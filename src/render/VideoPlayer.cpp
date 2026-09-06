@@ -16,6 +16,7 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
+#include <libavutil/channel_layout.h>
 #include <libavutil/imgutils.h>
 #include <libswresample/swresample.h>
 #include <libavutil/opt.h>
@@ -23,6 +24,18 @@ extern "C" {
 #endif
 
 namespace Caesura {
+
+#ifdef CAESURA_VIDEO_FFMPEG
+static std::shared_ptr<AVChannelLayout> copyChannelLayout(const AVChannelLayout& source) {
+    auto layout = std::shared_ptr<AVChannelLayout>(new AVChannelLayout{},
+        [](AVChannelLayout* value) {
+            av_channel_layout_uninit(value);
+            delete value;
+        });
+    if (av_channel_layout_copy(layout.get(), &source) < 0) return {};
+    return layout;
+}
+#endif
 
 // pl_mpeg audio callback: appends decoded interleaved float PCM to the
 // owning VideoState queue (the callback runs on the thread that calls
@@ -121,7 +134,9 @@ VideoHandle VideoPlayer::open(const char* path) {
                     // (modern API: swr_alloc_set_opts2 with AVChannelLayout).
                     AVChannelLayout outLayout = AV_CHANNEL_LAYOUT_STEREO;
                     SwrContext* swr = nullptr;
-                    if (swr_alloc_set_opts2(&swr, &outLayout, AV_SAMPLE_FMT_FLT,
+                    auto expectedLayout = copyChannelLayout(aCtx->ch_layout);
+                    if (expectedLayout &&
+                        swr_alloc_set_opts2(&swr, &outLayout, AV_SAMPLE_FMT_FLT,
                             aCtx->sample_rate, &aCtx->ch_layout,
                             aCtx->sample_fmt, aCtx->sample_rate, 0, nullptr) >= 0
                         && swr_init(swr) >= 0) {
@@ -131,8 +146,7 @@ VideoHandle VideoPlayer::open(const char* path) {
                         // reference: it moves with the frame on format change).
                         vs.expectedSampleFmt = aCtx->sample_fmt;
                         vs.expectedSampleRate = aCtx->sample_rate;
-                        vs.expectedChLayout[0] = aCtx->ch_layout.u.mask;
-                        vs.expectedChLayout[1] = 0;
+                        vs.expectedChLayout = std::move(expectedLayout);
                     } else {
                         if (swr) swr_free(&swr);
                         // The audio flag was set optimistically above; without a
@@ -478,6 +492,16 @@ void VideoPlayer::close(VideoHandle handle) {
     }
 }
 
+void VideoPlayer::closeAll() {
+    std::vector<uint32_t> ids;
+    ids.reserve(m_videos.size());
+    for (const auto& [id, state] : m_videos) {
+        (void)state;
+        ids.push_back(id);
+    }
+    for (const auto id : ids) close(VideoHandle{id});
+}
+
 bool VideoPlayer::update(VideoHandle handle, double dt) {
     (void)dt;
     auto vs = find(handle);
@@ -534,9 +558,10 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
                                 while (avcodec_receive_frame(ac, af) >= 0) {
                                     if (af->sample_rate <= 0 ||
                                         af->format != vs->expectedSampleFmt ||
-                                    af->sample_rate != vs->expectedSampleRate ||
+                                        af->sample_rate != vs->expectedSampleRate ||
+                                        !vs->expectedChLayout ||
                                         av_channel_layout_compare(&af->ch_layout,
-                                        reinterpret_cast<const AVChannelLayout*>(&vs->expectedChLayout)) != 0) {
+                                            static_cast<const AVChannelLayout*>(vs->expectedChLayout.get())) != 0) {
                                         continue;
                                     }
                                     const int64_t outSamples =
@@ -586,8 +611,9 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
                                 if (af->sample_rate <= 0 ||
                                     af->format != vs->expectedSampleFmt ||
                                     af->sample_rate != vs->expectedSampleRate ||
+                                    !vs->expectedChLayout ||
                                     av_channel_layout_compare(&af->ch_layout,
-                                        reinterpret_cast<const AVChannelLayout*>(&vs->expectedChLayout)) != 0) {
+                                        static_cast<const AVChannelLayout*>(vs->expectedChLayout.get())) != 0) {
                                     continue;
                                 }
                                 const int64_t outSamples =
@@ -959,6 +985,7 @@ void VideoPlayer::destroyTexture(VideoState& vs) {
         avcodec_free_context(&ac);
         vs.avAudioCodec = nullptr;
     }
+    vs.expectedChLayout.reset();
     vs.audioStreamIndex = -1;
     vs.audioEnabled = false;
 #endif

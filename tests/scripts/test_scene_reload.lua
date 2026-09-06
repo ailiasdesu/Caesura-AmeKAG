@@ -149,6 +149,14 @@ do
         end },
         config = {},
         ["kag.operation"] = require("kag.operation"),
+        ["kag.presentation"] = {
+            prepare_start = function() return nil end,
+            apply_start = function() return true end,
+            discard_start = function() end,
+            adopt = function() end,
+            stop = function() return true end,
+            discard = function() return true end,
+        },
         replay = { get_mode = function() return "off" end },
         backend = { cancel_async_loads = function()
             cancellation_calls = cancellation_calls + 1
@@ -159,6 +167,9 @@ do
     env.require = function(name)
         return assert(dependencies[name], "unexpected dependency: " .. name)
     end
+    env.package = { loaded = setmetatable({
+        ["kag.presentation"] = dependencies["kag.presentation"],
+    }, { __index = package.loaded }) }
     local source = assert(io.open("scripts/kag_runner.lua", "r"))
     local runner_src = source:read("*a")
     source:close()

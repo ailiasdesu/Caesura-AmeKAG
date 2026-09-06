@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ProviderChain.h"
+#include "api/IAssetReader.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -10,7 +11,7 @@ namespace Caesura {
 
 // Asset reader backed by ProviderChain (Dir + CARC).
 // Thread-safe for concurrent reads from a single worker thread.
-class AssetManager {
+class AssetManager : public IAssetReader {
 public:
     AssetManager() = default;
     ~AssetManager();
@@ -25,6 +26,7 @@ public:
     void addProvider(std::unique_ptr<Caesura::IAssetProvider> provider);
 
     std::vector<uint8_t> read(const std::string& path);
+    std::vector<uint8_t> readAsset(const std::string& path, size_t maxBytes) override;
     bool exists(const std::string& path);
 
 private:

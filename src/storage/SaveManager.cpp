@@ -500,7 +500,16 @@ json SaveManager::loadContents(int slot, const std::string& contents, SaveMeta* 
     std::string scene = safeStr("scene");
     int tokenIdx      = safeInt("token_index", 0);
     std::string thumb = safeStr("thumbnail");
-    int schemaVer     = safeInt("schema_version", 1);
+    // Absence identifies legacy v1. An explicitly unsupported or malformed
+    // schema cannot be interpreted as v1 or narrowed through an int overflow.
+    const auto schema = envelope.find("schema_version");
+    if (schema != envelope.end() &&
+        (!schema->is_number_integer() || *schema < 1 || *schema > m_currentSchemaVersion)) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveReadFailed,
+                  "[SaveManager] Unsupported or invalid save schema");
+        return {};
+    }
+    int schemaVer = schema == envelope.end() ? 1 : schema->get<int>();
     std::string engineVer = safeStr("engine_version");
 
     // Handle schema migration on the "data" sub-object
@@ -636,17 +645,29 @@ void SaveManager::registerMigration(int fromVersion, int toVersion, MigrationFn 
 }
 
 json SaveManager::migrate(const json& data, int fromVersion) {
+    if (fromVersion < 1 || fromVersion > m_currentSchemaVersion) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveReadFailed,
+                  "[SaveManager] Unsupported migration source v%d", fromVersion);
+        return {};
+    }
+    if (fromVersion == m_currentSchemaVersion) return data;
     if (!data.is_object()) {
-        DEBUG_ERR(SubSys::Storage, ErrCode::Ok, "[SaveManager] Migration input is not an object; skipping");
-        return data;
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveReadFailed,
+                  "[SaveManager] Migration input is not an object");
+        return {};
     }
     json current = data;
     int ver = fromVersion;
 
     int steps = 0;
-    while (steps < 64) {
+    while (ver < m_currentSchemaVersion && steps < 64) {
         auto it = m_migrations.find(ver);
-        if (it == m_migrations.end()) break;
+        if (it == m_migrations.end()) {
+            DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveReadFailed,
+                      "[SaveManager] Missing migration from v%d to reach v%d",
+                      ver, m_currentSchemaVersion);
+            return {};
+        }
 
         int nextVer = it->second.first;
         printf("[SaveManager] Applying migration v%d -> v%d\n", ver, nextVer);
@@ -659,8 +680,11 @@ json SaveManager::migrate(const json& data, int fromVersion) {
         ver = nextVer;
         steps++;
     }
-    if (steps >= 64) {
-        DEBUG_ERR(SubSys::Storage, ErrCode::Ok, "[SaveManager] Migration chain exceeded 64 steps (cycle?) at v%d", ver);
+    if (ver != m_currentSchemaVersion) {
+        DEBUG_ERR(SubSys::Storage, ErrCode::Storage_SaveReadFailed,
+                  "[SaveManager] Migration chain did not reach v%d within 64 steps (stopped at v%d)",
+                  m_currentSchemaVersion, ver);
+        return {};
     }
     return current;
 }

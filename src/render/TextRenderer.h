@@ -72,7 +72,6 @@ struct MessageLayerCache {
     }
 };
 
-enum class FontId : uint8_t { Small = 0, Large = 1, TTF = 2 };
 
 struct TextColor {
     uint8_t r, g, b, a;
@@ -95,11 +94,17 @@ public:
     TextRenderer(const TextRenderer&) = delete;
     TextRenderer& operator=(const TextRenderer&) = delete;
 
-    bool init(IRenderDevice* device);
+    bool init(IRenderDevice* device, bool activateDefault = true);
     void shutdown();
 
     // TTF loading: loads .ttf, rasterizes ASCII+CJK to runtime atlas, sets FontId::TTF
     bool loadTTF(const char* path, float fontSize = 24.0f);
+    FontRestoreState captureFontState() const;
+    static std::unique_ptr<IPreparedFontState> prepareFontState(
+        const FontRestoreState& state, const uint8_t* bytes, size_t size);
+    bool applyFontState(std::unique_ptr<IPreparedFontState> prepared);
+    void clearFontState();
+    std::unique_ptr<IPreparedFontState> takeFontForDeviceRecovery();
 
     void setScreenSize(int w, int h) { m_screenWidth = w; m_screenHeight = h; }
     void setFont(FontId id);
@@ -338,9 +343,25 @@ private:
         int atlasW = 2048, atlasH = 2048;
         int penX = 1, penY = 1, maxRowH = 0;
         std::unordered_map<uint32_t, GlyphMetrics> glyphs;
+        std::vector<uint8_t> sourceBytes;
+        std::vector<uint8_t> atlasPixels;
     };
+    struct PreparedFont final : public IPreparedFontState {
+        FontRestoreState state;
+        std::unique_ptr<TTFState> ttf;
+        std::vector<uint8_t> bitmapPixels;
+        int atlasW=0, atlasH=0, glyphW=0, glyphH=0, atlasCols=0;
+        float lineHeight=16;
+        std::string rememberedTtfPath;
+        float rememberedTtfSize=24;
+        const FontRestoreState& description() const override { return state; }
+    };
+    static std::unique_ptr<IPreparedFontState> prepareBitmapFont(const FontRestoreState& state);
+    bool activateFont(PreparedFont& prepared);
     std::unique_ptr<TTFState> m_ttf;
-    bool rasterizeTTFGlyph(uint32_t cp, std::vector<uint8_t>& atlas);
+    static bool rasterizeTTFGlyph(TTFState& font, uint32_t cp, std::vector<uint8_t>& atlas);
+    std::vector<uint8_t> m_bitmapPixels;
+    FontRestoreState m_fontDescription;
 
     // -- Glyph lookup (Track 2) --
     GlyphMetrics getTTFGlyph(uint32_t codepoint);

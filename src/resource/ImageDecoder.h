@@ -3,20 +3,21 @@
 #include <cstdint>
 #include <cstddef>
 #include <vector>
+#include "api/IImageDecoder.h"
 
 namespace Caesura {
 
 // CPU-only image decode result. Safe to produce on worker threads (no bgfx).
-struct DecodedImage {
-    std::vector<uint8_t> rgba;
-    uint16_t width  = 0;
-    uint16_t height = 0;
-    bool ok = false;
+class CpuImageDecoder final : public IImageDecoder {
+public:
+    DecodedImage decode(const uint8_t* bytes, size_t size,
+                        size_t maxDecodedBytes) override;
 };
 
 // Thread-safe image decoder for worker threads (bimg + stb fallback, no GPU).
 namespace ImageDecoder {
-    DecodedImage decode(const uint8_t* data, size_t size);
+    DecodedImage decode(const uint8_t* data, size_t size,
+                        size_t maxDecodedBytes = 1024ull * 1024ull * 1024ull);
 }
 
 } // namespace Caesura

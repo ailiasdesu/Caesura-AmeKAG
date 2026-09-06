@@ -960,17 +960,17 @@ namespace SoLoud
 	static void resample_catmullrom(float* aSrc,
 		float* aSrc1,
 		float* aDst,
-		int aSrcOffset,
+		unsigned int aSrcOffset,
 		int aDstSampleCount,
-		int aStepFixed)
+		unsigned int aStepFixed)
 	{
 		int i;
-		int pos = aSrcOffset;
+		uint64_t pos = aSrcOffset;
 
 		for (i = 0; i < aDstSampleCount; i++, pos += aStepFixed)
 		{
-			int p = pos >> FIXPOINT_FRAC_BITS;
-			int f = pos & FIXPOINT_FRAC_MASK;
+			int p = int(pos >> FIXPOINT_FRAC_BITS);
+			int f = int(pos & FIXPOINT_FRAC_MASK);
 
 			float s0, s1, s2, s3;
 
@@ -1010,17 +1010,17 @@ namespace SoLoud
 	static void resample_linear(float* aSrc,
 		float* aSrc1,
 		float* aDst,
-		int aSrcOffset,
+		unsigned int aSrcOffset,
 		int aDstSampleCount,
-		int aStepFixed)
+		unsigned int aStepFixed)
 	{
 		int i;
-		int pos = aSrcOffset;
+		uint64_t pos = aSrcOffset;
 
 		for (i = 0; i < aDstSampleCount; i++, pos += aStepFixed)
 		{
-			int p = pos >> FIXPOINT_FRAC_BITS;
-			int f = pos & FIXPOINT_FRAC_MASK;
+			int p = int(pos >> FIXPOINT_FRAC_BITS);
+			int f = int(pos & FIXPOINT_FRAC_MASK);
 #ifdef _DEBUG
 			if (p >= SAMPLE_GRANULARITY || p < 0)
 			{
@@ -1041,16 +1041,16 @@ namespace SoLoud
 	static void resample_point(float* aSrc,
 		float* aSrc1,
 		float* aDst,
-		int aSrcOffset,
+		unsigned int aSrcOffset,
 		int aDstSampleCount,
-		int aStepFixed)
+		unsigned int aStepFixed)
 	{
 		int i;
-		int pos = aSrcOffset;
+		uint64_t pos = aSrcOffset;
 
 		for (i = 0; i < aDstSampleCount; i++, pos += aStepFixed)
 		{
-			int p = pos >> FIXPOINT_FRAC_BITS;
+			int p = int(pos >> FIXPOINT_FRAC_BITS);
 			aDst[i] = aSrc[p];
 		}
 	}
@@ -1606,7 +1606,23 @@ namespace SoLoud
 			aVoice->mCurrentChannelVolume[k] = pand[k];
 	}
 
-	void Soloud::mixBus_internal(float *aBuffer, unsigned int aSamplesToRead, unsigned int aBufferSize, float *aScratch, unsigned int aBus, float aSamplerate, unsigned int aChannels, unsigned int aResampler)
+	static unsigned int fixedResampleStep(float step)
+	{
+		if (!(step > 0) || step >= 4096.0f) return 0;
+		return (unsigned int)floor(double(step) * FIXPOINT_FRAC_MUL);
+	}
+
+	static unsigned int availableResampleFrames(uint64_t offset, unsigned int step)
+	{
+		const uint64_t end = uint64_t(SAMPLE_GRANULARITY) * FIXPOINT_FRAC_MUL;
+		if (!step || offset >= end) return 0;
+		// Caesura: include every position inside this block, not only positions
+		// whose NEXT step is also inside. The residual crosses into the next
+		// block instead of being discarded by a premature refill.
+		return (unsigned int)((end - offset + step - 1) / step);
+	}
+
+	void Soloud::mixBus_internal(float *aBuffer, unsigned int aSamplesToRead, unsigned int aBufferSize, float *aScratch, unsigned int aBus, float aSamplerate, unsigned int aChannels, unsigned int aResampler, AudioSourceInstance *aOnlyVoice)
 	{
 		unsigned int i, j;
 		// Clear accumulation buffer
@@ -1623,15 +1639,13 @@ namespace SoLoud
 		{
 			AudioSourceInstance *voice = mVoice[mActiveVoice[i]];
 			if (voice &&
+				(!aOnlyVoice || voice == aOnlyVoice) &&
 				voice->mBusHandle == aBus &&
 				!(voice->mFlags & AudioSourceInstance::PAUSED) &&
 				!(voice->mFlags & AudioSourceInstance::INAUDIBLE))
 			{
-				float step = voice->mSamplerate / aSamplerate;
-				// avoid step overflow
-				if (step > (1 << (32 - FIXPOINT_FRAC_BITS)))
-					step = 0;
-				unsigned int step_fixed = (int)floor(step * FIXPOINT_FRAC_MUL);
+				const unsigned int step_fixed = fixedResampleStep(voice->mSamplerate / aSamplerate);
+				if (!step_fixed) continue;
 				unsigned int outofs = 0;
 			
 				if (voice->mDelaySamples)
@@ -1729,28 +1743,20 @@ namespace SoLoud
 					// Figure out how many samples we can generate from this source data.
 					// The value may be zero.
 
-					unsigned int writesamples = 0;
-
-					if (voice->mSrcOffset < SAMPLE_GRANULARITY * FIXPOINT_FRAC_MUL)
-					{
-						writesamples = ((SAMPLE_GRANULARITY * FIXPOINT_FRAC_MUL) - voice->mSrcOffset) / step_fixed + 1;
-
-						// avoid reading past the current buffer..
-						if (((writesamples * step_fixed + voice->mSrcOffset) >> FIXPOINT_FRAC_BITS) >= SAMPLE_GRANULARITY)
-							writesamples--;
-					}
+					unsigned int writesamples = availableResampleFrames(voice->mSrcOffset, step_fixed);
 
 
 					// If this is too much for our output buffer, don't write that many:
-					if (writesamples + outofs > aSamplesToRead)
+					if (writesamples > aSamplesToRead - outofs)
 					{
-						voice->mLeftoverSamples = (writesamples + outofs) - aSamplesToRead;
+						voice->mLeftoverSamples = writesamples - (aSamplesToRead - outofs);
 						writesamples = aSamplesToRead - outofs;
 					}
 
 					// Call resampler to generate the samples, once per channel
 					if (writesamples)
 					{
+						SOLOUD_ASSERT(voice->mSrcOffset < uint64_t(SAMPLE_GRANULARITY) * FIXPOINT_FRAC_MUL);
 						for (j = 0; j < voice->mChannels; j++)
 						{
 							switch (aResampler)
@@ -1759,7 +1765,7 @@ namespace SoLoud
 								resample_point(voice->mResampleData[0] + SAMPLE_GRANULARITY * j,
 									voice->mResampleData[1] + SAMPLE_GRANULARITY * j,
 									aScratch + aBufferSize * j + outofs,
-									voice->mSrcOffset,
+									(unsigned int)voice->mSrcOffset,
 									writesamples,
 									/*voice->mSamplerate,
 									aSamplerate,*/
@@ -1769,7 +1775,7 @@ namespace SoLoud
 								resample_catmullrom(voice->mResampleData[0] + SAMPLE_GRANULARITY * j,
 									voice->mResampleData[1] + SAMPLE_GRANULARITY * j,
 									aScratch + aBufferSize * j + outofs,
-									voice->mSrcOffset,
+									(unsigned int)voice->mSrcOffset,
 									writesamples,
 									/*voice->mSamplerate,
 									aSamplerate,*/
@@ -1780,7 +1786,7 @@ namespace SoLoud
 								resample_linear(voice->mResampleData[0] + SAMPLE_GRANULARITY * j,
 									voice->mResampleData[1] + SAMPLE_GRANULARITY * j,
 									aScratch + aBufferSize * j + outofs,
-									voice->mSrcOffset,
+									(unsigned int)voice->mSrcOffset,
 									writesamples,
 									/*voice->mSamplerate,
 									aSamplerate,*/
@@ -1794,7 +1800,7 @@ namespace SoLoud
 					outofs += writesamples;
 
 					// Move source pointer onwards (writesamples may be zero)
-					voice->mSrcOffset += writesamples * step_fixed;
+					voice->mSrcOffset += uint64_t(writesamples) * step_fixed;
 				}
 				
 				// Handle panning and channel expansion (and/or shrinking)
@@ -1808,14 +1814,15 @@ namespace SoLoud
 			}
 			else
 				if (voice &&
+					(!aOnlyVoice || voice == aOnlyVoice) &&
 					voice->mBusHandle == aBus &&
 					!(voice->mFlags & AudioSourceInstance::PAUSED) &&
 					(voice->mFlags & AudioSourceInstance::INAUDIBLE) &&
 					(voice->mFlags & AudioSourceInstance::INAUDIBLE_TICK))
 			{
 				// Inaudible but needs ticking. Do minimal work (keep counters up to date and ask audiosource for data)
-				float step = voice->mSamplerate / aSamplerate;
-				int step_fixed = (int)floor(step * FIXPOINT_FRAC_MUL);
+					const unsigned int step_fixed = fixedResampleStep(voice->mSamplerate / aSamplerate);
+					if (!step_fixed) continue;
 				unsigned int outofs = 0;
 
 				if (voice->mDelaySamples)
@@ -1881,22 +1888,13 @@ namespace SoLoud
 					// Figure out how many samples we can generate from this source data.
 					// The value may be zero.
 
-					unsigned int writesamples = 0;
-
-					if (voice->mSrcOffset < SAMPLE_GRANULARITY * FIXPOINT_FRAC_MUL)
-					{
-						writesamples = ((SAMPLE_GRANULARITY * FIXPOINT_FRAC_MUL) - voice->mSrcOffset) / step_fixed + 1;
-
-						// avoid reading past the current buffer..
-						if (((writesamples * step_fixed + voice->mSrcOffset) >> FIXPOINT_FRAC_BITS) >= SAMPLE_GRANULARITY)
-							writesamples--;
-					}
+					unsigned int writesamples = availableResampleFrames(voice->mSrcOffset, step_fixed);
 
 
 					// If this is too much for our output buffer, don't write that many:
-					if (writesamples + outofs > aSamplesToRead)
+					if (writesamples > aSamplesToRead - outofs)
 					{
-						voice->mLeftoverSamples = (writesamples + outofs) - aSamplesToRead;
+						voice->mLeftoverSamples = writesamples - (aSamplesToRead - outofs);
 						writesamples = aSamplesToRead - outofs;
 					}
 
@@ -1906,7 +1904,7 @@ namespace SoLoud
 					outofs += writesamples;
 
 					// Move source pointer onwards (writesamples may be zero)
-					voice->mSrcOffset += writesamples * step_fixed;
+					voice->mSrcOffset += uint64_t(writesamples) * step_fixed;
 				}
 
 				// clear voice if the sound is over
@@ -1920,13 +1918,14 @@ namespace SoLoud
 
 	void Soloud::mapResampleBuffers_internal()
 	{
-		SOLOUD_ASSERT(mMaxActiveVoices < 256);
-		char live[256];
-		memset(live, 0, mMaxActiveVoices);
+		// Caesura: the public budget accepts every value below VOICE_COUNT.
+		SOLOUD_ASSERT(mMaxActiveVoices < VOICE_COUNT);
+		SOLOUD_ASSERT(mActiveVoiceCount <= mMaxActiveVoices);
+		char live[VOICE_COUNT] = {};
 		unsigned int i, j;
 		for (i = 0; i < mMaxActiveVoices; i++)
 		{
-			for (j = 0; j < mMaxActiveVoices; j++)
+			for (j = 0; j < mActiveVoiceCount; j++)
 			{
 				if (mResampleDataOwner[i] && mResampleDataOwner[i] == mVoice[mActiveVoice[j]])
 				{
@@ -2014,6 +2013,7 @@ namespace SoLoud
 			// ate all our active voice slots.
 			// This is a potentially an error situation, but we have no way to report
 			// error from here. And asserting could be bad, too.
+			mapResampleBuffers_internal();
 			return;
 		}
 
@@ -2118,7 +2118,9 @@ namespace SoLoud
 		}
 #endif
 
-		float buffertime = aSamples / (float)mSamplerate;
+		// Caesura: retain sample-clock precision when capturing a seek position.
+		// float rounds 8192 / 48000 down enough for seek() to discard 8191 frames.
+		double buffertime = aSamples / (double)mSamplerate;
 		float globalVolume[2];
 		mStreamTime += buffertime;
 		mLastClockedTime = 0;
@@ -2199,6 +2201,38 @@ namespace SoLoud
 
 		if (mActiveVoiceDirty)
 			calcActiveVoices_internal();
+
+		// Caesura: only count selected output-producing voices, after active
+		// budget decisions. Cached parent output from before a voice started
+		// does not advance that new source's cursor.
+		bool selectedVoices[VOICE_COUNT] = {};
+		for (unsigned int active = 0; active < mActiveVoiceCount; ++active)
+			selectedVoices[mActiveVoice[active]] = true;
+		for (i = 0; i < (signed)mHighestVoice; ++i)
+		{
+			AudioSourceInstance *voice = mVoice[i];
+			if (!voice || (voice->mFlags & AudioSourceInstance::PAUSED)) continue;
+			bool selected = selectedVoices[i];
+			if (voice->mBusHandle)
+			{
+				const int parent = getVoiceFromHandle_internal(voice->mBusHandle);
+				selected = selected && parent >= 0 && selectedVoices[parent]
+					&& !(mVoice[parent]->mFlags & AudioSourceInstance::PAUSED);
+			}
+			const unsigned int step = fixedResampleStep(voice->mSamplerate / float(mSamplerate));
+			if (!selected || !step)
+			{
+				voice->mRestoreClockValid = false;
+				continue;
+			}
+			if (voice->mOverallRelativePlaySpeed != 1.0f || voice->mRelativePlaySpeedFader.mActive || voice->mDelaySamples)
+				voice->mRestoreClockValid = false;
+			const unsigned int delayed = voice->mParentClockDelayFrames < aSamples ? voice->mParentClockDelayFrames : aSamples;
+			voice->mParentClockDelayFrames -= delayed;
+			const uint64_t advance = uint64_t(aSamples - delayed) * step;
+			if (UINT64_MAX - voice->mSourceFrameFixed < advance) voice->mRestoreClockValid = false;
+			else voice->mSourceFrameFixed += advance;
+		}
 	
 		mixBus_internal(mOutputScratch.mData, aSamples, aStride, mScratch.mData, 0, (float)mSamplerate, mChannels, mResampler);
 

@@ -8,6 +8,7 @@ end
 
 local tokenizer = require("tokenizer")
 local scheduler = require("scheduler")
+require("layers").init() -- slot routing has no visible scene or active VFX
 
 local function run(tokens, overrides)
     local ctx = { f = {}, tf = {}, sf = {}, mp = {}, variables = {},

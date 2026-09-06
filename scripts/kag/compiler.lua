@@ -775,12 +775,24 @@ end
 --  JSON round-trips object keys as strings; the decoder converts
 --  numeric index keys back directly (flow jump table, params/exprs), so
 --  compiled.flow[i] lookups stay O(1) with no post-decode deep pass.
+local function copy_serialized(value, copies)
+    if type(value) ~= "table" then return value end
+    if copies[value] then return copies[value] end
+    local result = {}
+    copies[value] = result
+    for key, child in pairs(value) do result[key] = copy_serialized(child, copies) end
+    return result
+end
+
 function compiler.deserialize(data)
     if type(data) ~= "table" or data.version ~= 1 then return nil end
     if type(data.tokens) ~= "table" or type(data.flow) ~= "table"
         or type(data.labels) ~= "table" then
         return nil
     end
+    -- A bundle is trusted input, never the live scheduler's mutable storage.
+    -- Preserve sharing within this decoded graph without aliasing another run.
+    data = copy_serialized(data, {})
     local tokens = data.tokens
     -- handlers: not serialized — leave nil; the scheduler falls back to
     -- the kag[cmd] lookup (compiled.handlers[i] or kag[cmd]).

@@ -124,6 +124,124 @@ async function currentI18n() {
 }
 
 describe('bundle cross-scene flow (runFromBundle + __BUNDLE_SCENES)', () => {
+  it('uses the same exact scene key for ordinary jumps and restore preparation', async () => {
+    const bundle = await bakeBundle({
+      'alias_entry.ks': '[jump alias_target.ks]',
+      'alias_target.ks': '[save slot=19]\n[set var="f.identity" value=1]\n[end]',
+      'assets/script/alias_target.ks': '[save slot=19]\n[set var="f.identity" value=2]\n[end]',
+      'alias_loader.ks': '[load slot=19]\n[end]',
+    })
+    expect((await player.runFromBundle(bundle, 'alias_entry.ks', { maxFrames: 100 })).startsWith('DONE:')).toBe(true)
+    const original = await player.lua.doString('return __CTXREF.f.identity')
+    expect((await player.runFromBundle(bundle, 'alias_loader.ks', { maxFrames: 100 })).startsWith('DONE:')).toBe(true)
+    const restored = await player.lua.doString('return __CTXREF.f.identity')
+    expect(restored).toBe(original)
+    expect(original).toBe(2)
+  })
+
+  it.each(['source', 'bundle'])('restores scheduler scene identities in the %s path', async (mode) => {
+    const scenes = {
+      'identity_a.ks': '[jump identity_b.ks]',
+      'identity_b.ks': '[save slot=18]\n[set var="f.restored_b" value=1]\n[end]',
+      'identity_loader.ks': '[load slot=18]\n[end]',
+    }
+    const bundle = mode === 'bundle' ? await bakeBundle(scenes) : null
+    const run = (key) => mode === 'bundle'
+      ? player.runFromBundle(bundle, key, { maxFrames: 100 })
+      : player.runScene(scenes[key], key, { maxFrames: 100, sceneSources: scenes })
+    expect((await run('identity_a.ks')).startsWith('DONE:')).toBe(true)
+    expect((await run('identity_loader.ks')).startsWith('DONE:')).toBe(true)
+    expect(await player.lua.doString("return __CTXREF.tf.load_error or ''")).toBe('')
+    expect(await player.lua.doString("return __CTXREF.tf.load_result == 'ok' and __CTXREF.f.restored_b == 1")).toBe(true)
+  })
+
+  it.each(['source', 'bundle'])('restores a bare-key local caller frame in the %s path', async (mode) => {
+    const scenes = {
+      'identity_call.ks': '[set var="lf.owner" value="caller"]\n[call target="*sub"]\n[eval exp="f.returned = lf.owner"]\n[end]\n*sub\n[set var="lf.owner" value="callee"]\n[save slot=18]\n[return]',
+      'identity_loader.ks': '[load slot=18]\n[end]',
+    }
+    const bundle = mode === 'bundle' ? await bakeBundle(scenes) : null
+    const run = (key) => mode === 'bundle'
+      ? player.runFromBundle(bundle, key, { maxFrames: 100 })
+      : player.runScene(scenes[key], key, { maxFrames: 100, sceneSources: scenes })
+    expect((await run('identity_call.ks')).startsWith('DONE:')).toBe(true)
+    expect((await run('identity_loader.ks')).startsWith('DONE:')).toBe(true)
+    expect(await player.lua.doString("return __CTXREF.tf.load_error or ''")).toBe('')
+    expect(await player.lua.doString("return __CTXREF.tf.load_result == 'ok' and __CTXREF.f.returned == 'caller'")).toBe(true)
+  })
+
+  it.each([['source', false], ['bundle', false], ['source', true], ['bundle', true]])(
+    'awaits a nested asynchronous operation in the %s driver (reject=%s)', async (mode, reject) => {
+    const events = []
+    player.lua.global.set('__u11_prepare_async', async () => {
+      events.push('prepare')
+      await new Promise((resolve) => setTimeout(resolve, 1))
+      events.push('prepared')
+      if (reject) throw new Error('fixture preparation failed')
+      return 42
+    })
+    player.lua.global.set('__u11_expect_rejection', reject)
+    await player.lua.doString(`
+      require('kag').u11_async_prepare = function(ctx)
+        local ok, value = pcall(function() return __u11_prepare_async():await() end)
+        if __u11_expect_rejection then
+          assert(not ok and tostring(value):find('fixture preparation failed', 1, true))
+          ctx.f.prepared = -1
+        else
+          assert(ok and value == 42, 'driver resumed before the preparation settled')
+          ctx.f.prepared = value
+        end
+      end
+    `)
+    const source = '[u11_async_prepare]\n[set var="f.after_prepare" value=1]\n[end]'
+    const out = mode === 'source'
+      ? await player.runScene(source, 'async_prepare.ks', { maxFrames: 100 })
+      : await player.runFromBundle(await bakeBundle({ 'async_prepare.ks': source }), 'async_prepare.ks', { maxFrames: 100 })
+    expect(out.startsWith('DONE:'), out).toBe(true)
+    expect(events).toEqual(['prepare', 'prepared'])
+    expect(await player.lua.doString(`return __CTXREF.f.prepared == ${reject ? -1 : 42} and __CTXREF.f.after_prepare == 1`)).toBe(true)
+  })
+
+  it('prepares source scenes without publishing or sharing mutable tokens', async () => {
+    const source = '*entry\n[set var="f.marker" value=1]\n[end]'
+    await player.runScene(source, 'prepare_source.ks', {
+      maxFrames: 100, sceneSources: { '../owned_bad.ks': '[end]', '/owned_absolute.ks': '[end]' },
+    })
+    const prepared = await player.lua.doString(`
+      local flow = require('flow')
+      assert(flow.is_restore_scene('prepare_source.ks') and flow.is_restore_scene('assets/script/prepare_source.ks'))
+      assert(not flow.is_restore_scene('demo/no_such_scene.ks'))
+      assert(not flow.is_restore_scene('../owned_bad.ks') and not flow.is_restore_scene('/owned_absolute.ks'))
+      local current, tokens = __CTXREF, __CTXREF.tokens
+      local index = current.token_index
+      local first = assert(flow.prepare_scene('demo/prepare_source.ks'))
+      assert(type(first) == 'table' and type(first.tokens) == 'table')
+      assert(first.tokens ~= tokens and first.labels.entry == 1)
+      first.tokens[2] = {'end', {}}
+      local second = assert(flow.prepare_scene('demo/prepare_source.ks'))
+      assert(second.tokens[2].cmd == 'set' or second.tokens[2][1] == 'set')
+      assert(__CTXREF == current and current.tokens == tokens and current.token_index == index)
+      assert(flow.prepare_scene('demo/no_such_scene.ks') == nil)
+      return true
+    `)
+    expect(prepared).toBe(true)
+  })
+
+  it('prepares bundled scenes through the trusted compiler without changing the live scene', async () => {
+    const bundle = await bakeBundle({
+      'prepare_bundle.ks': '*entry\n[set var="f.marker" value=2]\n[end]',
+    })
+    await player.runFromBundle(bundle, 'prepare_bundle.ks', { maxFrames: 100 })
+    const prepared = await player.lua.doString(`
+      local current, tokens = __CTXREF, __CTXREF.tokens
+      local first = assert(require('flow').prepare_scene('demo/prepare_bundle.ks'))
+      assert(type(first) == 'table' and first.tokens ~= tokens and first.labels.entry == 1)
+      assert(__CTXREF == current and current.tokens == tokens)
+      return true
+    `)
+    expect(prepared).toBe(true)
+  })
+
   it('jump: A [jump scene_b.ks] -> B executes -> DONE (both in bundle)', async () => {
     const bundle = await bakeBundle({
       'scene_a.ks': [
@@ -279,16 +397,22 @@ describe('bundle cross-scene flow (runFromBundle + __BUNDLE_SCENES)', () => {
     let out = await player.runFromBundle(bundle, 'scene_a.ks', { maxFrames: 30000 })
     expect(out.startsWith('WAIT:'), 'A should park on its [p]: ' + out).toBe(true)
 
-    // 2. advance past A's park: the jump to B fires, B-ADV-1 parks
+    // A ch and an explicit p each have a wait in the shared native runner.
     out = await player.runFromBundle(bundle, 'scene_a.ks', { maxFrames: 30000, advance: true, advanceScene: 'scene_a.ks' })
-    expect(out.startsWith('WAIT:'), 'after advancing A, the run should park in B: ' + out).toBe(true)
+    expect(out.startsWith('WAIT:'), out).toBe(true)
+    out = await player.runFromBundle(bundle, 'scene_a.ks', { maxFrames: 30000, advance: true, advanceScene: 'scene_a.ks' })
+    expect(out.startsWith('WAIT:'), 'A jumps to the first B line: ' + out).toBe(true)
 
     // 3. advance continues B: B-ADV-1 -> B-ADV-2 parks
     out = await player.runFromBundle(bundle, 'scene_b.ks', { maxFrames: 30000, advance: true, advanceScene: 'scene_b.ks' })
     // the live ctx/coroutine is already inside scene_b after the jump
     expect(out.startsWith('WAIT:'), '2nd advance should run B and park at B-ADV-2: ' + out).toBe(true)
 
-    // 4. final advance completes B
+    // The next click reaches B's second ch, followed by its explicit p.
+    out = await player.runFromBundle(bundle, 'scene_b.ks', { maxFrames: 30000, advance: true, advanceScene: 'scene_b.ks' })
+    expect(out.startsWith('WAIT:'), out).toBe(true)
+    out = await player.runFromBundle(bundle, 'scene_b.ks', { maxFrames: 30000, advance: true, advanceScene: 'scene_b.ks' })
+    expect(out.startsWith('WAIT:'), out).toBe(true)
     out = await player.runFromBundle(bundle, 'scene_b.ks', { maxFrames: 30000, advance: true, advanceScene: 'scene_b.ks' })
     expect(out.startsWith('DONE:'), 'B should finish: ' + out).toBe(true)
 
@@ -329,7 +453,8 @@ describe('bundle cross-scene flow (runFromBundle + __BUNDLE_SCENES)', () => {
     player.core.events.length = 0
     const outA = await player.runFromBundle(bundle, 'scene_a.ks', { maxFrames: 50000, autoClick: true })
     expect(outA.startsWith('DONE:'), outA).toBe(true)
-    expect(player.core.events.some((e) => e.kind === 'save.write')).toBe(true)
+    expect(player.core.events.some((e) => e.kind === 'save.write'),
+      'save failed: ' + String(player._ctx?.tf?.save_error)).toBe(true)
     const slots = player.listSlots()
     const s1 = slots.find((s) => s.slot === 1)
     expect(s1, 'bundle [save] must create slot 1').toBeTruthy()
@@ -342,7 +467,9 @@ describe('bundle cross-scene flow (runFromBundle + __BUNDLE_SCENES)', () => {
     expect(outB.startsWith('DONE:'), outB).toBe(true)
     expect(player.core.events.some((e) => e.kind === 'save.read')).toBe(true)
     const t = backlogText()
-    expect(t).toContain('LOADER-B')
+    expect(t).not.toContain('LOADER-B')
+    expect(t).toContain('A-SL-1')
+    expect(t).toContain('A-SL-2')
     expect(t, 'bundle [load] must resume scene A at the saved token').toContain('A-SL-AFTER-SAVE')
     const errs = player.core.events.filter((e) => String(e.kind).includes('error'))
     expect(errs, 'bundle cross-scene load must not surface errors').toEqual([])

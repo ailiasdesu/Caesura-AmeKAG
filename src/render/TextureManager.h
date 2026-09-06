@@ -49,6 +49,7 @@ public:
     void getTextureSizeById(uint32_t id, uint16_t& width,
                             uint16_t& height) const override;
     bool isValid(uint32_t id) const override;
+    bool describeTexture(uint32_t id, TextureSourceInfo& output) const override;
 
     uint64_t totalTextureBytes() const override { return m_totalBytes; }
     bool checkBudget(uint32_t id, uint16_t w, uint16_t h) override;
@@ -68,6 +69,7 @@ private:
     struct RestoreSource {
         RestoreSourceKind kind = RestoreSourceKind::Encoded;
         std::vector<uint8_t> bytes;
+        std::string assetPath;
         uint16_t width = 0;
         uint16_t height = 0;
     };

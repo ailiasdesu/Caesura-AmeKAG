@@ -56,13 +56,13 @@ namespace SoLoud
 			drmp3 *mMp3;
 			drwav *mWav;
 		} mCodec;
-		unsigned int mOggFrameSize;
-		unsigned int mOggFrameOffset;
-		float **mOggOutputs;
 	public:
 		WavStreamInstance(WavStream *aParent);
 		virtual unsigned int getAudio(float *aBuffer, unsigned int aSamplesToRead, unsigned int aBufferSize);
 		virtual result seek(double aSeconds, float* mScratch, unsigned int mScratchSize);
+		virtual result seekFrame(uint64_t aFrame);
+		// Caesura: check raw decoder channels, not a truncated output count.
+		bool isDecoderValid() const;
 		virtual result rewind();
 		virtual bool hasEnded();
 		virtual ~WavStreamInstance();

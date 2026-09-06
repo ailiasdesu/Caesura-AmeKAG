@@ -17,255 +17,298 @@ extern "C" {
 #include "../../storage/api/ISaveManager.h"
 #include <cstdio>
 #include <ctime>
+#include <algorithm>
+#include <cmath>
+#include <limits>
+#include <stdexcept>
+#include <unordered_set>
 
 namespace Caesura {
 
 static ISaveManager* getSaveManager() {
     return BackendRegistry::instance().getSaveManager();
 }
-// -- Lua table -> nlohmann::json (recursive) -------------------------------
-// Detect if a Lua table is a dense array (all keys are 1..N positive integers)
-static bool isLuaArray(lua_State* L, int absIdx) {
-    int maxKey = 0, count = 0;
-    lua_pushnil(L);
-    while (lua_next(L, absIdx) != 0) { count++; if (lua_type(L, -2) == LUA_TNUMBER) { int k = (int)lua_tointeger(L, -2); if (k > maxKey) maxKey = k; } lua_pop(L, 1); }
-    return (count > 0 && maxKey == count);
+// Lua persistence accepts JSON objects or dense arrays, never silent truncation.
+static constexpr int kMaxTableDepth = 64;
+static constexpr size_t kMaxValueCount = 100000;
+
+static bool validUtf8(const std::string& text) {
+    size_t i = 0;
+    while (i < text.size()) {
+        const auto first = static_cast<unsigned char>(text[i++]);
+        if (first < 0x80) continue;
+        unsigned value = 0, minimum = 0, remaining = 0;
+        if (first >= 0xc2 && first <= 0xdf) {
+            value = first & 0x1f; minimum = 0x80; remaining = 1;
+        } else if (first >= 0xe0 && first <= 0xef) {
+            value = first & 0x0f; minimum = 0x800; remaining = 2;
+        } else if (first >= 0xf0 && first <= 0xf4) {
+            value = first & 7; minimum = 0x10000; remaining = 3;
+        } else return false;
+        if (remaining > text.size() - i) return false;
+        while (remaining--) {
+            const auto next = static_cast<unsigned char>(text[i++]);
+            if ((next & 0xc0) != 0x80) return false;
+            value = (value << 6) | (next & 0x3f);
+        }
+        if (value < minimum || value > 0x10ffff || (value >= 0xd800 && value <= 0xdfff))
+            return false;
+    }
+    return true;
 }
 
-// Recursion depth cap: malicious self-referential Lua tables or deeply nested
-// corrupt save files must not blow the C stack (the save path is not wrapped
-// in lua_pcall, so LUAI_MAXCCALLS does not apply).
-static constexpr int kMaxTableDepth = 64;
+static std::string savedString(lua_State* L, int index) {
+    size_t length = 0;
+    const char* bytes = lua_tolstring(L, index, &length);
+    std::string value(bytes, length);
+    if (!validUtf8(value)) throw std::runtime_error("Saved strings require valid UTF-8");
+    return value;
+}
 
-static json luaTableToJson(lua_State* L, int index, int depth = 0) {
-    if (depth > kMaxTableDepth) return nullptr;
-    json result;
+struct SaveValueTraversal {
+    std::unordered_set<const void*> ancestors;
+    size_t count = 0;
+};
 
-    // Normalize negative indices
-        int absIdx = (index < 0) ? lua_gettop(L) + index + 1 : index;
-    // Check if this table is a dense array
-    if (isLuaArray(L, absIdx)) {
-        json arr = json::array();
+static json luaValueToJson(lua_State* L, int index, SaveValueTraversal& walk, int depth = 0) {
+    if (++walk.count > kMaxValueCount) throw std::runtime_error("Save value budget exceeded");
+    switch (lua_type(L, index)) {
+    case LUA_TBOOLEAN: return lua_toboolean(L, index) != 0;
+    case LUA_TNUMBER:
+        if (lua_isinteger(L, index)) return static_cast<int64_t>(lua_tointeger(L, index));
+        if (!std::isfinite(lua_tonumber(L, index))) throw std::runtime_error("Non-finite saved number");
+        return static_cast<double>(lua_tonumber(L, index));
+    case LUA_TSTRING: return savedString(L, index);
+    case LUA_TTABLE: break;
+    default: throw std::runtime_error("Unsupported saved Lua value");
+    }
+    if (depth > kMaxTableDepth) throw std::runtime_error("Save table depth exceeded");
+    if (!lua_checkstack(L, 8)) throw std::runtime_error("Cannot grow save conversion stack");
+    const int absolute = lua_absindex(L, index);
+    const void* identity = lua_topointer(L, absolute);
+    if (!walk.ancestors.insert(identity).second) throw std::runtime_error("Cyclic save table");
+    size_t numeric = 0, strings = 0;
+    lua_Integer maximum = 0;
+    lua_pushnil(L);
+    while (lua_next(L, absolute)) {
+        if (lua_type(L, -2) == LUA_TSTRING) ++strings;
+        else if (lua_type(L, -2) == LUA_TNUMBER && lua_isinteger(L, -2)) {
+            const lua_Integer key = lua_tointeger(L, -2);
+            if (key < 1) throw std::runtime_error("Saved array indices start at one");
+            maximum = (std::max)(maximum, key);
+            ++numeric;
+        } else throw std::runtime_error("Unsupported saved table key");
+        if (numeric + strings > kMaxValueCount) throw std::runtime_error("Save table size exceeded");
+        lua_pop(L, 1);
+    }
+    if (numeric && (strings || static_cast<uint64_t>(maximum) != numeric))
+        throw std::runtime_error("Saved tables require string keys or dense array indices");
+    json result = numeric ? json::array() : json::object();
+    if (numeric) {
+        for (lua_Integer key = 1; key <= maximum; ++key) {
+            lua_rawgeti(L, absolute, key);
+            result.push_back(luaValueToJson(L, -1, walk, depth + 1));
+            lua_pop(L, 1);
+        }
+    } else {
         lua_pushnil(L);
-        while (lua_next(L, absIdx) != 0) {
-            int vt = lua_type(L, -1);
-            switch (vt) {
-                case LUA_TBOOLEAN: arr.push_back((bool)lua_toboolean(L, -1)); break;
-                case LUA_TNUMBER:  arr.push_back(lua_isinteger(L, -1) ? (json)(int64_t)lua_tointeger(L, -1) : (json)(double)lua_tonumber(L, -1)); break;
-                case LUA_TSTRING:  arr.push_back(std::string(lua_tostring(L, -1))); break;
-                case LUA_TTABLE:   arr.push_back(luaTableToJson(L, -1, depth + 1)); break;
-                default:           arr.push_back(nullptr); break;
-            }
+        while (lua_next(L, absolute)) {
+            result[savedString(L, -2)] = luaValueToJson(L, -1, walk, depth + 1);
             lua_pop(L, 1);
         }
-        return arr;
     }
-
-
-    lua_pushnil(L);  // first key
-    while (lua_next(L, absIdx) != 0) {
-        // Stack: ... table key value
-        // Duplicate key for lua_next
-        std::string key;
-        if (lua_type(L, -2) == LUA_TSTRING) {
-            key = lua_tostring(L, -2);
-        } else if (lua_type(L, -2) == LUA_TNUMBER) {
-            key = std::to_string((int)lua_tointeger(L, -2));
-        } else {
-            lua_pop(L, 1);
-            continue;
-        }
-
-        int valueType = lua_type(L, -1);
-        switch (valueType) {
-            case LUA_TBOOLEAN:
-                result[key] = (bool)lua_toboolean(L, -1);
-                break;
-            case LUA_TNUMBER:
-                if (lua_isinteger(L, -1))
-                    result[key] = (int64_t)lua_tointeger(L, -1);
-                else
-                    result[key] = (double)lua_tonumber(L, -1);
-                break;
-            case LUA_TSTRING:
-                result[key] = std::string(lua_tostring(L, -1));
-                break;
-            case LUA_TTABLE:
-                result[key] = luaTableToJson(L, -1, depth + 1);
-                break;
-            case LUA_TNIL:
-                result[key] = nullptr;
-                break;
-            default:
-                // Unsupported type -- skip
-                break;
-        }
-        lua_pop(L, 1);  // pop value, keep key for next iteration
-    }
-
+    walk.ancestors.erase(identity);
     return result;
 }
 
-// -- nlohmann::json -> Lua table (recursive) -------------------------------
-static void jsonToLuaTable(lua_State* L, const json& j, int depth = 0) {
-    if (depth > kMaxTableDepth) return;  // corrupt save: truncate instead of crashing
-    lua_newtable(L);
-
-    if (j.is_object()) {
-        for (auto it = j.begin(); it != j.end(); ++it) {
-            const std::string& key = it.key();
-            const json& value = it.value();
-
-            lua_pushstring(L, key.c_str());
-
-            switch (value.type()) {
-                case json::value_t::null:
-                    lua_pushnil(L);
-                    break;
-                case json::value_t::boolean:
-                    lua_pushboolean(L, value.get<bool>() ? 1 : 0);
-                    break;
-                case json::value_t::number_integer:
-                case json::value_t::number_unsigned:
-                    lua_pushinteger(L, (lua_Integer)value.get<int64_t>());
-                    break;
-                case json::value_t::number_float:
-                    lua_pushnumber(L, value.get<double>());
-                    break;
-                case json::value_t::string:
-                    lua_pushstring(L, value.get<std::string>().c_str());
-                    break;
-                case json::value_t::array:
-                    jsonToLuaTable(L, value, depth + 1);  // array -> indexed table
-                    break;
-                case json::value_t::object:
-                    jsonToLuaTable(L, value, depth + 1);
-                    break;
-                default:
-                    lua_pushnil(L);
-                    break;
-            }
-
-            lua_settable(L, -3);
+static void validateLoadedValue(const json& value, size_t& count, int depth = 0, bool arrayItem = false) {
+    if (++count > kMaxValueCount) throw std::runtime_error("Loaded value budget exceeded");
+    if (value.is_null()) {
+        // Old releases wrote empty state tables as object null members.
+        if (arrayItem) throw std::runtime_error("JSON array null cannot become a Lua array hole");
+        return;
+    }
+    if (value.is_number_unsigned() && value.get<uint64_t>() >
+        static_cast<uint64_t>((std::numeric_limits<lua_Integer>::max)()))
+        throw std::runtime_error("Saved integer exceeds Lua integer range");
+    if (value.is_number_float() && !std::isfinite(value.get<double>()))
+        throw std::runtime_error("Non-finite loaded number");
+    if (value.is_string() && !validUtf8(value.get_ref<const std::string&>()))
+        throw std::runtime_error("Invalid UTF-8 in loaded string");
+    if (!value.is_structured()) return;
+    if (depth > kMaxTableDepth) throw std::runtime_error("Loaded table depth exceeded");
+    if (value.is_object()) {
+        for (auto it = value.begin(); it != value.end(); ++it) {
+            if (!validUtf8(it.key())) throw std::runtime_error("Invalid UTF-8 in loaded key");
+            validateLoadedValue(it.value(), count, depth + 1);
         }
-    } else if (j.is_array()) {
-        int idx = 1;
-        for (const auto& elem : j) {
-            switch (elem.type()) {
-                case json::value_t::null:
-                    lua_pushnil(L);
-                    break;
-                case json::value_t::boolean:
-                    lua_pushboolean(L, elem.get<bool>() ? 1 : 0);
-                    break;
-                case json::value_t::number_integer:
-                case json::value_t::number_unsigned:
-                    lua_pushinteger(L, (lua_Integer)elem.get<int64_t>());
-                    break;
-                case json::value_t::number_float:
-                    lua_pushnumber(L, elem.get<double>());
-                    break;
-                case json::value_t::string:
-                    lua_pushstring(L, elem.get<std::string>().c_str());
-                    break;
-                case json::value_t::array:
-                case json::value_t::object:
-                    jsonToLuaTable(L, elem, depth + 1);
-                    break;
-                default:
-                    lua_pushnil(L);
-                    break;
-            }
-            lua_rawseti(L, -2, idx++);
-        }
+    } else {
+        for (const auto& child : value) validateLoadedValue(child, count, depth + 1, true);
     }
 }
 
-// -- lua_Save_game ----------------------------------------------------------
-// KAG.save_game(slot, dataTable, sceneName, tokenIndex, [thumbnail]) -> bool
+// This helper runs only inside lua_pcall. It holds no owning C++ temporaries,
+// so a Lua allocation failure cannot jump over JSON/string destructors.
+static void pushLoadedValue(lua_State* L, const json& value) {
+    if (!lua_checkstack(L, 8)) { luaL_error(L, "Cannot grow load conversion stack"); return; }
+    switch (value.type()) {
+    case json::value_t::null: lua_pushnil(L); return;
+    case json::value_t::boolean: lua_pushboolean(L, value.get<bool>()); return;
+    case json::value_t::number_integer: lua_pushinteger(L, value.get<int64_t>()); return;
+    case json::value_t::number_unsigned: lua_pushinteger(L, value.get<uint64_t>()); return;
+    case json::value_t::number_float: lua_pushnumber(L, value.get<double>()); return;
+    case json::value_t::string: {
+        const auto& text = value.get_ref<const std::string&>();
+        lua_pushlstring(L, text.data(), text.size()); return;
+    }
+    case json::value_t::object:
+        lua_createtable(L, 0, static_cast<int>(value.size()));
+        for (auto it = value.begin(); it != value.end(); ++it) {
+            lua_pushlstring(L, it.key().data(), it.key().size());
+            pushLoadedValue(L, it.value());
+            lua_rawset(L, -3);
+        }
+        return;
+    case json::value_t::array: {
+        lua_createtable(L, static_cast<int>(value.size()), 0);
+        lua_Integer index = 1;
+        for (const auto& child : value) {
+            pushLoadedValue(L, child);
+            lua_rawseti(L, -2, index++);
+        }
+        return;
+    }
+    default: lua_pushnil(L); return;
+    }
+}
+
+struct LoadedSaveView { const json* data; const SaveMeta* meta; };
+
+static void pushSaveMeta(lua_State* L, const SaveMeta& meta) {
+    lua_createtable(L, 0, 5);
+    lua_pushinteger(L, meta.slot); lua_setfield(L, -2, "slot");
+    lua_pushinteger(L, static_cast<lua_Integer>(meta.timestamp)); lua_setfield(L, -2, "timestamp");
+    lua_pushlstring(L, meta.sceneName.data(), meta.sceneName.size()); lua_setfield(L, -2, "scene");
+    lua_pushinteger(L, meta.tokenIndex); lua_setfield(L, -2, "token_index");
+    lua_pushinteger(L, meta.schemaVersion); lua_setfield(L, -2, "schema_version");
+}
+
+static int pushLoadedSave(lua_State* L) {
+    const auto* view = static_cast<const LoadedSaveView*>(lua_touserdata(L, 1));
+    pushLoadedValue(L, *view->data);
+    pushSaveMeta(L, *view->meta);
+    return 2;
+}
+
 static int lua_Save_game(lua_State* L) {
-    int slot              = (int)luaL_checkinteger(L, 1);
+    const auto slotValue = luaL_checkinteger(L, 1);
     luaL_checktype(L, 2, LUA_TTABLE);
-    const char* sceneName = luaL_checkstring(L, 3);
-    int tokenIndex        = (int)luaL_checkinteger(L, 4);
-    const char* thumbnail = luaL_optstring(L, 5, "");
-
-    // Convert Lua table to structured JSON
-    json gameData = luaTableToJson(L, 2);
-
-    auto* manager = getSaveManager();
-    bool ok = manager && manager->save(slot, gameData, sceneName,
-                                       tokenIndex, thumbnail);
-    lua_pushboolean(L, ok ? 1 : 0);
-    return 1;
+    size_t sceneLength = 0, thumbnailLength = 0;
+    const char* sceneBytes = luaL_checklstring(L, 3, &sceneLength);
+    const auto tokenValue = luaL_checkinteger(L, 4);
+    const char* thumbnailBytes = luaL_optlstring(L, 5, "", &thumbnailLength);
+    const int top = lua_gettop(L);
+    char error[256] = {};
+    bool saved = false;
+    try {
+        if (slotValue < 0 || slotValue > 99 || tokenValue < (std::numeric_limits<int>::min)()
+            || tokenValue > (std::numeric_limits<int>::max)())
+            throw std::runtime_error("Save slot or token index is outside its range");
+        const std::string sceneName(sceneBytes, sceneLength);
+        const std::string thumbnail(thumbnailBytes, thumbnailLength);
+        if (!validUtf8(sceneName) || !validUtf8(thumbnail))
+            throw std::runtime_error("Saved metadata requires valid UTF-8");
+        SaveValueTraversal traversal;
+        const auto data = luaValueToJson(L, 2, traversal);
+        auto* manager = getSaveManager();
+        saved = manager && manager->save(static_cast<int>(slotValue), data, sceneName,
+                                         static_cast<int>(tokenValue), thumbnail);
+        if (!saved) std::snprintf(error, sizeof(error), "Save backend rejected the write");
+    } catch (const std::exception& failure) {
+        std::snprintf(error, sizeof(error), "%s", failure.what());
+    } catch (...) {
+        std::snprintf(error, sizeof(error), "Save conversion failed");
+    }
+    lua_settop(L, top);
+    lua_pushboolean(L, saved);
+    if (saved) return 1;
+    lua_pushstring(L, error);
+    return 2;
 }
 
-// -- lua_Load_game ----------------------------------------------------------
-// KAG.load_game(slot) -> dataTable, metaTable | nil, error
 static int lua_Load_game(lua_State* L) {
-    int slot = (int)luaL_checkinteger(L, 1);
-
-    auto* manager = getSaveManager();
-    if (!manager) {
-        lua_pushnil(L);
-        lua_pushstring(L, "Save manager is not available");
-        return 2;
+    const auto slotValue = luaL_checkinteger(L, 1);
+    const int top = lua_gettop(L);
+    char error[256] = {};
+    try {
+        if (slotValue < 0 || slotValue > 99) throw std::runtime_error("Invalid load slot");
+        auto* manager = getSaveManager();
+        if (!manager) throw std::runtime_error("Save manager is not available");
+        SaveMeta meta;
+        const auto data = manager->load(static_cast<int>(slotValue), &meta);
+        if (!data.is_object() && !data.is_array())
+            throw std::runtime_error("Save slot has no representable state table");
+        size_t count = 0;
+        validateLoadedValue(data, count);
+        if (meta.timestamp > static_cast<uint64_t>((std::numeric_limits<lua_Integer>::max)()))
+            throw std::runtime_error("Saved timestamp exceeds Lua integer range");
+        if (!lua_checkstack(L, 8)) throw std::runtime_error("Cannot grow load conversion stack");
+        const LoadedSaveView view{&data, &meta};
+        lua_pushcfunction(L, pushLoadedSave);
+        lua_pushlightuserdata(L, const_cast<LoadedSaveView*>(&view));
+        if (lua_pcall(L, 1, 2, 0) == LUA_OK) return 2;
+        std::snprintf(error, sizeof(error), "%s", lua_tostring(L, -1) ? lua_tostring(L, -1) : "Lua load allocation failed");
+    } catch (const std::exception& failure) {
+        std::snprintf(error, sizeof(error), "%s", failure.what());
+    } catch (...) {
+        std::snprintf(error, sizeof(error), "Load conversion failed");
     }
-
-    SaveMeta meta;
-    json data = manager->load(slot, &meta);
-
-    // Only a missing/corrupt save (load() returns json()) is a failure. An
-    // empty table {} or [] saved by the game is a valid save and must load.
-    if (data.is_null()) {
-        lua_pushnil(L);
-        lua_pushfstring(L, "Failed to load save slot %d", slot);
-        return 2;
-    }
-
-    // Push game data as Lua table
-    jsonToLuaTable(L, data);
-
-    // Push metadata table
-    lua_newtable(L);
-    lua_pushinteger(L, meta.slot);
-    lua_setfield(L, -2, "slot");
-    lua_pushinteger(L, (lua_Integer)meta.timestamp);
-    lua_setfield(L, -2, "timestamp");
-    lua_pushstring(L, meta.sceneName.c_str());
-    lua_setfield(L, -2, "scene");
-    lua_pushinteger(L, meta.tokenIndex);
-    lua_setfield(L, -2, "token_index");
-    lua_pushinteger(L, meta.schemaVersion);
-    lua_setfield(L, -2, "schema_version");
-
-    return 2;  // dataTable, metaTable
+    lua_settop(L, top);
+    lua_pushnil(L);
+    lua_pushstring(L, error);
+    return 2;
 }
+
 
 // -- lua_List_saves ---------------------------------------------------------
 // KAG.list_saves() -> {{slot=N, timestamp=T, scene=S, token_index=I}, ...}
-static int lua_List_saves(lua_State* L) {
-    auto* manager = getSaveManager();
-    const auto saves = manager ? manager->listSaves() : std::vector<SaveMeta>{};
-
-    lua_newtable(L);
+static int pushSaveList(lua_State* L) {
+    const auto& saves = *static_cast<const std::vector<SaveMeta>*>(lua_touserdata(L, 1));
+    lua_createtable(L, static_cast<int>(saves.size()), 0);
     int idx = 1;
     for (const auto& meta : saves) {
-        lua_newtable(L);
-        lua_pushinteger(L, meta.slot);
-        lua_setfield(L, -2, "slot");
-        lua_pushinteger(L, (lua_Integer)meta.timestamp);
-        lua_setfield(L, -2, "timestamp");
-        lua_pushstring(L, meta.sceneName.c_str());
-        lua_setfield(L, -2, "scene");
-        lua_pushinteger(L, meta.tokenIndex);
-        lua_setfield(L, -2, "token_index");
-        lua_pushinteger(L, meta.schemaVersion);
-        lua_setfield(L, -2, "schema_version");
+        pushSaveMeta(L, meta);
         lua_rawseti(L, -2, idx++);
     }
-
     return 1;
+}
+
+static int lua_List_saves(lua_State* L) {
+    const int top = lua_gettop(L);
+    char error[256] = {};
+    try {
+        auto* manager = getSaveManager();
+        const auto saves = manager ? manager->listSaves() : std::vector<SaveMeta>{};
+        if (saves.size() > kMaxValueCount) throw std::runtime_error("Save listing size exceeded");
+        for (const auto& meta : saves) {
+            if (!validUtf8(meta.sceneName) || meta.timestamp >
+                static_cast<uint64_t>((std::numeric_limits<lua_Integer>::max)()))
+                throw std::runtime_error("Save listing has unrepresentable metadata");
+        }
+        if (!lua_checkstack(L, 8)) throw std::runtime_error("Cannot grow save listing stack");
+        lua_pushcfunction(L, pushSaveList);
+        lua_pushlightuserdata(L, const_cast<std::vector<SaveMeta>*>(&saves));
+        if (lua_pcall(L, 1, 1, 0) == LUA_OK) return 1;
+        std::snprintf(error, sizeof(error), "%s", lua_tostring(L, -1) ? lua_tostring(L, -1) : "Lua list allocation failed");
+    } catch (const std::exception& failure) {
+        std::snprintf(error, sizeof(error), "%s", failure.what());
+    } catch (...) {
+        std::snprintf(error, sizeof(error), "Save listing failed");
+    }
+    lua_settop(L, top);
+    lua_pushnil(L);
+    lua_pushstring(L, error);
+    return 2;
 }
 
 // -- lua_Delete_save ---------------------------------------------------------

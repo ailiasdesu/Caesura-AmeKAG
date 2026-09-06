@@ -56,6 +56,14 @@ function TextScene.get_state(ctx)
     return ensure_state(ctx)
 end
 
+function TextScene.reveal_length(ctx)
+    local total=0
+    for _,draw in ipairs(ensure_state(ctx).draws) do
+        if draw.typewriter then total=total+(utf8.len(draw.text) or #draw.text) end
+    end
+    return total
+end
+
 function TextScene.clear(ctx)
     local state = ensure_state(ctx)
     state.draws = {}
@@ -304,6 +312,161 @@ function TextScene.render(ctx, render_backend)
         end
     end
     return submitted
+end
+
+local function saved_number(value, name, minimum, maximum)
+    if type(value) ~= "number" or value ~= value or math.abs(value) == math.huge
+        or (minimum and value < minimum) or (maximum and value > maximum) then
+        error("Invalid saved text " .. name, 0)
+    end
+    return value
+end
+
+local function saved_array(value, name)
+    if value == nil then return {} end
+    if type(value) ~= "table" then error("Invalid saved text " .. name, 0) end
+    local count = 0
+    for key in pairs(value) do
+        if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then
+            error("Invalid saved text array index", 0)
+        end
+        count = count + 1
+    end
+    if count ~= #value or count > 4096 then error("Invalid saved text array size", 0) end
+    return value
+end
+
+local function saved_count(value, name)
+    local result=saved_number(value,name,0)
+    if result~=math.floor(result) then error("Invalid saved text "..name,0) end
+    return result
+end
+
+local function saved_page_options(value)
+    if value==nil then return nil end
+    if type(value)~="table" then error("Invalid saved page options",0) end
+    local opts=require("kag.save_state").copy(value)
+    for _,key in ipairs({"msgX","msgY","nameX","lineHeight","maxWidth","font_size"}) do
+        if opts[key]~=nil then
+            saved_number(opts[key],key)
+            if (key=="lineHeight" or key=="maxWidth" or key=="font_size") and opts[key]<=0 then
+                error("Invalid saved page "..key,0)
+            end
+        end
+    end
+    if opts.nvl~=nil and type(opts.nvl)~="boolean" then error("Invalid saved page NVL flag",0) end
+    if opts.pos~=nil and type(opts.pos)~="string" then error("Invalid saved page position",0) end
+    if opts.color~=nil then
+        if type(opts.color)~="table" then error("Invalid saved page color",0) end
+        for _,key in ipairs({1,2,3,4,"r","g","b","a"}) do
+            if opts.color[key]~=nil then saved_number(opts.color[key],"page color",0,255) end
+        end
+    end
+    return opts
+end
+
+local function saved_draw(source)
+    if type(source) ~= "table" or (source.kind ~= "text" and source.kind ~= "ruby")
+        or type(source.text) ~= "string" or not utf8.len(source.text) then
+        error("Invalid saved text draw", 0)
+    end
+    local draw = {kind=source.kind,text=source.text}
+    for _, key in ipairs({"x","y"}) do draw[key]=saved_number(source[key],key) end
+    for _, key in ipairs({"r","g","b","a"}) do draw[key]=saved_number(source[key],key,0,255) end
+    for _, key in ipairs({"scale","layout_width"}) do
+        if source[key] ~= nil then draw[key]=saved_number(source[key],key,0) end
+    end
+    for _, key in ipairs({"bold","italic","strike","typewriter","_page_src"}) do
+        if source[key] ~= nil then
+            if type(source[key]) ~= "boolean" then error("Invalid saved text flag",0) end
+            draw[key]=source[key]
+        end
+    end
+    if source.kind == "ruby" then
+        if type(source.ruby) ~= "string" or not utf8.len(source.ruby) then
+            error("Invalid saved ruby text",0)
+        end
+        draw.ruby=source.ruby
+    end
+    if source.group ~= nil then
+        if type(source.group) ~= "string" and type(source.group) ~= "number" then
+            error("Unrepresentable saved text group",0)
+        end
+        draw.group=source.group
+        if type(draw.group)=="number" then saved_number(draw.group,"group") end
+    end
+    return draw
+end
+
+-- Normalize a plain snapshot before changing either the live context or font.
+function TextScene.prepare_restore(snapshot)
+    local copy = require("kag.save_state").copy
+    if type(snapshot) ~= "table" or type(snapshot.state) ~= "table" then
+        error("Invalid text snapshot",0)
+    end
+    local source, state = snapshot.state, {draws={},page_src={}}
+    for _, key in ipairs({"cursor_x","cursor_y"}) do
+        if source[key] ~= nil then state[key]=saved_number(source[key],key) end
+    end
+    for _, key in ipairs({"line","char_offset","reveal_chars"}) do
+        if source[key] ~= nil then state[key]=saved_count(source[key],key) end
+    end
+    if source.font_size~=nil then state.font_size=saved_number(source.font_size,"font_size",0) end
+    if source.opacity ~= nil then state.opacity=saved_number(source.opacity,"opacity",0,255) end
+    for _, key in ipairs({"font_face","font_color","last_action"}) do
+        if source[key] ~= nil then
+            if type(source[key]) ~= "string" then error("Invalid saved text "..key,0) end
+            state[key]=source[key]
+        end
+    end
+    for i, draw in ipairs(saved_array(source.draws,"draws")) do state.draws[i]=saved_draw(draw) end
+    for i, entry in ipairs(saved_array(source.page_src,"page sources")) do
+        if type(entry) ~= "table" or type(entry.src) ~= "string"
+            or not utf8.len(entry.src) or (entry.kind ~= "ch" and entry.kind ~= "text") then
+            error("Invalid saved page source",0)
+        end
+        for _,key in ipairs({"scene","speaker"}) do
+            if entry[key]~=nil and (type(entry[key])~="string" or not utf8.len(entry[key])) then
+                error("Invalid saved page "..key,0)
+            end
+        end
+        state.page_src[i]=copy(entry)
+        state.page_src[i].opts=saved_page_options(entry.opts)
+    end
+    if snapshot.waiting_input~=nil and type(snapshot.waiting_input)~="boolean" then
+        error("Invalid saved input wait",0)
+    end
+    local result={state=state,waiting_input=snapshot.waiting_input==true}
+    for _, key in ipairs({"textCursorX","textCursorY"}) do
+        if snapshot[key] ~= nil then result[key]=saved_number(snapshot[key],key) end
+    end
+    result.textCursorX = result.textCursorX or state.cursor_x or 32
+    result.textCursorY = result.textCursorY or state.cursor_y or 580
+    if snapshot.text_speed ~= nil then result.text_speed=saved_number(snapshot.text_speed,"speed",0) end
+    if snapshot.reveal ~= nil then
+        if type(snapshot.reveal) ~= "table" then error("Invalid saved text reveal",0) end
+        local reveal = snapshot.reveal
+        result.reveal = {
+            total=saved_count(reveal.total,"reveal total"),
+            elapsed=saved_number(reveal.elapsed,"reveal elapsed",0),
+            last_shown=saved_count(reveal.last_shown==nil and 0 or reveal.last_shown,"last shown"),
+        }
+        if result.reveal.last_shown > result.reveal.total then error("Invalid saved reveal boundary",0) end
+    end
+    return result
+end
+
+function TextScene.capture(ctx)
+    return TextScene.prepare_restore({state=ctx.text_state or {},reveal=ctx.reveal,
+        textCursorX=ctx.textCursorX,textCursorY=ctx.textCursorY,
+        text_speed=ctx.text_speed,waiting_input=ctx.waiting_input})
+end
+
+function TextScene.apply_restore(ctx, snapshot)
+    ctx.text_state, ctx.reveal = snapshot.state, snapshot.reveal
+    ctx.textCursorX = snapshot.textCursorX or snapshot.state.cursor_x or 32
+    ctx.textCursorY = snapshot.textCursorY or snapshot.state.cursor_y or 580
+    ctx.text_speed, ctx.waiting_input = snapshot.text_speed, snapshot.waiting_input
 end
 
 return TextScene

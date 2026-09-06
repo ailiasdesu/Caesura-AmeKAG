@@ -225,6 +225,7 @@ caesura_add_module(Archive
 
 caesura_add_module(Audio
     src/audio/SoLoudAudioEngine.cpp
+    src/audio/AudioRestore.cpp
     src/audio/NullAudioBackend.cpp
 )
 
@@ -291,6 +292,7 @@ caesura_add_module(Render
     src/render/EmbeddedShaders_Metal.cpp
     src/render/EmbeddedShaders_S5.cpp
     src/render/TextRenderer.cpp
+    src/render/TextRendererFont.cpp
     src/render/ParticleSystem.cpp
     src/render/GpuMonitor.cpp
     src/render/VideoPlayer.cpp
@@ -329,6 +331,10 @@ caesura_add_module(Script
     src/script/bindings/SmaBinding.cpp
     src/script/bindings/SteamBinding.cpp
     src/script/bindings/SaveBinding.cpp
+    src/script/bindings/RestoreBinding.cpp
+    src/script/bindings/AudioRestoreBinding.cpp
+    src/script/bindings/FontRestoreBinding.cpp
+    src/script/bindings/TransientRestoreBinding.cpp
     src/script/bindings/AIBinding.cpp
     src/script/bindings/EngineBinding.cpp
 )

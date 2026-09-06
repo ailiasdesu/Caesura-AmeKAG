@@ -222,21 +222,20 @@ fi
 RTOUT="$(GOLDEN_ROUNDTRIP=1 SAMPLE_FRAMES="$FRAME_BUDGET" "$LUA" tests/scripts/golden_vn_headless.lua 2>&1)"
 RTRC=$?
 printf "  [roundtrip] %s\n" "$(printf '%s\n' "$RTOUT" | grep -E "RT_|ROUNDTRIP|RESULT" | tr '\n' ' ')"
-# t58 hardening: restore-only degradation (rejected load path) matched every
-# old grep -- also require the resume to be ARMED (RT_RESUME_ARMED, printed
-# only when _pendingLoadScene carries the accepted path) and the replay to
-# actually re-execute [save] (>=2 "Saved to slot 9" lines).
+# Require a newly active coroutine, restored values, and a completed
+# continuation. The consumed save command must not write the slot a second time.
 RTSAVES=$(printf '%s\n' "$RTOUT" | grep -c "\[SaveCmd\] Saved to slot 9")
 if [ "$RTRC" -eq 0 ] \
    && printf '%s\n' "$RTOUT" | grep -q "RESULT DONE" \
    && printf '%s\n' "$RTOUT" | grep -q "RT_FORWARD marker=POST_SAVE_MUTATED counter=2" \
    && printf '%s\n' "$RTOUT" | grep -q "ROUNDTRIP_OK" \
    && printf '%s\n' "$RTOUT" | grep -q "RT_RESUME_ARMED" \
-   && [ "$RTSAVES" -ge 2 ] \
+   && [ "$RTSAVES" -eq 1 ] \
+   && printf '%s\n' "$RTOUT" | grep -q "RT_CONTINUATION_OK" \
    && printf '%s\n' "$RTOUT" | grep -q "RT_REPLAY_END"; then
-    check "v2 save->load roundtrip (restore + resume armed + replay re-save, to [end])" 0
+    check "v2 save->load roundtrip (restored state + active continuation, no duplicate save)" 0
 else
-    check "v2 save->load roundtrip (restore + resume armed + replay re-save, to [end])" 1 "rc=$RTRC saves=$RTSAVES"
+    check "v2 save->load roundtrip (restored state + active continuation, no duplicate save)" 1 "rc=$RTRC saves=$RTSAVES"
 fi
 
 # ---- 4d. v3 semantic flags: NVL mode (accumulate / page-turn / save / off) ----

@@ -11,6 +11,7 @@ extern "C" {
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <exception>
 
 namespace Caesura {
 
@@ -146,14 +147,29 @@ static IRenderDevice* getRender(lua_State* L) {
 
 // -- KAG.play_bgm(file, fadeTime) -----------------------------------------
 
+template <typename Play>
+static int checkedAudioPlay(lua_State* L, Play play) {
+    bool created = false;
+    char error[256] = "Audio backend did not create a source";
+    try {
+        created = play() != 0;
+    } catch (const std::exception& failure) {
+        std::snprintf(error, sizeof(error), "%s", failure.what());
+    } catch (...) {
+        std::snprintf(error, sizeof(error), "Audio source creation failed");
+    }
+    lua_pushboolean(L, created);
+    if (created) return 1;
+    lua_pushstring(L, error);
+    return 2;
+}
+
 static int lua_KAG_play_bgm(lua_State* L) {
     const char* file = luaL_checkstring(L, 1);
     float fadeTime   = (float)luaL_optnumber(L, 2, 1.0);
     IAudioBackend* audio = getAudio(L);
     if (!audio) { lua_pushboolean(L, 0); return 1; }
-    audio->playBGM(file, fadeTime);
-    lua_pushboolean(L, 1);
-    return 1;
+    return checkedAudioPlay(L, [=] { return audio->playBGM(file, fadeTime); });
 }
 
 // -- KAG.play_voice(file) -------------------------------------------------
@@ -162,9 +178,7 @@ static int lua_KAG_play_voice(lua_State* L) {
     const char* file = luaL_checkstring(L, 1);
     IAudioBackend* audio = getAudio(L);
     if (!audio) { lua_pushboolean(L, 0); return 1; }
-    audio->playVoice(file);
-    lua_pushboolean(L, 1);
-    return 1;
+    return checkedAudioPlay(L, [=] { return audio->playVoice(file); });
 }
 
 // -- KAG.play_se_3d(file, x, y, z) ----------------------------------------
@@ -176,9 +190,7 @@ static int lua_KAG_play_se_3d(lua_State* L) {
     float z = (float)luaL_optnumber(L, 4, 0.0);
     IAudioBackend* audio = getAudio(L);
     if (!audio) { lua_pushboolean(L, 0); return 1; }
-    audio->playSE3D(file, x, y, z);
-    lua_pushboolean(L, 1);
-    return 1;
+    return checkedAudioPlay(L, [=] { return audio->playSE3D(file, x, y, z); });
 }
 
 // -- KAG.play_se(file) ----------------------------------------------------
@@ -187,9 +199,7 @@ static int lua_KAG_play_se(lua_State* L) {
     const char* file = luaL_checkstring(L, 1);
     IAudioBackend* audio = getAudio(L);
     if (!audio) { lua_pushboolean(L, 0); return 1; }
-    audio->playSE(file);
-    lua_pushboolean(L, 1);
-    return 1;
+    return checkedAudioPlay(L, [=] { return audio->playSE(file); });
 }
 
 // -- KAG.stop_bgm(fadeTime) -----------------------------------------------

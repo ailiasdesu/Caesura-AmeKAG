@@ -27,6 +27,7 @@ freely, subject to the following restrictions:
 
 #include <stdlib.h> // rand
 #include <math.h> // sin
+#include <stdint.h>
 
 #ifdef SOLOUD_NO_ASSERTS
 #define SOLOUD_ASSERT(x)
@@ -140,6 +141,18 @@ namespace SoLoud
 
 		// ctor
 		TinyAlignedFloatBuffer();
+	};
+
+	// Caesura: source-domain cursor at the device-consumed sample frontier.
+	// Fraction uses the mixer's existing 20-bit fixed-point phase.
+	struct VoiceFrameCursor
+	{
+		uint64_t frame;
+		unsigned int fraction;
+		unsigned int sourceRate;
+		unsigned int outputRate;
+		float volume;
+		bool looping;
 	};
 };
 
@@ -270,6 +283,21 @@ namespace SoLoud
 
 		// Seek the audio stream to certain point in time. Some streams can't seek backwards. Relative play speed affects time.
 		result seek(handle aVoiceHandle, time aSeconds);
+		// Caesura: discard cached mixer samples without seeking the source.
+		// Used after stopping all children of a session-owned bus.
+		void clearResamplerBuffers(handle aVoiceHandle);
+		// Caesura: take ownership of an independently prepared decoder instance.
+		handle playPrepared(AudioSource &aSound, AudioSourceInstance *aInstance,
+			float aVolume, float aPan, bool aPaused, unsigned int aBus);
+		bool getVoiceFrameCursor(handle aVoiceHandle, VoiceFrameCursor &aCursor);
+		// Caesura BGM lifecycle: start a paused voice at an atomic bus frontier;
+		// keep finite sources until their linear source/bus tail is consumed.
+		result startBusVoice(handle aVoiceHandle, Bus &aBus);
+		bool hasConsumedVoiceTail(handle aVoiceHandle, uint64_t aSourceFrames);
+		// Prime only this source/bus graph under the device audio mutex. No output
+		// is sent to the device and no global clocks or unrelated voices advance.
+		result primeRestoredVoice(handle aVoiceHandle, Bus &aBus, unsigned int aFrames,
+			unsigned int aInitialFraction, const VoiceFrameCursor &aTarget);
 		// Stop the sound.
 		void stop(handle aVoiceHandle);
 		// Stop all voices.
@@ -467,7 +495,7 @@ namespace SoLoud
 		// Map resample buffers to active voices
 		void mapResampleBuffers_internal();
 		// Perform mixing for a specific bus
-		void mixBus_internal(float *aBuffer, unsigned int aSamplesToRead, unsigned int aBufferSize, float *aScratch, unsigned int aBus, float aSamplerate, unsigned int aChannels, unsigned int aResampler);
+		void mixBus_internal(float *aBuffer, unsigned int aSamplesToRead, unsigned int aBufferSize, float *aScratch, unsigned int aBus, float aSamplerate, unsigned int aChannels, unsigned int aResampler, AudioSourceInstance *aOnlyVoice = 0);
 		// Find a free voice, stopping the oldest if no free voice is found.
 		int findFreeVoice_internal();
 		// Converts handle to voice, if the handle is valid. Returns -1 if not.

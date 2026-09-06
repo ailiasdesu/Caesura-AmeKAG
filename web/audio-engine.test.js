@@ -20,7 +20,7 @@ function fakeContext() {
       sources.push(s)
       return s
     },
-    decodeAudioData: vi.fn(async () => ({ duration: 5 })),
+    decodeAudioData: vi.fn(async () => ({ duration: 5, length: 240000, sampleRate: 48000, numberOfChannels: 2 })),
     suspend: vi.fn(async () => {}),
     resume: vi.fn(async () => {}),
     close: vi.fn(async () => {}),
@@ -32,7 +32,7 @@ function fakeContext() {
 function mkEngine() {
   const { ctx, sources, gains } = fakeContext()
   const eng = new AudioEngine({ ctx })
-  globalThis.fetch = vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) }))
+  globalThis.fetch = vi.fn(async () => new Response(new Uint8Array(8)))
   return { ctx, sources, gains, eng }
 }
 
@@ -49,7 +49,7 @@ describe('AudioEngine', () => {
   it('loads, plays and reports isPlaying on a bus', async () => {
     const { ctx, sources } = fakeContext()
     const eng = new AudioEngine({ ctx })
-    globalThis.fetch = vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) }))
+    globalThis.fetch = vi.fn(async () => new Response(new Uint8Array(8)))
     const ok = await eng.play('bgm', 'assets/bgm/daily.wav', { assetUrl: (p) => 'http://x/' + p })
     expect(ok).toBe(true)
     expect(sources[0].buffer).toBeTruthy()
@@ -63,7 +63,7 @@ describe('AudioEngine', () => {
   it('stop cuts the source and disconnects', async () => {
     const { ctx, sources } = fakeContext()
     const eng = new AudioEngine({ ctx })
-    globalThis.fetch = vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) }))
+    globalThis.fetch = vi.fn(async () => new Response(new Uint8Array(8)))
     await eng.play('voice', 'v.wav', { assetUrl: 'http://x/' })
     eng.stop('voice')
     expect(eng._sources.size).toBe(0)
@@ -73,7 +73,7 @@ describe('AudioEngine', () => {
   it('caches decoded buffers per path', async () => {
     const { ctx } = fakeContext()
     const eng = new AudioEngine({ ctx })
-    globalThis.fetch = vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) }))
+    globalThis.fetch = vi.fn(async () => new Response(new Uint8Array(8)))
     await eng.play('bgm', 'a.wav', { assetUrl: 'http://x/' })
     await eng.play('se', 'a.wav', { assetUrl: 'http://x/' })
     expect(globalThis.fetch).toHaveBeenCalledTimes(1)
@@ -97,7 +97,8 @@ describe('AudioEngine · bus routing', () => {
     const rec = eng._sources.get('bgm')
     expect(rec.gain).toBe(eng._busGains.get('bgm'))
     expect(rec.gain).not.toBe(ctx.destination)
-    expect(rec.source.connect).toHaveBeenCalledWith(eng._busGains.get('bgm'))
+    expect(rec.source.connect).toHaveBeenCalledWith(rec.clipGain)
+    expect(rec.clipGain.connect).toHaveBeenCalledWith(eng._busGains.get('bgm'))
   })
 
   it('plays all three kinds concurrently on independent buses', async () => {
@@ -165,19 +166,21 @@ describe('AudioEngine · volume control', () => {
     for (const k of ['bgm', 'se', 'voice']) expect(eng._busGains.get(k).gain.value).toBe(0)
   })
 
-  it('volume persists across plays; explicit play volume overrides the bus', async () => {
+  it('user bus volume persists while explicit play volume controls only the clip', async () => {
     const eng = mkEngine().eng
     eng.setBusVolume('bgm', 0.6)
     await eng.play('bgm', 'a.wav', { assetUrl: 'http://x/' })
     expect(eng._busGains.get('bgm').gain.value).toBe(0.6)
     await eng.play('bgm', 'b.wav', { assetUrl: 'http://x/', volume: 0.2 })
-    expect(eng._busGains.get('bgm').gain.value).toBe(0.2)
+    expect(eng._busGains.get('bgm').gain.value).toBe(0.6)
+    expect(eng._sources.get('bgm').clipGain.gain.value).toBe(0.2)
   })
 
   it('play accepts an explicit muted (0) volume', async () => {
     const eng = mkEngine().eng
     await eng.play('bgm', 'a.wav', { assetUrl: 'http://x/', volume: 0 })
-    expect(eng._busGains.get('bgm').gain.value).toBe(0)
+    expect(eng._busGains.get('bgm').gain.value).toBe(1)
+    expect(eng._sources.get('bgm').clipGain.gain.value).toBe(0)
   })
 })
 
@@ -270,7 +273,7 @@ describe('AudioEngine · resource tolerance', () => {
     const eng = mkEngine().eng
     globalThis.fetch = vi.fn()
       .mockRejectedValueOnce(new Error('first load fails'))
-      .mockResolvedValueOnce({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) })
+      .mockResolvedValueOnce(new Response(new Uint8Array(8)))
     await expect(eng.play('bgm', 'a.wav', { assetUrl: 'http://x/' })).resolves.toBe(false)
     await expect(eng.play('bgm', 'a.wav', { assetUrl: 'http://x/' })).resolves.toBe(true)
     expect(eng._buffers.has('a.wav')).toBe(true)
@@ -371,7 +374,8 @@ describe('AudioEngine · bridge contract', () => {
     const kind = 'bgm', file = 'music/track1.wav'
     await eng.play(kind, file, { volume: 0.4, assetUrl: (p) => 'http://cdn/' + p })
     expect(eng.isPlaying('bgm')).toBe(true)
-    expect(eng._busGains.get('bgm').gain.value).toBe(0.4)
+    expect(eng._busGains.get('bgm').gain.value).toBe(1)
+    expect(eng._sources.get('bgm').clipGain.gain.value).toBe(0.4)
     // backend.audio_stop(kind) -> audio.stop(kind)
     eng.stop(kind)
     expect(eng.isPlaying(kind)).toBe(false)

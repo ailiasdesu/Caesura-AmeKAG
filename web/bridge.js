@@ -1,9 +1,16 @@
+import { luaLiteralValue } from './lua-value.js'
 // G5 path-B web player — wasmoon bridge.
 // Loads the pure-Lua KAG stack + the REAL kag command table, wires the
 // AdapterCore as the binding surface, and runs .ks scenes.
 import { Lua } from 'wasmoon'
 import { AdapterCore, LAYER_TYPE } from './adapter-core.js'
 import { AudioEngine } from './audio-engine.js'
+import { installLayerBridge } from './layer-bridge.js'
+import { installRunnerBridge } from './runner-bridge.js'
+import { createAssetRestore } from './restore-assets.js'
+import { installSaveValueBridge } from './save-value-bridge.js'
+import { createFontRestore } from './restore-font.js'
+import { createAudioRestore } from './restore-audio.js'
 
 // modules whose Lua source lives in scripts/ (NOT bindings)
 // layers/audio/etc are C++-binding modules stubbed in JS below (the real
@@ -26,45 +33,6 @@ function makeDefaultStorage() {
   }
 }
 
-
-// JSON-safe value -> Lua literal source (bracketed keys + escaped strings).
-// Round 46: the web save bridge parses stored state back into real Lua
-// tables with load('return ' .. literal) — wasmoon's userdata proxies are
-// rejected by the engine's load handler (type(state) ~= 'table').
-function luaLiteralValue(v) {
-  if (v === null || v === undefined) return 'nil'
-  if (typeof v === 'number') return Number.isFinite(v) ? String(v) : 'nil'
-  if (typeof v === 'boolean') return v ? 'true' : 'false'
-  if (typeof v === 'string') {
-    let out = '"'
-    for (const ch of v) {
-      const code = ch.codePointAt(0)
-      if (ch === '\\') out += '\\\\'
-      else if (ch === '"') out += '\\"'
-      else if (ch === '\n') out += '\\n'
-      else if (ch === '\r') out += '\\r'
-      else if (ch === '\t') out += '\\t'
-      else if (code < 32) out += '\\' + code
-      else out += ch
-    }
-    return out + '"'
-  }
-  if (Array.isArray(v)) return '{' + v.map(luaLiteralValue).join(',') + '}'
-  if (typeof v === 'object') {
-    const parts = []
-    // Bracket quoted keys whenever they are NOT a valid plain Lua identifier:
-    // reserved words (end/for/do/while/return/... — e.g. a [for end="3"]
-    // param) or otherwise non-alnum keys must be '["end"]=..' not 'end=..'.
-    const RESERVED = new Set(['and','break','do','else','elseif','end','false','for','function','goto','if','in','local','nil','not','or','repeat','return','then','true','until','while'])
-    for (const k of Object.keys(v)) {
-      const bare = /^[A-Za-z_][A-Za-z0-9_]*$/.test(k) && !RESERVED.has(k)
-      const key = bare ? k : '[' + luaLiteralValue(k) + ']'
-      parts.push(key + '=' + luaLiteralValue(v[k]))
-    }
-    return '{' + parts.join(',') + '}'
-  }
-  return 'nil'
-}
 
 const BINDING_MODULES = new Set([
   'backend', 'layers', 'audio', 'rtt', 'blend', 'transition', 'transform',
@@ -104,11 +72,36 @@ const defaultAudioAssetUrl = (p) => {
   return pageBase() + 'assets/' + s
 }
 
-export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, audioAssetUrl = defaultAudioAssetUrl, storageBackend, langBase = langBaseFromScripts(scriptsBase), langs = ['en', 'zh', 'ja'] }) {
+function syncRestoredHistory(lua, core) {
+  const saved = lua.global.get('__RESTORED_WEB_BACKLOG')
+  if (saved == null) return
+  const entries = JSON.parse(JSON.stringify(saved))
+  core.backlog = (Array.isArray(entries) ? entries : []).map((entry) => {
+    const text = (entry.name ? '[' + entry.name + ']' : '') + (entry.text ?? '')
+    return { ...entry, text, draws: [{ t: text }] }
+  })
+  core._lastBacklog = core.backlog.at(-1)?.text ?? ''
+  core.endings = []
+  core._endingKeys.clear()
+  lua.global.set('__RESTORED_WEB_BACKLOG', null)
+}
+
+export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, audioContext, audioAssetUrl = defaultAudioAssetUrl, assetUrl = defaultAudioAssetUrl, decodeImage, storageBackend, langBase = langBaseFromScripts(scriptsBase), langs = ['en', 'zh', 'ja'] }) {
   const factory = await Lua.load(wasmFile ? { wasmFile } : undefined)
   const lua = factory.createState()
   const core = new AdapterCore()
-  const audio = new AudioEngine()
+  const audio = new AudioEngine({ctx:audioContext,fetchImpl})
+  const audioRestore = createAudioRestore({audio,fetchImpl,assetUrl:audioAssetUrl})
+  const imageRestore = createAssetRestore({core, fetchImpl, assetUrl, decodeImage})
+  const fontRestore = typeof globalThis.FontFace === 'function' && globalThis.document?.fonts
+    ? createFontRestore({core, fetchImpl, assetUrl}) : null
+  function solidTexture(...rgba) {
+    const key = rgba.join(',')
+    for (const [id, texture] of core.textures) if (texture.ordinaryColor === key) return id
+    const id = imageRestore.materialize_image(imageRestore.prepare_color(...rgba))
+    core.textures.get(id).ordinaryColor = key
+    return id
+  }
 
   // ---- lang dictionaries (round 91 i18n web parity) ------------------
   // The REAL scripts/i18n.lua loads assets/lang/<code>.lua through
@@ -220,19 +213,10 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
           core._log('save.error', { slot: Number(slot), error: 'invalid slot' })
           return null
         }
-        // Normalize the scene path inside the captured state into the
-        // engine's allowlisted form (SaveCommands.load validates
-        // state.scene_path with _safeScenePath — bare web basenames
-        // would be rejected and [load] would never set _pendingLoadScene).
+        // Keep logical scene identities intact, including caller frames and
+        // localization keys. Restore is limited to the host's trusted map.
         const st = state && typeof state === 'object' ? { ...state } : {}
-        let scene = String(sceneName ?? '')
-        if (scene.length > 0 && !scene.includes('/') && !scene.startsWith('demo/')) {
-          scene = 'demo/' + scene
-        }
-        if (typeof st.scene_path === 'string' && st.scene_path.length > 0
-            && !st.scene_path.includes('/')) {
-          st.scene_path = 'demo/' + st.scene_path
-        }
+        const scene = String(sceneName ?? '')
         const payload = JSON.stringify({
           state: st,
           scene,
@@ -295,15 +279,18 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
     },
     // audio_play routes through the real WebAudio engine when available;
     // the core state machine always records the call (telemetry + fallback).
-    audio_play: (kind, file, opts) => {
+    audio_play: async (kind, file, opts) => {
       const k = String(kind), f = String(file)
       core.audioPlay(k, f, opts && opts.volume)
-      void audio.play(k, f, { volume: opts && opts.volume, assetUrl: audioAssetUrl })
-      return 1
+      return await audio.play(k, f, {volume:opts && opts.volume,loop:opts?.loop ?? k==='bgm',assetUrl:audioAssetUrl})
     },
     audio_stop: (kind) => { const k = String(kind); core.audioStop(k); audio.stop(k) },
     audio_xfade: () => {},
-    audio_is_playing: (kind) => { core.tick(); return core.audioIsPlaying(String(kind)) },
+    audio_is_playing: (kind) => {
+      const key=String(kind),playing=audio.isPlaying(key)
+      if (!playing && core.audioBus[key]?.playing) core.audioEnded(key)
+      return playing
+    },
     audio_set_bus_volume: (kind, v) => { core.audioSetBusVolume(String(kind), v); audio.setBusVolume(String(kind), v) },
     audio_fade_volume: () => {},
     load_texture: (f) => {
@@ -312,7 +299,7 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
       return id
     },
     load_texture_async: (f) => core.loadTexture(f),
-    create_solid_texture: () => 0, destroy_texture: (id) => core.destroyTexture(id),
+    create_solid_texture: solidTexture, destroy_texture: (id) => core.destroyTexture(id),
     // -- palette / LUT bridge (round 77) -------------------------------
     // scripts/palette.lua drives LUT color grading through these four
     // backend.* entries (load_image / is_valid / set_palette /
@@ -351,7 +338,7 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
     blend: { lua: () => {} }, transition: { lua: () => {}, start: () => {}, is_active: () => false },
     transform: { lua: () => {} }, vfx: { lua: () => {}, flash: () => {}, shake: () => {}, quake: () => {} },
     flow: { scene_cache: () => {}, load_scene: () => {} },
-    replay: { save: () => {}, event_count: () => 0, load: () => {}, set_mode: () => {} },
+    replay: { get_mode: () => 'off', save: () => {}, event_count: () => 0, load: () => {}, set_mode: () => {} },
     pool: {}, config: { ai: () => {} }, system: { lua: () => {} },
     settings: {},
     // System-UI modules: the desktop engine opens overlay screens; the web
@@ -376,7 +363,31 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
   lua.global.set('backend', jsBackend)
   lua.global.set('layers', jsLayers)
   lua.global.set('KAG', jsKAG)
+  lua.global.set('__IS_WEB_PROMISE', (value) => value instanceof Promise)
   await lua.doString(`
+    local is_promise = __IS_WEB_PROMISE
+    function __copy_web_scenes(scenes)
+      local result = {}
+      for key, value in pairs(scenes or {}) do result[key] = value end
+      return result
+    end
+    function __find_web_scene(scenes, name)
+      if not scenes or type(name) ~= 'string' then return nil end
+      if scenes[name] ~= nil then return scenes[name] end
+      for _, prefix in ipairs({'assets/script/', 'assets/scripts/', 'demo/'}) do
+        if name:sub(1, #prefix) == prefix then return scenes[name:sub(#prefix + 1)] end
+      end
+    end
+    function __resume_web_scene(co, ...)
+      local result = table.pack(coroutine.resume(co, ...))
+      while result[1] and coroutine.status(co) ~= 'dead' and is_promise(result[2]) do
+        -- Pass the child :await() yield to Wasmoon's async outer thread.
+        -- Its continuation owns the result; a frame dt is not a reply.
+        coroutine.yield(result[2])
+        result = table.pack(coroutine.resume(co))
+      end
+      return table.unpack(result, 1, result.n)
+    end
     backend = _G['backend']
     layers = _G['layers']
     -- Round 77: wasmoon marshals a JS binding object as userdata, but
@@ -394,6 +405,8 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
       -- stage size ((1280,720)) instead of falling back to the desktop
       -- 1920x1080 default.
       local _jsRes = t.get_resolution
+      local play_audio=t.audio_play
+      t.audio_play=function(...) return play_audio(...):await() end
       if _jsRes ~= nil then
         t.get_resolution = function()
           local ok, r = pcall(_jsRes)
@@ -405,6 +418,35 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
         end
       end
       _G.backend = t
+    end
+    do
+      local original = _G.flow
+      local prepared_flow = {}
+      for key, value in pairs(original) do prepared_flow[key] = value end
+      function prepared_flow.prepare_scene(path)
+        local loader = rawget(_G, '__PREPARE_SCENE_TOKENS')
+        if type(path) ~= 'string' or type(loader) ~= 'function' then
+          return nil, 'No trusted scene provider'
+        end
+        local loaded, tokens = pcall(loader, path)
+        if not loaded then return nil, tostring(tokens) end
+        if type(tokens) ~= 'table' then return nil, 'Scene is unavailable: ' .. path end
+        local compiled, reason = pcall(require('kag.compiler').compile, tokens)
+        if not compiled then return nil, tostring(reason) end
+        return {tokens=tokens, labels=tokens._compiled and tokens._compiled.labels or {}, path=path}
+      end
+      function prepared_flow.is_restore_scene(path)
+        if type(path) ~= 'string' or #path == 0 or #path > 4096
+          or path:sub(1,1) == '/' or path:find('..',1,true) or not path:match('%.ks$') then return false end
+        for index = 1, #path do
+          local byte = path:byte(index)
+          if byte < 32 or byte == 58 or byte == 92 then return false end
+        end
+        local available = rawget(_G, '__HAS_RESTORE_SCENE')
+        return type(available) == 'function' and available(path) == true
+      end
+      prepared_flow.load_scene = prepared_flow.prepare_scene
+      _G.flow = prepared_flow
     end
     for _, name in ipairs({'backend','layers','audio','rtt','blend','transition','transform','vfx','flow','replay','pool','config','system','settings','gallery','music_room','title_menu','saveload_menu','chapter_select','dev_hud','history_ui','toast','ks_i18n','fileutil','sandbox','mods'}) do
       package.loaded[name] = _G[name]
@@ -419,7 +461,42 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
   `)
 
   // ---- load the real kag command table ----
-  await lua.doString(`local kag = require('kag')`)
+  await installLayerBridge(lua, core)
+  lua.global.set('__TRANSIENT_RESTORE', {
+    capture:()=>({videos:0,models:0,particles:0,emitters:0,postfx:core.palette.handle==null?0:1}),
+    stop:()=>{if(core.palette.handle!=null) core.setPalette(null,0,0);return true},
+  })
+  lua.global.set('__IMAGE_RESTORE', imageRestore)
+  await lua.doString(`
+    local image = __IMAGE_RESTORE
+    local transient = __TRANSIENT_RESTORE
+    Restore = Restore or {}
+    Restore.capture_transients=function()
+      local result={}
+      for key,value in pairs(transient.capture()) do result[key]=value end
+      return result
+    end
+    Restore.stop_transients=transient.stop
+    Restore.prepare_image = function(path) return image.prepare_image(path):await() end
+    Restore.prepare_color = image.prepare_color
+    Restore.materialize_image = image.materialize_image
+    Restore.discard_image = image.discard_image
+    Restore.image_info = function(ticket)
+      local size = image.image_info(ticket)
+      return size[1], size[2]
+    end
+    Restore.describe_texture = function(id)
+      local source = image.describe_texture(id)
+      if source == nil then return nil end
+      local value = {}
+      for key, item in pairs(source) do value[key] = item end
+      return value
+    end
+    __IMAGE_RESTORE = nil
+    __TRANSIENT_RESTORE = nil
+    local kag = require('kag')
+  `)
+  await installRunnerBridge(lua)
 
 
 
@@ -438,7 +515,7 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
     // keeps the load_game return value a genuine Lua table.
     'local _kag_js = _G.KAG',
     'local _kag_json_to_table = function(s)',
-    "  local f, err = load('return ' .. s, '@save.json', 't', _ENV)",
+    "  local f, err = load('return ' .. s, '@save.json', 't', {})",
     '  if not f then return nil, err end',
     '  local ok, t = pcall(f)',
     "  if not ok or type(t) ~= 'table' then return nil, 'corrupt save' end",
@@ -456,15 +533,124 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
     'end',
     '_G.KAG = _kag',
   ].join(String.fromCharCode(10)))
+  await installSaveValueBridge(lua, jsKAG.save_game)
+  lua.global.set('__AUDIO_RESTORE', {
+    ...audioRestore,
+    stop_audio: () => {
+      const result=audioRestore.stop_audio()
+      for (const kind of ['bgm','se','voice']) core.audioStop(kind)
+      return result
+    },
+    apply_audio: ticket => {
+      const result=audioRestore.apply_audio(ticket)
+      for (const kind of ['bgm','se','voice']) core.audioStop(kind)
+      const {bgm}=audioRestore.capture_audio()
+      if (bgm!==false) core.audioPlay('bgm',bgm.path,bgm.gain)
+      return result
+    },
+  })
+  await lua.doString(`
+    local audio=__AUDIO_RESTORE
+    Restore.capture_audio=function()
+      local source=audio.capture_audio()
+      local value={version=source.version,bgm=false}
+      if source.bgm~=false then
+        value.bgm={}
+        for key,item in pairs(source.bgm) do value.bgm[key]=item end
+      end
+      return value
+    end
+    Restore.prepare_audio=function(state) return audio.prepare_audio(state):await() end
+    Restore.apply_audio=audio.apply_audio
+    Restore.discard_audio=audio.discard_audio
+    Restore.stop_audio=audio.stop_audio
+    __AUDIO_RESTORE=nil
+  `)
+  if (fontRestore) {
+    try {
+      fontRestore.apply_font(await fontRestore.prepare_font(fontRestore.default_font()))
+      lua.global.set('__FONT_RESTORE', fontRestore)
+      await lua.doString(`
+        local font=__FONT_RESTORE
+        local function value(description)
+          local result={}
+          for key,item in pairs(description) do result[key]=item end
+          return result
+        end
+        Restore.capture_font=function() return value(font.capture_font()) end
+        Restore.default_font=function() return value(font.default_font()) end
+        Restore.prepare_font=function(state) return font.prepare_font(state):await() end
+        Restore.apply_font=font.apply_font
+        Restore.discard_font=font.discard_font
+        Restore.clear_font=font.clear_font
+        backend.text_set_font=function(face,size) return font.select_font(face or 'default',size or 24):await() end
+        KAG.set_font=function(id)
+          if id~=0 and id~=1 then return false end
+          local ticket=font.prepare_font({version=1,active=true,font=id,path='',size=id==0 and 16 or 32}):await()
+          return font.apply_font(ticket)
+        end
+        __FONT_RESTORE=nil
+      `)
+    } catch (error) {
+      fontRestore.dispose()
+      imageRestore.dispose()
+      lua.global.close()
+      throw error
+    }
+  }
+
+  let driving = false
+  let disposed = false
+  async function drive(player, mode, name, opts, sources, bundle) {
+    if (disposed) return 'ERR:player-closed'
+    if (driving) return 'ERR:player-busy'
+    driving = true
+    try {
+      lua.global.set('__WEB_REQUEST', luaLiteralValue({mode, name, opts, sources, bundle}))
+      const out = await lua.doString(`
+        local request = assert(load('return '..__WEB_REQUEST, '@web.request', 't', {}))()
+        __WEB_REQUEST = nil
+        return __DRIVE_WEB_RUNNER(request.mode, request.name, request.opts, request.sources, request.bundle)
+      `)
+      const draws = lua.global.get('__SCENE_DRAWS_TABLE')
+      core.setDraws(draws ? JSON.parse(JSON.stringify(draws)) : [])
+      if (lua.global.get('__WEB_NEW_SESSION') === true) core._lastBacklog = ''
+      lua.global.set('__WEB_NEW_SESSION', null)
+      syncRestoredHistory(lua, core)
+      const pages = lua.global.get('__SCENE_BACKLOG')
+      if (Array.isArray(pages)) {
+        for (const page of pages) if (Array.isArray(page) && page.length) core.pushBacklog(JSON.parse(JSON.stringify(page)))
+      }
+      const endings = lua.global.get('__SCENE_ENDINGS')
+      if (Array.isArray(endings)) core.recordEndings(JSON.parse(JSON.stringify(endings)))
+      lua.global.set('__SCENE_BACKLOG', null)
+      player._ctx = lua.global.get('__CTXREF')
+      player._co = await lua.doString("return __CO and coroutine.status(__CO) or 'nil'")
+      return out
+    } finally { driving = false }
+  }
 
   return {
     lua,
     core,
     audio,
+    async dispose() {
+      if (disposed) return true
+      if (driving) return false
+      disposed=true
+      const errors=[]
+      try {await lua.doString("local ok,err=require('kag_runner').stop(); if not ok then error(err) end")} catch(error) {errors.push(error)}
+      for (const cleanup of [()=>imageRestore.dispose(),()=>fontRestore?.dispose(),()=>audioRestore.dispose(),()=>audio.destroy(),
+        ...[...core.textures.keys()].map(id=>()=>core.destroyTexture(id)),()=>lua.global.close()]) {
+        try {cleanup()} catch(error) {errors.push(error)}
+      }
+      return errors.length===0
+    },
     /** Set the active UI/story language via the real pure-Lua i18n module
      *  (loaded at boot). Falls back silently when i18n is unavailable.
      *  @param {string} lang BCP-47-ish code, e.g. 'en', 'zh', 'ja-JP'. */
     async setLanguage(lang) {
+      if (driving || disposed) return false
       const s = String(lang ?? '').replace(/[^A-Za-z0-9-]/g, '')
       if (!s) return false
       try {
@@ -484,25 +670,9 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
           "  end",
           "end)",
           "if not okR then print('[setLanguage] relocalize degraded: ' .. tostring(errR)) end",
-          // Rebuild the exported draws from the (possibly re-localized) live
-          // ctx so the DOM renderer shows the new language immediately — the
-          // same exporter runScene uses at the end of every run.
-          "local st = _G.__CTXREF and _G.__CTXREF.text_state",
-          "__SCENE_DRAWS_TABLE = {}",
-          "if type(st) == 'table' and type(st.draws) == 'table' then",
-          "  local n = 0",
-          "  for _, d in ipairs(st.draws) do",
-          "    if type(d) == 'table' and d.text and #d.text > 0 then",
-          "      n = n + 1",
-          "      __SCENE_DRAWS_TABLE[n] = {",
-          "        t = tostring(d.text), x = tonumber(d.x) or 0, y = tonumber(d.y) or 0,",
-          "        r = tonumber(d.r) or 255, g = tonumber(d.g) or 255, b = tonumber(d.b) or 255,",
-          "        a = tonumber(d.a) or 255, s = tonumber(d.scale) or 1,",
-          "        bd = d.bold == true and 1 or 0, it = d.italic == true and 1 or 0,",
-          "      }",
-          "    end",
-          "  end",
-          "end",
+          // Publish through the runner's TextScene renderer so opacity,
+          // reveal clipping, ruby and inline styles match every scene run.
+          "__PUBLISH_WEB_TEXT()",
           "return i18n.current",
         ].join(String.fromCharCode(10)))
         const drawsTable = lua.global.get('__SCENE_DRAWS_TABLE')
@@ -515,741 +685,13 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
     _co: null,
     _ctx: null,
     /** Start a scene; resolves DONE:n/m or WAIT:idx (parked at [p]). */
-    /** Start + drive a scene to completion or first WAIT. */
+    /** Source and bundle entry points share the native runner lifecycle. */
     async runScene(ksSrc, sceneName = 'scene.ks', opts = {}) {
-      const maxFrames = opts.maxFrames ?? 200000
-      lua.global.set('KS_SRC', ksSrc)
-      lua.global.set('__SCENE_SOURCES', opts.sceneSources ?? {})
-      lua.global.set('__CLICK', false)
-      lua.global.set('__AUTOCLICK', !!opts.autoClick)
-      // Advance semantics (round 81 resumed): opts.advance resumes the
-      // previously parked scene cursor (persistent ctx + live coroutine,
-      // keyed by the source-scene name) instead of replaying from token 1.
-      lua.global.set('__ADVANCE', opts.advance === true)
-      lua.global.set('__ADVANCE_SCENE', opts.advanceScene ?? null)
-      // Choice-selection override (round 74): pick which [endbutton] option
-      // the auto/advance click selects (1-based); choiceX/Y aim the mouse.
-      lua.global.set('__CHOICE_INDEX', opts.choiceIndex ?? null)
-      lua.global.set('__CHOICE_X', typeof opts.choiceX === 'number' ? opts.choiceX : null)
-      lua.global.set('__CHOICE_Y', typeof opts.choiceY === 'number' ? opts.choiceY : null)
-      // Player-settings wiring (round 87+ UX): opts.textSpeed is the KAG3
-      // chars-per-second pace (the player-settings slider is 1..80 cps);
-      // opts.skip toggles skip mode. Both are pushed into the scene ctx so
-      // the reveal machinery (kag_runner reads ctx.text_speed as ms/char)
-      // and the [p]/[ch] wait loop anchor on them. Applied on a fresh start
-      // AND on an advance so mid-run setting toggles take effect immediately.
-      lua.global.set('__TEXT_SPEED', Number.isFinite(opts.textSpeed) ? opts.textSpeed : null)
-      lua.global.set('__SKIP_MODE', opts.skip === true)
-      const out = await lua.doString(`
-        local tokenizer = require('tokenizer')
-        local scheduler = require('scheduler')
-        -- Advance semantics (round 81 resumed): when opts.advance matches the
-        -- persisted scene name, resume the previously PARKED cursor (the live
-        -- coroutine + ctx stored in __CO / __CTXREF) instead of re-parsing and
-        -- replaying from token 1. This mirrors kag_runner.on_click: one click
-        -- advances a single [p] page, parking at the next WAIT (or DONE).
-        -- Because all runs share the same wasmoon Lua state, the Lua tables and
-        -- coroutine survive across runScene/doString calls by reference.
-        local advance = __ADVANCE == true
-        local advanceMatch = advance and __ADVANCE_SCENE ~= nil
-          and tostring(__ADVANCE_SCENE) == '${sceneName}'
-        local ctx, co
-        if advanceMatch and type(_G.__CTXREF) == 'table' and _G.__CO ~= nil then
-          ctx = _G.__CTXREF
-          co = _G.__CO
-          -- Clear the park flag and consume the current page: the click that
-          -- triggered this advance drives the parked [p]/[ch] on past itself.
-          ctx.waiting_input = false
-          __CLICK = true
-        else
-          local tokens = tokenizer.parse(KS_SRC)
-          ctx = {
-            f = {}, sf = {}, tf = {}, mp = {}, lf = {},
-            variables = {}, current_scene = '${sceneName}',
-            token_index = 1, tokens = tokens,
-            text_state = {}, layer_state = {}, audio_state = {},
-            macro_args = {}, call_stack = {}, flag_stack = {},
-          }
-          co = coroutine.create(function()
-            local ok, err = pcall(function() scheduler.run(ctx, ctx.tokens, ctx.token_index) end)
-            if not ok then error(err) end
-          end)
-          _G.__CTXREF = ctx
-          _G.__CO = co
-        end
-        -- Push player-settings text speed (cps) + skip mode into the ctx on
-        -- both a fresh start and an advance (round 87 UX). textSpeed is cps:
-        -- ctx.text_speed is the ms/char read point (floor(1000/cps)), exactly
-        -- as [textspeed] computes it; inline [pt]/[textspeed] commands still
-        -- override it mid-run. A zero/negative/huge cps (validation edge) is
-        -- ignored so the engine default never explodes into a 0/negative
-        -- divisor.
-        do
-          local __cps = tonumber(__TEXT_SPEED)
-          if __cps ~= nil and __cps > 0 then
-            ctx.cps = __cps
-            ctx.text_speed = math.floor(1000 / __cps)
-            if ctx.text_speed < 1 then ctx.text_speed = 1 end
-          end
-          -- Explicitly drive the default skip mode both ways so a mid-run
-          -- toggle OFF (opts.skip false) clears a previously parked skip.
-          ctx.skip_mode = __SKIP_MODE == true
-        end
-        local __load_scene_tokens = function(name)
-          -- Engine scene paths are allowlisted to demo/...; web scene keys
-          -- are bare basenames, so try the key as-is and stripped variants.
-          local key = name
-          if type(key) == 'string' and key:sub(1, 5) == 'demo/' then
-            key = key:sub(6)
-          end
-          local src = __SCENE_SOURCES and __SCENE_SOURCES[key]
-          if type(src) ~= 'string' or #src == 0 then
-            src = __SCENE_SOURCES and __SCENE_SOURCES[name]
-          end
-          if type(src) ~= 'string' or #src == 0 then return nil end
-          local okP, nt = pcall(tokenizer.parse, src)
-          if not okP or type(nt) ~= 'table' then return nil end
-          return nt
-        end
-        -- In advance mode only the preserved coroutine is resumed: the outer
-        -- re-wrap below (label/load jumps) must not orphan the live cursor.
-        local result = ''
-        -- One CUMULATIVE frame budget for the whole run: the outer loop
-        -- re-spawns the coroutine on [load]/label jumps, and a per-segment
-        -- counter reset made maxFrames unable to bound a respawn cycle
-        -- (t69: a self-referential [save]->[load] whose discriminator misses
-        -- re-spawns forever, immune to any budget — the silent hang that
-        -- froze three CI jobs). A cumulative budget turns that regression
-        -- class into a loud ERR:frame-limit fast-fail.
-        local frames = 0
-        local clicks = 0
-        while result == '' do
-        -- NOTE: rebuild from ctx.tokens / ctx.token_index, NOT the local
-        -- tokens var — [load] resume swaps ctx.tokens to the saved scene,
-        -- and the outer loop must continue THAT scene (round 47 fix).
-        local co2 = co
-        local function wrap_co()
-          local w = coroutine.create(function()
-            local ok, err = pcall(function() scheduler.run(ctx, ctx.tokens, ctx.token_index) end)
-            if not ok then error(err) end
-          end)
-          _G.__CO = w
-          _G.__CTXREF = ctx
-          return w
-        end
-        if advanceMatch then
-          -- Persistent coroutine from the previous park: only the non-dead
-          -- suspended cursor is reused; if it somehow died, rebuild it from
-          -- the persisted ctx position.
-          if coroutine.status(co2) == 'dead' then co2 = wrap_co() end
-        else
-          co2 = wrap_co()
-        end
-        while true do
-          local status = coroutine.status(co2)
-          if status == 'dead' then
-            -- [load] resume: engine semantics — reload the saved scene and
-            -- continue from the saved token (SaveCommands.load sets these).
-            if ctx._pendingLoadScene and type(__load_scene_tokens) == 'function' then
-              local ok2, ntoks = pcall(__load_scene_tokens, ctx._pendingLoadScene)
-              if ok2 and type(ntoks) == 'table' then
-                ctx.tokens = ntoks
-                -- [load] resume cursor. Round 94: a self-referential load —
-                -- [save] then [load] back-to-back in the SAME scene — saves a
-                -- token at/before the CURRENT [load] token, so re-spawning at
-                -- it re-executes the [save]/[load] block and loops forever.
-                -- When the reloaded scene is the current one AND the saved
-                -- resume point is at/before the consumed [load] token, advance
-                -- past the [load] so execution continues forward and completes.
-                -- Cross-scene loads (a real [load] into a different scene) are
-                -- unchanged: the scene differs, so _pendingLoadToken is used.
-                -- t69: mirror native kag_runner atLoadTag discriminator (t62):
-                -- cursor+1 applies ONLY when the token at the saved resume
-                -- point IS a [load] tag (self-referential [save]->[load]);
-                -- a pause-point direct load of the same scene (no load tag
-                -- at the saved cursor) must resume exactly at the saved token.
-                local cur9 = tonumber(ctx.token_index) or 1
-                local curTok9 = ntoks and ntoks[cur9]
-                local atLoadTag9 = type(curTok9) == "table" and (curTok9[1] == "load" or curTok9.cmd == "load")
-                if (ctx._pendingLoadOriginScene == ctx._pendingLoadScene) and atLoadTag9
-                  and (tonumber(ctx._pendingLoadToken) or 1) <= cur9 then
-                  ctx.token_index = cur9 + 1
-                else
-                  ctx.token_index = math.max(1, tonumber(ctx._pendingLoadToken) or 1)
-                end
-                ctx.current_scene = ctx._pendingLoadScene
-                ctx.currentScene = ctx._pendingLoadScene
-                ctx.stop_flag = false
-                ctx._pendingLoadScene = nil
-                ctx._pendingLoadToken = nil
-                co2 = coroutine.create(function()
-                  local okc, errc = pcall(function() scheduler.run(ctx, ntoks, ctx.token_index) end)
-                  if not okc then error(errc) end
-                end)
-                _G.__CO = co2
-                _G.__CTXREF = ctx
-                break
-              end
-            end
-            -- Choice result routing: [endbutton] set _pendingJump to a
-            -- "*label" target when the player picked an option. Mirror the
-            -- desktop runner's dead-coroutine branch (kag_runner.update
-            -- -> stage_label_jump): resolve the label and re-spawn at it so
-            -- [sel x="tf.result"] choices route to the chosen branch.
-            if ctx._pendingJump then
-              local target = ctx._pendingJump
-              ctx._pendingJump = nil
-              local path = (type(target) == 'table' and target.scene) or target
-              if type(path) == 'string' and path:sub(1, 1) == '*' then
-                local label = path:sub(2)
-                local lidx = (ctx.label_index and ctx.label_index[label]) or nil
-                if not lidx and type(ctx.tokens) == 'table' then
-                  for ti, tok in ipairs(ctx.tokens) do
-                    if tok and tok[1] == 'label' and tok[2] and tok[2].name == label then
-                      lidx = ti
-                      break
-                    end
-                  end
-                end
-                if lidx then
-                  ctx.token_index = lidx
-                  ctx.stop_flag = false
-                  co2 = coroutine.create(function()
-                    local okc, errc = pcall(function() scheduler.run(ctx, ctx.tokens, ctx.token_index) end)
-                    if not okc then error(errc) end
-                  end)
-                  _G.__CO = co2
-                  _G.__CTXREF = ctx
-                  break
-                end
-              end
-            end
-            result = 'DONE:' .. tostring(ctx.token_index) .. ':' .. tostring(clicks) break
-          end
-          frames = frames + 1
-          -- Perf-trace hook (round 109): when the caller sets PERF_TRACE=true
-          -- the benchmark can read the exact frame count afterwards. Gated so
-          -- the normal path costs one nil-test per frame (no global write).
-          if __PERF_TRACE == true then _G.__FRAME_COUNT = frames end
-          if frames > ${maxFrames} then result = 'ERR:frame-limit@' .. tostring(ctx.token_index) .. ':' .. tostring((ctx.tokens and ctx.tokens[ctx.token_index] and (ctx.tokens[ctx.token_index].cmd or ctx.tokens[ctx.token_index].type)) or '?') break end
-          if ctx.waiting_input then
-            -- Skip mode (round 87 UX): reveal the page instantly and advance
-            -- through the wait without a click — mirrors kag_runner.update
-            -- (skip_mode reveals + on_click immediately).
-            if ctx.skip_mode then
-              if ctx.reveal then
-                local __st = require('kag.text_scene').get_state(ctx)
-                __st.reveal_chars = ctx.reveal.total
-              end
-            elseif not __CLICK then
-              if __AUTOCLICK and clicks < 10000 then __CLICK = true else
-                result = 'WAIT:' .. tostring(ctx.token_index) break
-              end
-            end
-            -- Choice mode ([endbutton]/[endselect]): the engine's input layer
-            -- dispatches a click (mouse at _GAME_MOUSE_X/_GAME_MOUSE_Y) to
-            -- _KAG_onClick, which hit-tests the button regions and records
-            -- _selectedChoice. The web runner's batched click must feed the
-            -- SAME dispatch so [sel x="tf.result"] captures the chosen option
-            -- (round 74 parity). __CHOICE_INDEX (1-based) picks which visible
-            -- option to auto-select; defaults to the first.
-            if ctx._choiceMode then
-              local cbs = ctx._choiceButtonsActive or ctx._choiceButtons
-              local ci = tonumber(__CHOICE_INDEX) or 1
-              local cx = tonumber(__CHOICE_X or 100) or 100
-              local cy
-              if type(cbs) == 'table' and cbs[ci] then
-                local c = cbs[ci]
-                cy = (tonumber(c.y) or 450) + (tonumber(c.h) or 24) / 2
-              end
-              _G._GAME_MOUSE_X = cx
-              _G._GAME_MOUSE_Y = cy or 460
-              if type(_G._KAG_onClick) == 'function' then
-                _G._KAG_onClick()
-              end
-            end
-            ctx.waiting_input = false
-            __CLICK = false
-            clicks = clicks + 1
-            local pg = ctx.text_state and ctx.text_state.draws
-            local pdraws = {}
-            if type(pg) == 'table' then
-              for _, d in ipairs(pg) do
-                if type(d) == 'table' and d.text and #d.text > 0 then
-                  pdraws[#pdraws + 1] = { t = tostring(d.text), x = tonumber(d.x) or 0, y = tonumber(d.y) or 0 }
-                end
-              end
-            end
-            __SCENE_PAGE = pdraws
-            __SCENE_BACKLOG = __SCENE_BACKLOG or {}
-            __SCENE_BACKLOG[#__SCENE_BACKLOG + 1] = pdraws
-          end
-          local r = { coroutine.resume(co2, 16) }
-          if not r[1] then result = 'ERR:' .. tostring(r[2]) break end
-          -- R106 parity: advance fire-and-forget [tween]s each frame by the
-          -- same dt the scheduler consumed. Mirrors desktop kag_runner.update
-          -- -> TweenCommands.update(ctx, dt_ms). No-ops until R106-A registers
-          -- scripts/kag/commands/tween.lua in kag.lua + regenerates
-          -- scripts-index.json; the module then stays advanced on BOTH paths
-          -- (runScene + runFromBundle) with zero further bridge change.
-          local __twm = package.loaded['kag.commands.tween']
-          if type(__twm) == 'table' and type(__twm.update) == 'function' then
-            pcall(__twm.update, ctx, 16)
-          end
-        end
-        end
-        -- Collect the current visible text draws from the Lua TextScene
-        -- as a lightweight JSON array (fields: text/x/y/r/g/b/a/scale/bold/italic).
-        local st = ctx.text_state
-        local draws = {}
-        if st and type(st.draws) == 'table' then
-          for _, d in ipairs(st.draws) do
-            if type(d) == 'table' and d.text and #d.text > 0 then
-              draws[#draws + 1] = {
-                t = tostring(d.text),
-                x = tonumber(d.x) or 0,
-                y = tonumber(d.y) or 0,
-                r = tonumber(d.r) or 255,
-                g = tonumber(d.g) or 255,
-                b = tonumber(d.b) or 255,
-                a = tonumber(d.a) or 255,
-                s = tonumber(d.scale) or 1,
-                bd = d.bold == true and 1 or 0,
-                it = d.italic == true and 1 or 0,
-              }
-            end
-          end
-        end
-                __SCENE_DRAWS_TABLE = draws
-        -- Export endings unlocked by [ending] (engine: ctx.seen_endings).
-        __SCENE_ENDINGS = {}
-        if type(ctx.seen_endings) == 'table' then
-          local n = 0
-          for eid, einfo in pairs(ctx.seen_endings) do
-            n = n + 1
-            __SCENE_ENDINGS[n] = { id = tostring(eid), name = (type(einfo) == 'table' and tostring(einfo.name or '')) or '' }
-          end
-        end
-        __LAST_CTX = ctx
-        return result
-      `)
-      // sync the structured draws into the core overlay (JSON parse)
-      const drawsTable = lua.global.get('__SCENE_DRAWS_TABLE')
-      core.setDraws(drawsTable ? JSON.parse(JSON.stringify(drawsTable)) : [])
-      // commit all [p]-parked pages accumulated during the run (VN history)
-      const pages = lua.global.get('__SCENE_BACKLOG')
-      if (pages && Array.isArray(pages)) {
-        for (const pg of pages) {
-          if (Array.isArray(pg) && pg.length > 0) {
-            core.pushBacklog(JSON.parse(JSON.stringify(pg)))
-          }
-        }
-      }
-            const endings = lua.global.get('__SCENE_ENDINGS')
-      if (endings && Array.isArray(endings)) core.recordEndings(JSON.parse(JSON.stringify(endings)))
-      lua.global.set('__SCENE_BACKLOG', null)
-      // Wire the persisted scene-cursor handles (round 81): these let callers
-      // inspect/advance the parked scene without re-parsing. The authoritative
-      // state lives in Lua globals (__CTXREF / __CO); the JS fields mirror it.
-      this._ctx = lua.global.get('__CTXREF')
-      this._co = await lua.doString("local c = _G.__CO if c == nil then return 'nil' end return coroutine.status(c)")
-      return out
+      return drive(this, 'source', sceneName, opts, { ...opts.sceneSources, [sceneName]: ksSrc })
     },
-    /** Run a scene from a pre-baked story bundle (ks_bake --web): zero
-     *  parse/compile at start — the serialized stream loads directly. */
     async runFromBundle(bundle, sceneKey, opts = {}) {
-      const scene = bundle && bundle.scenes && bundle.scenes[sceneKey]
-      if (!scene) return 'ERR:scene-not-in-bundle:' + String(sceneKey)
-      // wasmoon exposes host-side JS objects as *userdata* proxies when set
-      // via global.set, and compiler.deserialize strictly requires a Lua
-      // table (type(data) == 'table'). Passing .scenes directly made every
-      // bundled scene fail to deserialize -> instant DONE:1:0. Encode the
-      // scenes map as a Lua literal so the runner rebuilds REAL Lua tables
-      // for the baked scene and for [load]/[jump]/[call] cross-scene lookup.
-      lua.global.set('BAKED_SCENE', null)
-      lua.global.set('__BUNDLE_SCENES_LIT', luaLiteralValue(bundle.scenes ?? {}))
-      lua.global.set('__RUN_SCENE_KEY', sceneKey)
-      lua.global.set('__SCENE_SOURCES', opts.sceneSources ?? {})
-      lua.global.set('__CLICK', false)
-      lua.global.set('__AUTOCLICK', !!opts.autoClick)
-      // Advance semantics (round 81 resumed): resume the parked scene cursor
-      // (see runScene — same __CO/__CTXREF persistence across doString).
-      lua.global.set('__ADVANCE', opts.advance === true)
-      lua.global.set('__ADVANCE_SCENE', opts.advanceScene ?? null)
-      // Choice-selection override (round 74): pick which [endbutton] option
-      // the auto/advance click selects (1-based); choiceX/Y aim the mouse.
-      lua.global.set('__CHOICE_INDEX', opts.choiceIndex ?? null)
-      lua.global.set('__CHOICE_X', typeof opts.choiceX === 'number' ? opts.choiceX : null)
-      lua.global.set('__CHOICE_Y', typeof opts.choiceY === 'number' ? opts.choiceY : null)
-      // Player-settings wiring (round 87+ UX): same text-speed (cps) + skip
-      // contract as runScene, applied on fresh start AND advance.
-      lua.global.set('__TEXT_SPEED', Number.isFinite(opts.textSpeed) ? opts.textSpeed : null)
-      lua.global.set('__SKIP_MODE', opts.skip === true)
-      const maxFrames = opts.maxFrames ?? 200000
-      const out = await lua.doString(`
-        local compiler = require('kag.compiler')
-        local scheduler = require('scheduler')
-        local tokenizer = require('tokenizer')
-        -- Rebuild a REAL Lua scenes table from the literal (host JS objects
-        -- arrive as userdata proxies which compiler.deserialize rejects).
-        local __BUNDLE_SCENES = (type(__BUNDLE_SCENES_LIT) == 'string'
-          and assert(load('return ' .. __BUNDLE_SCENES_LIT))() or {})
-        local BAKED_SCENE = __BUNDLE_SCENES[__RUN_SCENE_KEY]
-        if BAKED_SCENE == nil then
-          BAKED_SCENE = __BUNDLE_SCENES[__RUN_SCENE_KEY:gsub('^demo/','')]
-        end
-        local tokens = compiler.deserialize(BAKED_SCENE)
-        if tokens == nil then error('bundle-deserialize-failed:' .. tostring(__RUN_SCENE_KEY)) end
-        local __initial_tokens = tokens
-        -- Advance semantics (round 81 resumed): resume the parked cursor.
-        local advance = __ADVANCE == true
-        local advanceMatch = advance and __ADVANCE_SCENE ~= nil
-          and tostring(__ADVANCE_SCENE) == '${sceneKey}'
-        local ctx, co
-        if advanceMatch and type(_G.__CTXREF) == 'table' and _G.__CO ~= nil then
-          ctx = _G.__CTXREF
-          co = _G.__CO
-          ctx.waiting_input = false
-          __CLICK = true
-        else
-          ctx = {
-            f = {}, sf = {}, tf = {}, mp = {}, lf = {},
-            variables = {}, current_scene = '${sceneKey}',
-            token_index = 1, tokens = tokens,
-            text_state = {}, layer_state = {}, audio_state = {},
-            macro_args = {}, call_stack = {}, flag_stack = {},
-            -- Cross-scene [jump]/[call]/[link] hook: scheduler passes an
-            -- 'assets/script/<target>.ks' path; resolve it against the
-            -- bundled scenes (table or literal-stream) and the source map.
-            load_tokens = function(path)
-              local base = tostring(path or '')
-              base = base:gsub('^assets/script/', '')
-              local key = base
-              if key:sub(1, 5) == 'demo/' then key = key:sub(6) end
-              local okL = false
-              local result = nil
-              local ser = __BUNDLE_SCENES and (__BUNDLE_SCENES[key] or __BUNDLE_SCENES[base])
-              if type(ser) == 'table' then
-                local okT, nt2 = pcall(compiler.deserialize, ser)
-                if okT and type(nt2) == 'table' then result = nt2; okL = true end
-              elseif type(ser) == 'string' and #ser > 0 then
-                local okD, came = pcall(compiler.deserialize, ser)
-                if okD and came then result = came; okL = true end
-              end
-              if not okL then
-                local src = __SCENE_SOURCES and (__SCENE_SOURCES[key] or __SCENE_SOURCES[base])
-                if type(src) == 'string' and #src > 0 then
-                  local okP, nt = pcall(tokenizer.parse, src)
-                  if okP and type(nt) == 'table' then result = nt; okL = true end
-                end
-              end
-              if okL and result ~= nil then
-                -- Signal the outer dead-coroutine loop to re-spawn at the
-                -- swapped scene (desktop kag_runner _scene_changed analog).
-                ctx._scene_changed = true
-              end
-              return result
-            end,
-          }
-          co = coroutine.create(function()
-            local ok, err = pcall(function() scheduler.run(ctx, ctx.tokens, ctx.token_index) end)
-            if not ok then error(err) end
-          end)
-          _G.__CTXREF = ctx
-          _G.__CO = co
-        end
-        -- Push player-settings text speed (cps) + skip mode into the ctx on
-        -- both a fresh start and an advance (round 87 UX), same contract as
-        -- runScene. textSpeed is cps -> ctx.text_speed ms/char = floor(1000/cps);
-        -- a non-positive cps is ignored so the engine default never divides by
-        -- zero/negative. Inline [pt]/[textspeed] commands override mid-run.
-        do
-          local __cps = tonumber(__TEXT_SPEED)
-          if __cps ~= nil and __cps > 0 then
-            ctx.cps = __cps
-            ctx.text_speed = math.floor(1000 / __cps)
-            if ctx.text_speed < 1 then ctx.text_speed = 1 end
-          end
-          -- Both-ways default: skip reflects opts.skip, so a mid-run toggle
-          -- OFF also clears a previously parked skip on the next advance.
-          ctx.skip_mode = __SKIP_MODE == true
-        end
-        -- [load] resume: bundled scenes are serialized; parse them on demand.
-        local __load_scene_tokens = function(name)
-          local key = name
-          if type(key) == 'string' and key:sub(1, 5) == 'demo/' then
-            key = key:sub(6)
-          end
-          local ser = __BUNDLE_SCENES and __BUNDLE_SCENES[key]
-          if ser == nil then
-            ser = __BUNDLE_SCENES and __BUNDLE_SCENES[name]
-          end
-          -- Bundle scene values are real deserializable tables (version=1);
-          -- older/web-cache streams may be encoded as Lua-literal strings.
-          if type(ser) == 'table' then
-            local okT, nt2 = pcall(compiler.deserialize, ser)
-            if okT and type(nt2) == 'table' then return nt2 end
-          elseif type(ser) == 'string' and #ser > 0 then
-            return compiler.deserialize(ser)
-          end
-          local src = __SCENE_SOURCES and __SCENE_SOURCES[key]
-          if type(src) ~= 'string' or #src == 0 then
-            src = __SCENE_SOURCES and __SCENE_SOURCES[name]
-          end
-          if type(src) == 'string' and #src > 0 then
-            local okP, nt = pcall(tokenizer.parse, src)
-            return okP and type(nt) == 'table' and nt or nil
-          end
-          return nil
-        end
-        local result = ''
-        -- One CUMULATIVE frame budget across [load] respawn segments (see
-        -- runScene: a per-segment reset let a self-referential [save]->[load]
-        -- re-spawn forever, immune to maxFrames — t69).
-        local frames = 0
-        local clicks = 0
-        while result == '' do
-        -- NOTE: rebuild from ctx.tokens / ctx.token_index, NOT the local
-        -- tokens var — [load] resume swaps ctx.tokens to the saved scene,
-        -- and the outer loop must continue THAT scene (round 47 fix).
-        local co2 = co
-        local function wrap_co()
-          local w = coroutine.create(function()
-            local ok, err = pcall(function() scheduler.run(ctx, ctx.tokens, ctx.token_index) end)
-            if not ok then error(err) end
-          end)
-          _G.__CO = w
-          _G.__CTXREF = ctx
-          return w
-        end
-        if advanceMatch then
-          if coroutine.status(co2) == 'dead' then co2 = wrap_co() end
-        else
-          co2 = wrap_co()
-        end
-        while true do
-          local status = coroutine.status(co2)
-          if status == 'dead' then
-            -- [load] resume: reload the saved (bundled) scene and continue
-            -- from the saved token — engine resume_from_save semantics.
-            if ctx._pendingLoadScene and type(__load_scene_tokens) == 'function' then
-              local ok2, ntoks = pcall(__load_scene_tokens, ctx._pendingLoadScene)
-              if ok2 and type(ntoks) == 'table' then
-                ctx.tokens = ntoks
-                -- [load] resume cursor (round 94). A self-referential load —
-                -- [save] then [load] back-to-back in the SAME scene — saves a
-                -- token at/before the CURRENT [load] token; re-spawning there
-                -- re-runs the [save]/[load] block and loops forever. The
-                -- source path masked this in the sweep by never resolving the
-                -- saved scene to tokens; the bundle path resolves it, so the
-                -- deadlock surfaced here. When the reloaded scene IS the
-                -- current one AND the saved resume point is at/before the
-                -- consumed [load] token, advance past the [load] so execution
-                -- continues forward and the scene completes. Cross-scene loads
-                -- (a genuine [load] into a different scene) are unchanged: the
-                -- scene differs, so _pendingLoadToken is used as-is.
-                -- t69: mirror native kag_runner atLoadTag discriminator (t62):
-                -- cursor+1 applies ONLY when the token at the saved resume
-                -- point IS a [load] tag (self-referential [save]->[load]);
-                -- a pause-point direct load of the same scene (no load tag
-                -- at the saved cursor) must resume exactly at the saved token.
-                local cur9 = tonumber(ctx.token_index) or 1
-                local curTok9 = ntoks and ntoks[cur9]
-                local atLoadTag9 = type(curTok9) == "table" and (curTok9[1] == "load" or curTok9.cmd == "load")
-                if (ctx._pendingLoadOriginScene == ctx._pendingLoadScene) and atLoadTag9
-                  and (tonumber(ctx._pendingLoadToken) or 1) <= cur9 then
-                  ctx.token_index = cur9 + 1
-                else
-                  ctx.token_index = math.max(1, tonumber(ctx._pendingLoadToken) or 1)
-                end
-                ctx.current_scene = ctx._pendingLoadScene
-                ctx.currentScene = ctx._pendingLoadScene
-                ctx.stop_flag = false
-                ctx._pendingLoadScene = nil
-                ctx._pendingLoadToken = nil
-                co2 = coroutine.create(function()
-                  local okc, errc = pcall(function() scheduler.run(ctx, ntoks, ctx.token_index) end)
-                  if not okc then error(errc) end
-                end)
-                _G.__CO = co2
-                _G.__CTXREF = ctx
-                break
-              end
-            end
-            -- Choice result routing: [endbutton] set _pendingJump to a
-            -- "*label" target when the player picked an option. Mirror the
-            -- desktop runner's dead-coroutine branch (kag_runner.update
-            -- -> stage_label_jump): resolve the label and re-spawn at it so
-            -- [sel x="tf.result"] choices route to the chosen branch.
-            if ctx._pendingJump then
-              local target = ctx._pendingJump
-              ctx._pendingJump = nil
-              local path = (type(target) == 'table' and target.scene) or target
-              if type(path) == 'string' and path:sub(1, 1) == '*' then
-                local label = path:sub(2)
-                local lidx = (ctx.label_index and ctx.label_index[label]) or nil
-                if not lidx and type(ctx.tokens) == 'table' then
-                  for ti, tok in ipairs(ctx.tokens) do
-                    if tok and tok[1] == 'label' and tok[2] and tok[2].name == label then
-                      lidx = ti
-                      break
-                    end
-                  end
-                end
-                if lidx then
-                  ctx.token_index = lidx
-                  ctx.stop_flag = false
-                  co2 = coroutine.create(function()
-                    local okc, errc = pcall(function() scheduler.run(ctx, ctx.tokens, ctx.token_index) end)
-                    if not okc then error(errc) end
-                  end)
-                  _G.__CO = co2
-                  _G.__CTXREF = ctx
-                  break
-                end
-              end
-            end
-                                    -- Cross-scene [jump]/[goto]: scheduler swaps ctx.tokens and
-            -- RETURNS (dead coroutine); the runner must re-spawn at the
-            -- new scene's saved token (desktop _scene_changed analog). The
-            -- one-shot ctx._scene_changed flag (set by ctx.load_tokens) is
-            -- consumed here so a later legitimate [end] of the jumped-to
-            -- scene does NOT loop. [call] keeps one coroutine alive, so it
-            -- never sets the flag.
-            if ctx.stop_flag ~= true and ctx._scene_changed == true and type(ctx.load_tokens) == 'function' then
-              ctx._scene_changed = false
-              local ntk = ctx.tokens
-              ctx.label_index = nil
-              ctx.stop_flag = false
-              co2 = coroutine.create(function()
-                local okc, errc = pcall(function() scheduler.run(ctx, ntk, ctx.token_index) end)
-                if not okc then error(errc) end
-              end)
-              _G.__CO = co2
-              _G.__CTXREF = ctx
-              break
-            end
-result = 'DONE:' .. tostring(ctx.token_index) .. ':' .. tostring(clicks) break
-          end
-          frames = frames + 1
-          if __PERF_TRACE == true then _G.__FRAME_COUNT = frames end
-          if frames > ${maxFrames} then result = 'ERR:frame-limit@' .. tostring(ctx.token_index) break end
-          if ctx.waiting_input then
-            -- Skip mode (round 87 UX): reveal the page instantly and advance
-            -- through the wait without a click — mirrors kag_runner.update
-            -- (skip_mode reveals + on_click immediately).
-            if ctx.skip_mode then
-              if ctx.reveal then
-                local __st = require('kag.text_scene').get_state(ctx)
-                __st.reveal_chars = ctx.reveal.total
-              end
-            elseif not __CLICK then
-              if __AUTOCLICK and clicks < 10000 then __CLICK = true else
-                result = 'WAIT:' .. tostring(ctx.token_index) break
-              end
-            end
-            -- Choice mode ([endbutton]/[endselect]): the engine's input layer
-            -- dispatches a click (mouse at _GAME_MOUSE_X/_GAME_MOUSE_Y) to
-            -- _KAG_onClick, which hit-tests the button regions and records
-            -- _selectedChoice. The web runner's batched click must feed the
-            -- SAME dispatch so [sel x="tf.result"] captures the chosen option
-            -- (round 74 parity). __CHOICE_INDEX (1-based) picks which visible
-            -- option to auto-select; defaults to the first.
-            if ctx._choiceMode then
-              local cbs = ctx._choiceButtonsActive or ctx._choiceButtons
-              local ci = tonumber(__CHOICE_INDEX) or 1
-              local cx = tonumber(__CHOICE_X or 100) or 100
-              local cy
-              if type(cbs) == 'table' and cbs[ci] then
-                local c = cbs[ci]
-                cy = (tonumber(c.y) or 450) + (tonumber(c.h) or 24) / 2
-              end
-              _G._GAME_MOUSE_X = cx
-              _G._GAME_MOUSE_Y = cy or 460
-              if type(_G._KAG_onClick) == 'function' then
-                _G._KAG_onClick()
-              end
-            end
-            ctx.waiting_input = false
-            __CLICK = false
-            clicks = clicks + 1
-            local pg = ctx.text_state and ctx.text_state.draws
-            local pdraws = {}
-            if type(pg) == 'table' then
-              for _, d in ipairs(pg) do
-                if type(d) == 'table' and d.text and #d.text > 0 then
-                  pdraws[#pdraws + 1] = { t = tostring(d.text), x = tonumber(d.x) or 0, y = tonumber(d.y) or 0 }
-                end
-              end
-            end
-            __SCENE_PAGE = pdraws
-            __SCENE_BACKLOG = __SCENE_BACKLOG or {}
-            __SCENE_BACKLOG[#__SCENE_BACKLOG + 1] = pdraws
-          end
-          local r = { coroutine.resume(co2, 16) }
-          if not r[1] then result = 'ERR:' .. tostring(r[2]) break end
-          -- R106 parity: advance fire-and-forget [tween]s each frame by the
-          -- same dt the scheduler consumed. Mirrors desktop kag_runner.update
-          -- -> TweenCommands.update(ctx, dt_ms). No-ops until R106-A registers
-          -- scripts/kag/commands/tween.lua in kag.lua + regenerates
-          -- scripts-index.json; the module then stays advanced on BOTH paths
-          -- (runScene + runFromBundle) with zero further bridge change.
-          local __twm = package.loaded['kag.commands.tween']
-          if type(__twm) == 'table' and type(__twm.update) == 'function' then
-            pcall(__twm.update, ctx, 16)
-          end
-        end
-        end
-        local st = ctx.text_state
-        local draws = {}
-        if st and type(st.draws) == 'table' then
-          for _, d in ipairs(st.draws) do
-            if type(d) == 'table' and d.text and #d.text > 0 then
-              draws[#draws + 1] = {
-                t = tostring(d.text),
-                x = tonumber(d.x) or 0,
-                y = tonumber(d.y) or 0,
-                r = tonumber(d.r) or 255,
-                g = tonumber(d.g) or 255,
-                b = tonumber(d.b) or 255,
-                a = tonumber(d.a) or 255,
-                s = tonumber(d.scale) or 1,
-                bd = d.bold == true and 1 or 0,
-                it = d.italic == true and 1 or 0,
-              }
-            end
-          end
-        end
-                __SCENE_DRAWS_TABLE = draws
-        -- Export endings unlocked by [ending] (engine: ctx.seen_endings).
-        __SCENE_ENDINGS = {}
-        if type(ctx.seen_endings) == 'table' then
-          local n = 0
-          for eid, einfo in pairs(ctx.seen_endings) do
-            n = n + 1
-            __SCENE_ENDINGS[n] = { id = tostring(eid), name = (type(einfo) == 'table' and tostring(einfo.name or '')) or '' }
-          end
-        end
-        __LAST_CTX = ctx
-        return result
-      `)
-      const drawsTable = lua.global.get('__SCENE_DRAWS_TABLE')
-      core.setDraws(drawsTable ? JSON.parse(JSON.stringify(drawsTable)) : [])
-      // commit all [p]-parked pages accumulated during the run (VN history)
-      const pages = lua.global.get('__SCENE_BACKLOG')
-      if (pages && Array.isArray(pages)) {
-        for (const pg of pages) {
-          if (Array.isArray(pg) && pg.length > 0) {
-            core.pushBacklog(JSON.parse(JSON.stringify(pg)))
-          }
-        }
-      }
-            const endings = lua.global.get('__SCENE_ENDINGS')
-      if (endings && Array.isArray(endings)) core.recordEndings(JSON.parse(JSON.stringify(endings)))
-      lua.global.set('__SCENE_BACKLOG', null)
-      this._ctx = lua.global.get('__CTXREF')
-      this._co = await lua.doString("local c = _G.__CO if c == nil then return 'nil' end return coroutine.status(c)")
-      return out
+      if (!bundle?.scenes?.[sceneKey]) return 'ERR:scene-not-in-bundle:' + String(sceneKey)
+      return drive(this, 'bundle', sceneKey, opts, opts.sceneSources ?? {}, bundle.scenes)
     },
     /** Raise the click signal for the next runScene. */
     async click() { lua.global.set('__CLICK', true) },
@@ -1308,14 +750,15 @@ result = 'DONE:' .. tostring(ctx.token_index) .. ':' .. tostring(clicks) break
      *  Drives the engine's own SaveCommands.save so f/sf/unlocks/backlog
      *  all persist exactly as [save slot=N] would in a running scene. */
     async saveCurrent(slot) {
+      if (driving || disposed) return false
       const sv = Number(slot)
       if (!Number.isInteger(sv) || sv < 0 || sv > 99) return false
-      const ctx = lua.global.get('__LAST_CTX')
+      const ctx = lua.global.get('__CTXREF')
       if (!ctx) return false
       try {
         const ok = await lua.doString([
           "local Save = require('kag.commands.save')",
-          "local c = _G.__LAST_CTX",
+          "local c = require('kag_runner').get_ctx()",
           "if type(c) ~= 'table' then return false end",
           'Save.save(c, { slot = ' + sv + ' })',
           // Success/failure is reported via ctx.tf.save_result ('ok'/'error').
@@ -1330,22 +773,11 @@ result = 'DONE:' .. tostring(ctx.token_index) .. ':' .. tostring(clicks) break
       }
     },
 
-    /** Load a slot into a fresh scene run; the run loop resumes the saved
-     *  scene from its saved token (round 47-48). sceneSources maps scene
-     *  names to .ks source for scenes not in a bundle. */
+    /** Prepare a slot before retiring the current session. */
     async loadSlot(slot, opts = {}) {
-      const src = [
-        '[ch name="System" text="Loading slot ' + Number(slot) + '..."]',
-        '[p]',
-        '[load slot=' + Number(slot) + ']',
-        '[end]',
-      ].join(String.fromCharCode(10))
-      const out = await this.runScene(src, 'loadslot.ks', {
-        maxFrames: opts.maxFrames ?? 200000,
-        autoClick: opts.autoClick ?? true,
-        sceneSources: opts.sceneSources ?? {},
-      })
-      return out
+      const number = Number(slot)
+      if (!Number.isInteger(number) || number < 0 || number > 99) return 'ERR:invalid-slot'
+      return drive(this, 'load', '', { ...opts, slot: number, autoClick: opts.autoClick ?? true }, opts.sceneSources, opts.bundle?.scenes)
     },
     /** Snapshot the real Lua layer tree (Layers.snapshot) for rendering. */
     async snapshotLayers() {
@@ -1354,7 +786,7 @@ result = 'DONE:' .. tostring(ctx.token_index) .. ':' .. tostring(clicks) break
         local snaps = layers.snapshot()
         local out = {}
         for i, s in ipairs(snaps) do
-          out[i] = { name = s.name, tag = s.tag, x = s.x, y = s.y, w = s.w, h = s.h, visible = s.visible, opacity = s.opacity, z = s.z, texture = s.texture }
+          out[i] = { id = s.id, name = s.name, tag = s.tag, x = s.x, y = s.y, w = s.w, h = s.h, visible = s.visible, opacity = s.opacity, z = s.z, texture = s.texture }
         end
         return out
       `)
@@ -1363,6 +795,7 @@ result = 'DONE:' .. tostring(ctx.token_index) .. ':' .. tostring(clicks) break
     /** Pre-resolve texture ids to URLs (browser: asset URLs). */
     async linkTextures(assetUrl) {
       for (const [id, t] of core.textures) {
+        if (t.prepared) continue
         const u = assetUrl(t.path)
         core.textures.set(id, { ...t, url: u })
       }

@@ -1,9 +1,24 @@
 #pragma once
 #include <cstdint>
 #include <string>
+#include <memory>
+#include <cstddef>
 #include "RenderTypes.h"
 
 namespace Caesura {
+
+enum class FontId : uint8_t { Small = 0, Large = 1, TTF = 2 };
+struct FontRestoreState {
+    bool active = false;
+    FontId font = FontId::Small;
+    std::string assetPath;
+    float pixelSize = 0;
+};
+class IPreparedFontState {
+public:
+    virtual ~IPreparedFontState() = default;
+    virtual const FontRestoreState& description() const = 0;
+};
 
 // -- View ID constants -----------------------------------------------------
 // Render order enforced by IRenderDevice::init()
@@ -151,6 +166,12 @@ public:
                              uint8_t r, uint8_t g, uint8_t b, uint8_t a) = 0;
     virtual void setFont(int fontId) = 0;
     virtual bool loadTTF(const char* path, float fontSize) = 0;
+    virtual FontRestoreState captureFontState() const = 0;
+    virtual FontRestoreState defaultFontState() const = 0;
+    virtual std::unique_ptr<IPreparedFontState> prepareFontState(
+        const FontRestoreState& state, const uint8_t* bytes, size_t size) = 0;
+    virtual bool applyFontState(std::unique_ptr<IPreparedFontState> prepared) = 0;
+    virtual void clearFontState() = 0;
     virtual float textLineHeight() const = 0;
 
     // -- Blend / Transition / VFX submission (P1: abstract interface methods) --

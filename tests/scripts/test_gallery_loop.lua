@@ -8,6 +8,7 @@ end
 
 local Gallery = require("gallery")
 local real_scan = Gallery.scan
+local real_render, real_hide = Gallery._renderCurrent, Gallery.hide
 Gallery.scan = function()
     return { { id = "cg1", name = "CG One", path = "a.png" },
              { id = "cg2", name = "CG Two", path = "b.png" },
@@ -63,6 +64,7 @@ check("esc closes", coroutine.status(co) == "dead" and ctx.galleryState == nil)
 package.loaded["layers"] = layers_backup
 _G._CAESURA_BACKEND = real_backend
 Gallery.scan = real_scan
+Gallery._renderCurrent, Gallery.hide = real_render, real_hide
 
 if failed > 0 then os.exit(1) end
 print("GALLERY LOOP TESTS DONE")

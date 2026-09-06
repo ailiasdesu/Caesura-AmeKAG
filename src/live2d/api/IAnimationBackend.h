@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include <cstddef>
 #include <string>
 #include <cstdint>
 
@@ -20,6 +21,10 @@ public:
     virtual int  loadModel(const std::string& path, const std::string& name) = 0;
     virtual void unloadModel(int handle) = 0;
     virtual bool isLoaded(int handle) const = 0;
+    // Includes hidden models; clearing releases all models without changing
+    // backend initialization or reusing their handles. Safe when already empty.
+    virtual std::size_t loadedModelCount() const = 0;
+    virtual void clearModels() = 0;
 
     // Rendering
     virtual void showModel(int handle, float x, float y, float scale) = 0;

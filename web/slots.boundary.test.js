@@ -13,6 +13,11 @@ const scriptsDir = join(here, '..', 'scripts')
 const index = JSON.parse(readFileSync(join(here, 'scripts-index.json'), 'utf8'))
 const fileFetch = async (url) => {
   const u = new URL(url)
+  if (u.pathname.startsWith('/assets/lang/')) {
+    const p = join(here, '..', u.pathname.slice(1))
+    return { ok: existsSync(p), status: existsSync(p) ? 200 : 404,
+      text: async () => existsSync(p) ? readFileSync(p, 'utf8') : '' }
+  }
   const rel = u.pathname.replace('/scripts/', '')
   const p = join(scriptsDir, ...rel.split('/'))
   const ok = existsSync(p)
@@ -31,6 +36,14 @@ beforeEach(() => { clearSlots(); player.core.events.length = 0; player.core.back
 const pageText = () => (player.core.draws || []).map((d) => d.t || '').join('')
 const backlogOf = () => (player.core.backlog || []).map((b) => b.text).join(' | ')
 const NL = String.fromCharCode(10)
+const advanceTextPage = async (source, name) => {
+  const displayed = pageText()
+  const options = { maxFrames: 50000, advance: true, advanceScene: name }
+  const atPageWait = await player.runScene(source, name, options)
+  expect(atPageWait.startsWith('WAIT:'), atPageWait).toBe(true)
+  expect(pageText()).toBe(displayed)
+  return player.runScene(source, name, options)
+}
 
 describe('web save-slot boundary & lifecycle (injected memory backend)', () => {
   it('slot lifecycle: empty list, save reflects, delete removes', async () => {
@@ -53,7 +66,7 @@ describe('web save-slot boundary & lifecycle (injected memory backend)', () => {
     let out = await player.runScene(sceneA, 'wait.ks', { maxFrames: 50000 })
     expect(out.startsWith('WAIT:')).toBe(true)
     expect(pageText()).toContain('P1')
-    out = await player.runScene(sceneA, 'wait.ks', { maxFrames: 50000, advance: true, advanceScene: 'wait.ks' })
+    out = await advanceTextPage(sceneA, 'wait.ks')
     expect(out.startsWith('WAIT:')).toBe(true)
     expect(pageText()).toContain('P2')
     expect(await player.saveCurrent(3)).toBe(true)
@@ -67,7 +80,8 @@ describe('web save-slot boundary & lifecycle (injected memory backend)', () => {
     const texts = backlogOf()
     expect(texts).toContain('P2')
     expect(texts).toContain('P4')
-    expect(texts).not.toContain('P1')
+    // P1 remains in saved history, but must not execute or append again.
+    expect(player.core.backlog.filter(entry => entry.text === '[N]P1')).toHaveLength(1)
   }, 120000)
   it('multiple slots stay isolated: each load restores its own scene and vars', async () => {
     const textA = "A:${f.hero}:${f.level}"
@@ -97,20 +111,20 @@ describe('web save-slot boundary & lifecycle (injected memory backend)', () => {
     player.core.backlog.length = 0
     const lout = await player.loadSlot(4, { sceneSources: { 'adv_scene.ks': sceneA }, autoClick: false })
     expect(lout.startsWith('WAIT:')).toBe(true)
-    expect(pageText()).toContain('Loading slot 4')
-    const a1 = await player.runScene(sceneA, 'adv_scene.ks', { maxFrames: 60000, advance: true, advanceScene: 'adv_scene.ks' })
+    expect(pageText()).toContain('QX post-save')
+    expect(pageText()).not.toContain('Loading slot 4')
+    const a1 = await advanceTextPage(sceneA, 'adv_scene.ks')
     expect(player._ctx).toBeTruthy()
     const ctxName = String(player._ctx.current_scene || player._ctx.currentScene || '')
     expect(ctxName).not.toContain('loadslot.ks')
     expect(ctxName).toContain('adv_scene.ks')
-    expect(typeof a1).toBe('string')
-    expect(a1.length).toBeGreaterThan(0)
-    const loaderShown = () => backlogOf().split('Loading slot 4').length - 1
-    const before = loaderShown()
-    const a2 = await player.runScene(sceneA, 'adv_scene.ks', { maxFrames: 60000, advance: true, advanceScene: 'adv_scene.ks' })
-    expect(typeof a2).toBe('string')
+    expect(a1.startsWith('WAIT:'), a1).toBe(true)
+    expect(pageText()).toContain('QY')
+    expect(player._ctx.f.m).toBe(41)
+    const a2 = await advanceTextPage(sceneA, 'adv_scene.ks')
+    expect(a2.startsWith('DONE:'), a2).toBe(true)
     expect(String(player._ctx.current_scene || '')).toContain('adv_scene.ks')
-    expect(loaderShown()).toBeLessThanOrEqual(before + 1)
+    expect(backlogOf()).not.toContain('Loading slot 4')
   }, 120000)
   it('tolerates corrupt/illegal save payloads (list + load both survive)', async () => {
     store.set(SAVE_PREFIX + '11', '{ this is not valid json !!')

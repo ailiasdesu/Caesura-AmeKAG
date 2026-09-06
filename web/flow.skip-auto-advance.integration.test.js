@@ -131,7 +131,7 @@ describe('skip/auto/advance interaction matrix (round 93 wiring)', () => {
     expect(bl).toContain('P3')
   }, 60000)
 
-  it('skip=OFF advance resumes char-by-char: one [p] page per advance (逐字)', async () => {
+  it('skip=OFF advance respects both explicit [ch] and [p] waits (逐字)', async () => {
     player.core.backlog.length = 0
     const ks = [
       '[ch name="A" text="Q1"]', '[p]',
@@ -143,17 +143,25 @@ describe('skip/auto/advance interaction matrix (round 93 wiring)', () => {
     expect(out.startsWith('WAIT:')).toBe(true)
     expect(pageText()).toContain('Q1')
 
-    // advance WITHOUT skip -> exactly ONE page, parking at Q2 (逐字).
-    out = await player.runScene(ks, 'sk_adv_noskip.ks', { maxFrames: 50000, advance: true, advanceScene: 'sk_adv_noskip.ks', skip: false })
+    const advanceTextPage = async () => {
+      const displayed = pageText()
+      const options = { maxFrames: 50000, advance: true, advanceScene: 'sk_adv_noskip.ks', skip: false }
+      const atPageWait = await player.runScene(ks, 'sk_adv_noskip.ks', options)
+      expect(atPageWait.startsWith('WAIT:'), atPageWait).toBe(true)
+      expect(pageText()).toBe(displayed)
+      return player.runScene(ks, 'sk_adv_noskip.ks', options)
+    }
+    // Complete [ch]'s input wait and then the explicit [p] before Q2.
+    out = await advanceTextPage()
     expect(out.startsWith('WAIT:')).toBe(true)
     expect(pageText()).toContain('Q2')
     expect(pageText()).not.toContain('Q1')
 
-    out = await player.runScene(ks, 'sk_adv_noskip.ks', { maxFrames: 50000, advance: true, advanceScene: 'sk_adv_noskip.ks', skip: false })
+    out = await advanceTextPage()
     expect(out.startsWith('WAIT:')).toBe(true)
     expect(pageText()).toContain('Q3')
 
-    out = await player.runScene(ks, 'sk_adv_noskip.ks', { maxFrames: 50000, advance: true, advanceScene: 'sk_adv_noskip.ks', skip: false })
+    out = await advanceTextPage()
     expect(out.startsWith('DONE:')).toBe(true)
   }, 60000)
 

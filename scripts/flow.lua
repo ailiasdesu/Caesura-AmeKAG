@@ -19,14 +19,14 @@ flow.scene_cache = {}
 -- a stale cache only costs one recompile). Cache failures never break
 -- scene loading — they degrade to parse+compile.
 
-function flow.load_scene(path)
+function flow.load_scene(path, prepare_only)
     -- Check cache (cache keyed by the RESOLVED path so a mod override
     -- that appears after a base scene was cached still wins).
     -- Mod resolution: enabled mods may override base scenes
     -- (mods/<name>/<path>); the resolved path is cached independently.
     local mods = require("mods")
     local resolved = mods.resolve_scene(path)
-    if flow.scene_cache[resolved] then
+    if not prepare_only and flow.scene_cache[resolved] then
         return flow.scene_cache[resolved]
     end
 
@@ -40,7 +40,7 @@ function flow.load_scene(path)
     local tokens = nil
 
     -- 1) Try the .ksc cache first (compile once, reuse many).
-    local cached = compiler.readCache(kscPath)
+    local cached = not prepare_only and compiler.readCache(kscPath)
     if cached and #cached > 0 and cached._compiled then
         -- freshness: content hash must match (size-only comparison is
         -- unreliable when a scene is edited without changing length)
@@ -58,9 +58,12 @@ function flow.load_scene(path)
             return nil, tokens_or_err
         end
         tokens = tokens_or_err
-        pcall(compiler.compile, tokens)
-        tokens._srcHash = compiler.hashFile(resolved)
-        pcall(compiler.writeCache, tokens, kscPath)
+        local compiled, reason=pcall(compiler.compile, tokens)
+        if prepare_only and not compiled then return nil,reason end
+        if not prepare_only then
+            tokens._srcHash = compiler.hashFile(resolved)
+            pcall(compiler.writeCache, tokens, kscPath)
+        end
     end
 
     -- Label map from the compiled index (fixes the legacy dead-code path
@@ -72,8 +75,14 @@ function flow.load_scene(path)
 
     local scene = {tokens = tokens, labels = labels, path = resolved,
                    base_path = path}
-    flow.scene_cache[resolved] = scene
+    if not prepare_only then flow.scene_cache[resolved] = scene end
     return scene
+end
+
+-- Restore preparation must not reuse a token stream changed by live macros or
+-- replace the cache entry used by the still-running session.
+function flow.prepare_scene(path)
+    return flow.load_scene(path, true)
 end
 
 -- ── flow.reload_scene(path) — force reload (for hot reload) ──────────────────

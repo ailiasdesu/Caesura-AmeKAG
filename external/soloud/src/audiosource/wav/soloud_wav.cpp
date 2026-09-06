@@ -102,7 +102,8 @@ namespace SoLoud
 
 		drwav_uint64 samples = decoder.totalPCMFrameCount;
 
-		if (!samples)
+		// Caesura: interleaved decode below uses a fixed MAX_CHANNELS scratch.
+		if (!samples || decoder.channels == 0 || decoder.channels > MAX_CHANNELS)
 		{
 			drwav_uninit(&decoder);
 			return FILE_LOAD_FAILED;
@@ -147,14 +148,12 @@ namespace SoLoud
 		mBaseSamplerate = (float)info.sample_rate;
         int samples = stb_vorbis_stream_length_in_samples(vorbis);
 
-		if (info.channels > MAX_CHANNELS)
+		if (info.channels <= 0 || info.channels > MAX_CHANNELS)
 		{
-			mChannels = MAX_CHANNELS;
+			stb_vorbis_close(vorbis);
+			return FILE_LOAD_FAILED;
 		}
-		else
-		{
-			mChannels = info.channels;
-		}
+		mChannels = info.channels;
 		mData = new float[samples * mChannels];
 		memset(mData, 0, samples * mChannels * sizeof(float));
 		mSampleCount = samples;
@@ -185,6 +184,11 @@ namespace SoLoud
 
 		if (!drmp3_init_memory(&decoder, aReader->getMemPtr(), aReader->length(), NULL))
 		{
+			return FILE_LOAD_FAILED;
+		}
+		if (decoder.channels == 0 || decoder.channels > MAX_CHANNELS)
+		{
+			drmp3_uninit(&decoder);
 			return FILE_LOAD_FAILED;
 		}
 
@@ -232,7 +236,7 @@ namespace SoLoud
 
 		drflac_uint64 samples = decoder->totalPCMFrameCount;
 
-		if (!samples)
+		if (!samples || decoder->channels == 0 || decoder->channels > MAX_CHANNELS)
 		{
 			drflac_close(decoder);
 			return FILE_LOAD_FAILED;

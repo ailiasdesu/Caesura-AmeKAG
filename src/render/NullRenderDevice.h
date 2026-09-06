@@ -51,6 +51,12 @@ class NullRenderDevice final : public IRenderDevice {public:
                     uint8_t r, uint8_t g, uint8_t b, uint8_t a) override;
     void setFont(int fontId) override;
     bool loadTTF(const char* path, float fontSize) override;
+    FontRestoreState captureFontState() const override;
+    FontRestoreState defaultFontState() const override;
+    std::unique_ptr<IPreparedFontState> prepareFontState(
+        const FontRestoreState& state, const uint8_t* bytes, size_t size) override;
+    bool applyFontState(std::unique_ptr<IPreparedFontState> prepared) override;
+    void clearFontState() override;
     void stretchBlt(uint16_t viewId, uint32_t srcTexture,
                     float srcX, float srcY, float srcWidth, float srcHeight,
                     uint32_t dstTexture, float dstX, float dstY,

@@ -26,7 +26,12 @@ check("no map empty", #ChapterSelect.collect({}) == 0)
 
 -- show(): cancel (Esc) returns nil and routes nothing
 local backend_backup = _G._CAESURA_BACKEND
-_G._CAESURA_BACKEND = { render = function() return true end }
+_G._CAESURA_BACKEND = { render = function() return true end,
+    platform = function(cmd)
+        if cmd == "get_resolution" then return 1280, 720 end
+        if cmd == "get_input_focus" then return "KAG" end
+        return true
+    end }
 local layers_backup = package.loaded["layers"]
 package.loaded["layers"] = { ensure = function() return { visible = true } end,
     set_layer_visible = function() end, set_z = function() end }

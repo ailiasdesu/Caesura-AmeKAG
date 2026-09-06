@@ -155,6 +155,11 @@ namespace SoLoud
 		time mStreamTime;
 		// Position of this stream, in seconds.
 		time mStreamPosition;
+		// Caesura: exact device-frontier source phase; never advanced by decoder
+		// prefetch or by the bounded restoration pre-roll.
+		uint64_t mSourceFrameFixed;
+		bool mRestoreClockValid;
+		unsigned int mParentClockDelayFrames;
 		// Fader for the audio panning
 		Fader mPanFader;
 		// Fader for the audio volume
@@ -179,8 +184,9 @@ namespace SoLoud
 		void init(AudioSource &aSource, int aPlayIndex);
 		// Pointers to buffers for the resampler
 		float *mResampleData[2];
-		// Sub-sample playhead; 16.16 fixed point
-		unsigned int mSrcOffset;
+		// Sub-sample playhead; 20 fractional bits. Wide enough to retain a
+		// multi-block step without wrapping before the next source refill.
+		uint64_t mSrcOffset;
 		// Samples left over from earlier pass
 		unsigned int mLeftoverSamples;
 		// Number of samples to delay streaming
@@ -194,6 +200,8 @@ namespace SoLoud
 		virtual bool hasEnded() = 0;
 		// Seek to certain place in the stream. Base implementation is generic "tape" seek (and slow).
 		virtual result seek(time aSeconds, float *mScratch, unsigned int mScratchSize);
+		// Caesura: exact frame seek for independently prepared decoder instances.
+		virtual result seekFrame(uint64_t aFrame);
 		// Rewind stream. Base implementation returns NOT_IMPLEMENTED, meaning it can't rewind.
 		virtual result rewind();
 		// Get information. Returns 0 by default.

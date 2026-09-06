@@ -1055,3 +1055,46 @@ TEST_CASE("AsyncLoader in-flight dedup: released after completion; retry loads a
         CHECK(fx.loader.pendingCount() == 0);
     }
 }
+
+TEST_CASE("U11 asset reader: preparation binds the selected source and returned size") {
+    AssetManager assets;
+    assets.init();
+    auto low = std::make_unique<SpyProvider>(100, "base", true, std::vector<uint8_t>{1,2,3,4});
+    auto* lowSpy = low.get();
+    assets.addProvider(std::move(low));
+    IAssetReader& reader = assets;
+    SUBCASE("selected data is returned and survives later provider changes") {
+        auto bytes = reader.readAsset("u11/asset.bin", 4);
+        CHECK(bytes == std::vector<uint8_t>{1,2,3,4});
+        CHECK(lowSpy->readCalls() == 1);
+        bytes.clear();
+        CHECK(reader.readAsset("u11/asset.bin", 4).size() == 4);
+    }
+    SUBCASE("oversize result is not exposed") {
+        CHECK(reader.readAsset("u11/asset.bin", 3).empty());
+    }
+    SUBCASE("an empty selected layer cannot expose the lower layer") {
+        auto high = std::make_unique<SpyProvider>(200, "patch", true);
+        auto* highSpy = high.get();
+        assets.addProvider(std::move(high));
+        CHECK(reader.readAsset("u11/asset.bin", 64).empty());
+        CHECK(highSpy->readCalls() == 1);
+        CHECK(lowSpy->readCalls() == 0);
+    }
+    SUBCASE("a faulting selected layer cannot expose the lower layer") {
+        assets.addProvider(std::make_unique<ThrowingProvider>(200,"broken-patch"));
+        CHECK(reader.readAsset("u11/asset.bin",64).empty());
+        CHECK(lowSpy->readCalls() == 0);
+    }
+    SUBCASE("a genuine miss permits the next source") {
+        assets.addProvider(std::make_unique<SpyProvider>(200,"missing-patch",false));
+        CHECK(reader.readAsset("u11/asset.bin",4).size() == 4);
+    }
+    SUBCASE("nonportable paths reject before querying providers") {
+        for (const std::string path : {"../outside", "/absolute", "C:/absolute", "u11\\file"}) {
+            CHECK(reader.readAsset(path,64).empty());
+        }
+        CHECK(reader.readAsset(std::string("u11/\0file",9),64).empty());
+        CHECK(lowSpy->existsCalls() == 0);
+    }
+}

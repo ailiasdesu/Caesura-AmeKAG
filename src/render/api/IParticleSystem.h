@@ -43,6 +43,7 @@ public:
     virtual void render(uint16_t viewId) = 0;
 
     virtual int aliveCount() const = 0;
+    virtual int activeEmitterCount() const = 0;
     virtual bool isInitialized() const = 0;
 };
 

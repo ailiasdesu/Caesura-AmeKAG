@@ -43,7 +43,8 @@ export class DomRenderer {
     this.width = opts.width ?? 1280
     this.height = opts.height ?? 720
     this.textureUrls = new Map() // id -> src string
-    this._els = new Map() // layer name -> element
+    this._els = new Map() // stable layer id (legacy fallback: name) -> element
+    this._drawnPrepared = new WeakMap() // canvas -> immutable prepared resource
     this._textEl = null
     /** Optional external layer source (Lua Layers.snapshot()); when set it
      *  takes precedence over core.renderList(). */
@@ -144,17 +145,21 @@ export class DomRenderer {
     setStyle(this.root, 'filter', paletteFilter(this.core.palette))
     // text layer rendered separately (overlay) if it has content
     for (const n of list) {
-      let el = this._els.get(n.name)
+      const identity = n.id ?? n.name
+      let el = this._els.get(identity)
+      const texture = this.core.textures?.get(n.texture)
+      const prepared = texture?.prepared
       const isImage = IMAGE_LAYER_TAGS.has(n.name) || (n.tag && IMAGE_LAYER_TAGS.has(n.tag)) ||
         n.name.startsWith('_char_') || (n.tag && n.tag.startsWith('_char_'))
-      if (!el || (isImage && el.tagName !== 'IMG') || (!isImage && el.tagName === 'IMG')) {
+      const tagName = prepared ? 'CANVAS' : isImage ? 'IMG' : 'DIV'
+      if (!el || el.tagName !== tagName) {
         if (el) el.remove()
-        el = document.createElement(isImage ? 'img' : 'div')
+        el = document.createElement(tagName.toLowerCase())
         el.className = 'caesura-layer'
         el.dataset.layer = n.name
         el.style.position = 'absolute'
         this.root.appendChild(el)
-        this._els.set(n.name, el)
+        this._els.set(identity, el)
       }
       // CSS transitions animate engine-driven moves/fades (sprite_move /
       // sprite_fade yield per frame; the DOM sees the endpoint).
@@ -170,10 +175,20 @@ export class DomRenderer {
       setStyle(el, 'width', n.w + 'px')
       setStyle(el, 'height', n.h + 'px')
       // engine opacity is 0..255; DOM wants 0..1
-      setStyle(el, 'opacity', String((Number(n.opacity) || 255) / 255))
+      setStyle(el, 'opacity', String(Number(n.opacity ?? 255) / 255))
       setStyle(el, 'zIndex', String(n.z))
-      const url = n.texture ? this.textureUrls.get(n.texture) : null
-      if (el.tagName === 'IMG') {
+      const url = n.texture && (!this.core.textures || texture)
+        ? this.textureUrls.get(n.texture) : null
+      if (prepared) {
+        if (this._drawnPrepared.get(el) !== prepared) {
+          el.width = prepared.width
+          el.height = prepared.height
+          const context = el.getContext('2d')
+          if (!context) throw new Error('Prepared image canvas unavailable')
+          prepared.draw(context)
+          this._drawnPrepared.set(el, prepared)
+        }
+      } else if (el.tagName === 'IMG') {
         // Re-setting src to the SAME URL makes the browser re-run its image
         // load path (cache revalidation, and a decode on some engines), so
         // compare with the attribute actually on the node. getAttribute
@@ -187,7 +202,7 @@ export class DomRenderer {
       } else {
         el.textContent = url ? '' : ''
       }
-      alive.add(n.name)
+      alive.add(identity)
     }
     // remove stale layer elements
     for (const [name, el] of this._els) {
@@ -199,7 +214,7 @@ export class DomRenderer {
     // message overlay — structured draws (x/y/rgb/scale) when available,
     // else the flat textBuffer (legacy fallback).
     const draws = this.core.draws ?? []
-    const hasText = draws.length > 0 || this.core.textBuffer.length > 0
+    const hasText = this.core.font?.active !== false && (draws.length > 0 || this.core.textBuffer.length > 0)
     if (hasText && !this._textEl) {
       this._textEl = document.createElement('div')
       this._textEl.className = 'caesura-message'
@@ -221,9 +236,19 @@ export class DomRenderer {
           span.style.left = d.x + 'px'
           span.style.top = d.y + 'px'
           span.style.color = 'rgb(' + d.r + ',' + d.g + ',' + d.b + ')'
-          span.style.fontSize = Math.round(20 * (d.s || 1)) + 'px'
+          span.style.fontSize = Math.round((this.core.font?.size ?? 20) * (d.s || 1)) + 'px'
+          if (this.core.font?.family) span.style.fontFamily = this.core.font.family
           if (d.bd) span.style.fontWeight = '700'
           if (d.it) span.style.fontStyle = 'italic'
+          if (d.st) span.style.textDecoration = 'line-through'
+          if (d.ruby) {
+            const ruby = document.createElement('ruby')
+            ruby.textContent = d.t
+            const annotation = document.createElement('rt')
+            annotation.textContent = d.ruby
+            ruby.appendChild(annotation)
+            span.replaceChildren(ruby)
+          }
           this._textEl.appendChild(span)
         }
       } else {

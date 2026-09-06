@@ -17,6 +17,7 @@
 // One page load per file (a single browser session), ordered cases so later
 // ones build on the parked scene, exactly like a user would.
 import { describe, it, expect, beforeAll } from 'vitest'
+import { installCanvasHost } from './test-support/canvas-host.js'
 import { readFileSync, existsSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -26,6 +27,7 @@ const root = join(here, '..')
 const wasmFile = join(here, 'node_modules', 'wasmoon', 'dist', 'glue.wasm')
 const AUDIO_TUTORIAL = 'tutorial/tutorial_04_audio.ks'
 const EM = String.fromCharCode(0x2014) // — (no-audio placeholder)
+beforeAll(()=>{installCanvasHost()})
 
 // Map web/player fetch URLs to real files so the player boots without a
 // server (copied 1:1 from e2e.main.test.js to stay in the same harness).
@@ -149,14 +151,15 @@ async function runScene(name) {
   return waitStatus('parked: ', 'run parks: ' + name)
 }
 
-// Click Advance and wait for the status cursor to move to a new advance page.
+// Every completed click writes a log entry, including [ch] -> explicit [p]
+// boundaries that keep the same display-token status and visible page.
 async function advanceOnce() {
-  const before = statusText()
+  const before = $('log').textContent.split('\n').filter(line => line.startsWith('advance: ')).length
   $('advance').click()
   return waitFor(() => {
-    const s = statusText()
-    return s.startsWith('advance:') && s !== before
-  }, 'advance advances page', 60000)
+    const completed = $('log').textContent.split('\n').filter(line => line.startsWith('advance: ')).length
+    return completed > before && /^advance: (WAIT:|DONE:)/.test(statusText())
+  }, 'advance completes its input boundary', 60000)
 }
 
 beforeAll(async () => {
@@ -250,9 +253,13 @@ describe('audio UI · scene audio status display + one-way lock', () => {
     setSlider('settings-bgm', 0.7)
     expect(sliderValue('settings-bgm')).toBe(0.7)
 
-    // Advance one page: the tutorial's page-2 token is [setbgmvolume volume=0.3].
+    // Complete [ch] and its explicit [p] before page 2's volume command.
+    const before = window.__caesuraCore.events.length
+    await advanceOnce()
     await advanceOnce()
     expect(statusText()).toMatch(/^advance: (WAIT:|DONE:)/)
+    expect(window.__caesuraCore.events.slice(before).some(event => event.kind === 'audio.volume'
+      && event.detail.kind === 'bgm' && event.detail.v === 0.3)).toBe(true)
 
     expect(sliderValue('settings-bgm')).toBe(0.7)
     expect(readPersistedSettings().volumes.bgm).toBe(0.7)
@@ -266,12 +273,8 @@ describe('audio UI · scene audio status display + one-way lock', () => {
     // exactly where the previous test left the parked cursor.
     for (let i = 0; i < 10; i++) {
       if (audioStatus() === EM) break
-      const s0 = statusText()
-      $('advance').click()
-      await waitFor(() => {
-        const s = statusText()
-        return s.startsWith('advance:') && s !== s0
-      }, 'advance to clear audio ' + i, 60000)
+      await advanceOnce()
+      if (audioStatus() !== EM) await advanceOnce()
     }
     await waitFor(() => audioStatus() === EM, 'status reaches the no-audio placeholder', 15000)
     expect(audioStatus()).toBe(EM)

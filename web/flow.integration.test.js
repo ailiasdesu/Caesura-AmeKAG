@@ -338,7 +338,9 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
       '[end]',
     ].join(NL)
     player.core.events.length = 0
-    const out2 = await player.runScene(loadKs, 'loadgame.ks', { maxFrames: 200000, autoClick: true })
+    const out2 = await player.runScene(loadKs, 'loadgame.ks', {
+      maxFrames: 200000, autoClick: true, sceneSources: { 'savegame.ks': saveKs },
+    })
     expect(out2.startsWith('DONE:')).toBe(true)
     expect(player.core.events.some((e) => e.kind === 'save.read')).toBe(true)
     // [load] succeeded: engine logged Loaded slot 1 (no error events)
@@ -377,9 +379,9 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
       sceneSources: { 'scene_a.ks': sceneA },
     })
     expect(out.startsWith('DONE:')).toBe(true)
-    // resumed lines appear after the loader page
+    // Restore replaces future loader history with the saved game's history.
     const texts = player.core.backlog.map((x) => x.text).join(' | ')
-    expect(texts).toContain('LOADER-START')
+    expect(texts).not.toContain('LOADER-START')
     expect(texts).toContain('A3 after save')
     expect(texts).toContain('A4')
   }, 120000)
@@ -437,7 +439,7 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     const out = await player.loadSlot(2, { sceneSources: { 'scene_a.ks': sceneA } })
     expect(out.startsWith('DONE:')).toBe(true)
     const texts = player.core.backlog.map((x) => x.text).join(' | ')
-    expect(texts).toContain('Loading slot 2')
+    expect(texts).not.toContain('Loading slot 2')
     expect(texts).toContain('U2 after save')
     expect(texts).toContain('U3')
   }, 120000)
@@ -769,7 +771,7 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     })
     expect(out.startsWith('DONE:'), out).toBe(true)
     const texts = player.core.backlog.map((x) => x.text).join(' | ')
-    expect(texts).toContain('LOADER-START')
+    expect(texts).not.toContain('LOADER-START')
     // The loop body ran all 3 iterations (i=1 before save counts; save on
     // i=2, then iterations 2-finalize + 3 run after load), so total=3 and
     // the counter exited at i=4.
@@ -1120,9 +1122,17 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
 
   // -- round 81 resume: advance/skip/auto parity -------------------------
   // Desktop parity: each runScene(opts.advance) resumes the previously
-  // parked scene cursor and advances exactly ONE [p] page (kag_runner
-  // on_click semantics), instead of re-running the scene from token 1.
+  // parked scene cursor through the shared kag_runner on_click semantics.
+  // An explicit [ch] followed by [p] has two independent input boundaries.
   const pageText = () => (player.core.draws || []).map((d) => d.t || '').join('')
+  const advanceTextPage = async (source, name) => {
+    const displayed = pageText()
+    const opts = { maxFrames: 50000, advance: true, advanceScene: name }
+    const atPageWait = await player.runScene(source, name, opts)
+    expect(atPageWait.startsWith('WAIT:'), atPageWait).toBe(true)
+    expect(pageText(), 'the explicit [p] retains the completed [ch] page').toBe(displayed)
+    return player.runScene(source, name, opts)
+  }
 
   it('advance resumes the parked scene one page at a time (round 81)', async () => {
     const NL = String.fromCharCode(10)
@@ -1138,18 +1148,18 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     expect(pageText()).toContain('PAGE-ONE')
 
     // Advance 1 -> ONE page forward, parked at the next [p] (PAGE-TWO shown).
-    out = await player.runScene(ks, 'adv_basic.ks', { maxFrames: 50000, advance: true, advanceScene: 'adv_basic.ks' })
+    out = await advanceTextPage(ks, 'adv_basic.ks')
     expect(out.startsWith('WAIT:')).toBe(true)
     expect(pageText()).toContain('PAGE-TWO')
     expect(pageText()).not.toContain('PAGE-ONE')
 
     // Advance 2 -> PAGE-THREE.
-    out = await player.runScene(ks, 'adv_basic.ks', { maxFrames: 50000, advance: true, advanceScene: 'adv_basic.ks' })
+    out = await advanceTextPage(ks, 'adv_basic.ks')
     expect(out.startsWith('WAIT:')).toBe(true)
     expect(pageText()).toContain('PAGE-THREE')
 
     // Advance 3 -> past the final [p], DONE.
-    out = await player.runScene(ks, 'adv_basic.ks', { maxFrames: 50000, advance: true, advanceScene: 'adv_basic.ks' })
+    out = await advanceTextPage(ks, 'adv_basic.ks')
     expect(out.startsWith('DONE:')).toBe(true)
     // Backlog accumulated the departing pages (PAGE-ONE + PAGE-TWO + PAGE-THREE).
     const bl = (player.core.backlog || []).map((b) => b.text).join(' | ')
@@ -1192,11 +1202,11 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
 
     // Advancing must NOT wipe the ctx: [set f.v = 20] ran on the resumed
     // coroutine so V2 interpolates the variable that survived the advance.
-    const out1 = await player.runScene(ks, 'adv_vars.ks', { maxFrames: 50000, advance: true, advanceScene: 'adv_vars.ks' })
+    const out1 = await advanceTextPage(ks, 'adv_vars.ks')
     expect(out1.startsWith('WAIT:')).toBe(true)
     expect(pageText()).toContain('V2=20')
 
-    const out2 = await player.runScene(ks, 'adv_vars.ks', { maxFrames: 50000, advance: true, advanceScene: 'adv_vars.ks' })
+    const out2 = await advanceTextPage(ks, 'adv_vars.ks')
     expect(out2.startsWith('DONE:')).toBe(true)
   }, 120000)
   // -- round 78 i18n x round 81 advance combination -------------------------
@@ -1228,19 +1238,19 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     expect(pageT()).not.toContain('P1-Settings')
 
     // Advance 1 runs [i18n language="en"] then page 2 -> en dict.
-    out = await player.runScene(ks, 'i18n_adv.ks', { maxFrames: 50000, advance: true, advanceScene: 'i18n_adv.ks' })
+    out = await advanceTextPage(ks, 'i18n_adv.ks')
     expect(out.startsWith('WAIT:'), out).toBe(true)
     expect(pageT()).toContain('P2-Settings')
     expect(pageT()).not.toContain('P2-设置')
 
     // Advance 2 switches back to zh -> page 3 renders in zh again.
-    out = await player.runScene(ks, 'i18n_adv.ks', { maxFrames: 50000, advance: true, advanceScene: 'i18n_adv.ks' })
+    out = await advanceTextPage(ks, 'i18n_adv.ks')
     expect(out.startsWith('WAIT:'), out).toBe(true)
     expect(pageT()).toContain('P3-设置')
     expect(pageT()).not.toContain('P3-Settings')
 
     // Advance 3 -> past the last [p], DONE.
-    out = await player.runScene(ks, 'i18n_adv.ks', { maxFrames: 50000, advance: true, advanceScene: 'i18n_adv.ks' })
+    out = await advanceTextPage(ks, 'i18n_adv.ks')
     expect(out.startsWith('DONE:'), out).toBe(true)
   }, 120000)
 
@@ -1267,7 +1277,7 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
 
     // Advance 1: NO i18n command between the pages; the en selection set
     // before the park must have survived the advance (round-81 keeps ctx).
-    out = await player.runScene(ks, 'i18n_persist.ks', { maxFrames: 50000, advance: true, advanceScene: 'i18n_persist.ks' })
+    out = await advanceTextPage(ks, 'i18n_persist.ks')
     expect(out.startsWith('WAIT:'), out).toBe(true)
     expect(pageT()).toContain('E2-Settings')
     let sv = await readCtx('settingsValues')
@@ -1275,7 +1285,7 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
 
     // Advance 2 -> DONE; a later fresh scene (no [i18n]) still inherits en
     // because i18n.current outlives the scene (module-level state).
-    out = await player.runScene(ks, 'i18n_persist.ks', { maxFrames: 50000, advance: true, advanceScene: 'i18n_persist.ks' })
+    out = await advanceTextPage(ks, 'i18n_persist.ks')
     expect(out.startsWith('DONE:'), out).toBe(true)
 
     player.core.draws = []
@@ -1328,7 +1338,9 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     // Loading the save restores en (language + i18n.current hot-switch).
     player.core.draws = []
     player.core.backlog.length = 0
-    out = await player.loadSlot(slot, { maxFrames: 50000, autoClick: true })
+    out = await player.loadSlot(slot, {
+      maxFrames: 50000, autoClick: true, sceneSources: { 'i18n_save.ks': enKs },
+    })
     expect(out.startsWith('DONE:'), out).toBe(true)
     const sv = await readCtx('settingsValues')
     expect(sv && sv.language).toBe('en')
@@ -1364,11 +1376,11 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
 
     // Advance 1: [i18n language="en"] commits b1 to backlog AND relocalizes
     // it (设置 -> Settings); page 2 renders b2 in en.
-    out = await player.runScene(ks, 'i18n_bk_adv.ks', { maxFrames: 50000, advance: true, advanceScene: 'i18n_bk_adv.ks' })
+    out = await advanceTextPage(ks, 'i18n_bk_adv.ks')
     expect(out.startsWith('WAIT:'), out).toBe(true)
 
     // Advance 2 -> DONE; inspect the full backlog.
-    out = await player.runScene(ks, 'i18n_bk_adv.ks', { maxFrames: 50000, advance: true, advanceScene: 'i18n_bk_adv.ks' })
+    out = await advanceTextPage(ks, 'i18n_bk_adv.ks')
     expect(out.startsWith('DONE:'), out).toBe(true)
     const bl = await readBacklog()
     const texts = bl.map((b) => b.text)
@@ -1410,12 +1422,12 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
 
     // After each advance the plural table (and en category) survive, so
     // variant selection still tracks the count.
-    out = await player.runScene(ks, 'plural_adv.ks', { maxFrames: 50000, advance: true, advanceScene: 'plural_adv.ks' })
+    out = await advanceTextPage(ks, 'plural_adv.ks')
     expect(out.startsWith('WAIT:'), out).toBe(true)
     expect(await tNum(1)).toBe('1 item')
     expect(await tNum(2)).toBe('2 items')
 
-    out = await player.runScene(ks, 'plural_adv.ks', { maxFrames: 50000, advance: true, advanceScene: 'plural_adv.ks' })
+    out = await advanceTextPage(ks, 'plural_adv.ks')
     expect(out.startsWith('DONE:'), out).toBe(true)
     expect(await tNum(0)).toBe('0 items')
     // zh/ja (and unknown) plural_category is always "other" regardless of n.
@@ -1772,11 +1784,11 @@ describe('browser flow (jsdom + wasmoon + DOM)', () => {
     expect(out.startsWith('WAIT:'), out).toBe(true)
     expect(pageT()).toContain('P1-{n} items')
 
-    out = await player.runScene(ks, 'i18n_plur_adv.ks', { maxFrames: 50000, advance: true, advanceScene: 'i18n_plur_adv.ks' })
+    out = await advanceTextPage(ks, 'i18n_plur_adv.ks')
     expect(out.startsWith('WAIT:'), out).toBe(true)
     expect(pageT()).toContain('P2-{n} 个条目')
 
-    out = await player.runScene(ks, 'i18n_plur_adv.ks', { maxFrames: 50000, advance: true, advanceScene: 'i18n_plur_adv.ks' })
+    out = await advanceTextPage(ks, 'i18n_plur_adv.ks')
     expect(out.startsWith('DONE:'), out).toBe(true)
     const bl = await readBacklog()
     const blTexts = bl.map((b) => b.text || '')

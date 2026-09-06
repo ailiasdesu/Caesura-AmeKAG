@@ -9,6 +9,7 @@ extern "C" {
 #include "../debug/DebugManager.h"
 #include "ErrorUI.h"
 #include "../audio/api/IAudioBackend.h"
+#include "../audio/api/IAudioRestore.h"
 #include "../platform/api/IDisplayService.h"
 #include "../platform/LifecycleService.h"
 #include "../audio/AudioFocusService.h"
@@ -32,6 +33,7 @@ extern "C" {
 #include "../job/api/IJobSystem.h"
 #include "../resource/api/IAsyncLoader.h"
 #include "../resource/AssetManager.h"
+#include "../resource/api/IImageDecoder.h"
 #include "../resource/api/IResourceGenerationTracker.h"
 #include "../steam/api/ISteamBackend.h"
 #include "../script/bindings/SteamBinding.h"
@@ -124,6 +126,7 @@ std::unique_ptr<ITextureManager> createTextureManager();
 std::unique_ptr<ILayerManager> createLayerManager(IRenderDevice* renderDevice);
 std::unique_ptr<ISandboxQuota> createSandboxQuota();
 std::unique_ptr<AssetManager> createAssetManager();
+std::unique_ptr<IImageDecoder> createImageDecoder();
 std::unique_ptr<IAsyncLoader> createAsyncLoader(AssetManager* assetManager);
 std::unique_ptr<IJobSystem> createJobSystem();
 std::unique_ptr<ISaveManager> createSaveManager();
@@ -436,6 +439,7 @@ bool Engine::initPlatformPhase() {
     }
     m_audioInitialized = true;
     BackendRegistry::instance().setAudioBackend(m_audioBackend.get());
+    BackendRegistry::instance().setAudioRestore(dynamic_cast<IAudioRestore*>(m_audioBackend.get()));
 
     DebugManager::AudioInfo ai;
     ai.initialized = true; ai.bgmBusReady = true;
@@ -554,6 +558,8 @@ bool Engine::initScriptingPhase() {
 // ============================================================================
 
 bool Engine::initAssetPhase() {
+    if (!m_imageDecoder) m_imageDecoder=createImageDecoder();
+    BackendRegistry::instance().setImageDecoder(m_imageDecoder.get());
     if (!m_resourceGenerationTracker) {
         m_resourceGenerationTracker = createResourceGenerationTracker();
     }
@@ -573,6 +579,7 @@ bool Engine::initAssetPhase() {
     if (!registerDefaultAssetProviders(*m_assetManager, m_config, ".")) {
         return false;
     }
+    BackendRegistry::instance().setAssetReader(m_assetManager.get());
     m_asyncLoader->init();
     if (!m_asyncLoader->isRunning()) {
         DEBUG_ERR(SubSys::Resource, ErrCode::Ok, "Async loader initialization failed");
@@ -1819,6 +1826,8 @@ void Engine::shutdown() {
     m_miniGameBackend.reset();
     registry.setMiniGameBackend(nullptr);
 
+    registry.setAssetReader(nullptr);
+    registry.setImageDecoder(nullptr);
     if (m_assetManagerInitialized) m_assetManager->shutdown();
     if (m_steamInitialized) {
         m_steamBackend->shutdown();
@@ -1900,6 +1909,7 @@ void Engine::shutdown() {
     registry.setAudioFocusService(nullptr);
     registry.setRenderDevice(nullptr);
     registry.setAudioBackend(nullptr);
+    registry.setAudioRestore(nullptr);
     registry.setPlatformBackend(nullptr);
     registry.setLuaManager(nullptr);
 

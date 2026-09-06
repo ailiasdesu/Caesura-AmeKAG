@@ -11,6 +11,7 @@ namespace Caesura {
 // Forward declarations only — no I*.h includes needed for consumers
 class IRenderDevice;
 class IAudioBackend;
+class IAudioRestore;
 class IPlatformBackend;
 class IInputRouter;
 class IVideoPlayer;
@@ -27,6 +28,8 @@ class ISandboxQuota;
 class ITextureBudget;
 class ISaveManager;
 class IResourceGenerationTracker;
+class IAssetReader;
+class IImageDecoder;
 class ISteamBackend;
 class IMobileAdapter;
 class IDisplayService;
@@ -54,6 +57,7 @@ public:
     // -- Setters (out-of-line — need complete types in .cpp) --
     void setRenderDevice(IRenderDevice* device);
     void setAudioBackend(IAudioBackend* backend);
+    void setAudioRestore(IAudioRestore* restore);
     void setPlatformBackend(IPlatformBackend* backend);
     void setInputRouter(IInputRouter* router);
     void setMiniGameBackend(IMiniGameBackend* backend);
@@ -71,6 +75,8 @@ public:
     void setTextureBudget(ITextureBudget* tb);
     void setSaveManager(ISaveManager* manager);
     void setResourceGenerationTracker(IResourceGenerationTracker* tracker);
+    void setAssetReader(IAssetReader* reader);
+    void setImageDecoder(IImageDecoder* decoder);
     void setSteamBackend(ISteamBackend* backend);
     void setMobileAdapter(IMobileAdapter* adapter);
     void setDisplayService(IDisplayService* service);
@@ -87,6 +93,7 @@ public:
     // -- Getters (out-of-line — need complete types in .cpp) --
     IRenderDevice*    getRenderDevice();
     IAudioBackend*    getAudioBackend();
+    IAudioRestore*    getAudioRestore();
     IPlatformBackend* getPlatformBackend();
     IInputRouter*     getInputRouter();
     IVideoPlayer*     getVideoPlayer();
@@ -104,6 +111,8 @@ public:
     ITextureBudget*   getTextureBudget();
     ISaveManager*     getSaveManager();
     IResourceGenerationTracker* getResourceGenerationTracker();
+    IAssetReader* getAssetReader();
+    IImageDecoder* getImageDecoder();
     ISteamBackend*    getSteamBackend();
     IMobileAdapter*   getMobileAdapter();
     IDisplayService*  getDisplayService();

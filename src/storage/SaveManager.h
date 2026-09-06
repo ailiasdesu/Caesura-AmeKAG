@@ -35,7 +35,8 @@ public:
               int tokenIndex,
               const std::string& thumbnailPng = "") override;
 
-    // Load: returns the "data" sub-object, or empty json on failure
+    // Load returns the data value, or null JSON on failure. Failed schema
+    // validation/migration leaves caller metadata and the stored bytes intact.
     json load(int slot, SaveMeta* outMeta = nullptr) override;
     json loadLegacyPlaintext(int slot, SaveMeta* outMeta = nullptr) override;
 
@@ -45,6 +46,7 @@ public:
 
     // Migration
     void registerMigration(int fromVersion, int toVersion, MigrationFn fn) override;
+    // A successful migration must reach currentSchemaVersion within 64 steps.
     json migrate(const json& data, int fromVersion);
 
     int currentSchemaVersion() const override { return m_currentSchemaVersion; }

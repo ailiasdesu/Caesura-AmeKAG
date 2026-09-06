@@ -12,6 +12,7 @@
 #include "../render/LayerManager.h"
 #include "../di/SandboxQuota.h"
 #include "../resource/AssetManager.h"
+#include "../resource/ImageDecoder.h"
 #include "../resource/AsyncLoader.h"
 #include "../job/JobSystem.h"
 #include "../storage/SaveManager.h"
@@ -82,6 +83,10 @@ std::unique_ptr<ISandboxQuota> createSandboxQuota() {
 
 std::unique_ptr<AssetManager> createAssetManager() {
     return std::make_unique<AssetManager>();
+}
+
+std::unique_ptr<IImageDecoder> createImageDecoder() {
+    return std::make_unique<CpuImageDecoder>();
 }
 
 std::unique_ptr<IAsyncLoader> createAsyncLoader(AssetManager* assetManager) {

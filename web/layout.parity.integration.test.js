@@ -190,11 +190,12 @@ describe('web [layout] parity (wasmoon + real layout stack)', () => {
     const stage = document.createElement('div')
     document.body.appendChild(stage)
     const renderer = new DomRenderer(player.core, stage)
-    for (const name of ['elH1', 'elH2', 'elH3']) {
-      const n = player.core.ensureLayer(name, { w: 90, h: 80 })
-      player.core.setLayerImage(n, player.core.loadTexture(name + '.png'))
-    }
     const ks = [
+      // A fresh runner start retires the old graph. Create real image layers
+      // inside this scene before the layout commands position them.
+      '[image layer="elH1" storage="assets/bg/classroom.png" w=90 h=80]',
+      '[image layer="elH2" storage="assets/bg/classroom.png" w=90 h=80]',
+      '[image layer="elH3" storage="assets/bg/classroom.png" w=90 h=80]',
       '[layout name=h kind=hbox x=40 y=60 w=460 h=120 gap=10 padding=10]',
       '[layout_slot parent=h layer=elH1 index=1 size="90x80"]',
       '[layout_slot parent=h layer=elH2 index=2 size="90x80"]',

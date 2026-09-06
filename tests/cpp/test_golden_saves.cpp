@@ -1,7 +1,7 @@
 // ===========================================================================
 //  test_golden_saves.cpp -- Golden Save cross-version migration fixtures
-//  QA [14]: real save samples written by older schema versions must keep
-//  loading (and migrating) in the current engine. Fixtures live in
+//  Synthetic schema envelopes exercise native migration. A separate actual
+//  v1.0.1 release sample below carries producer provenance. Fixtures live in
 //  tests/golden_saves/golden_save_v{1..5}.json -- plaintext envelopes in the
 //  exact on-disk format SaveManager::save() writes:
 //    {schema_version, timestamp, scene, token_index, thumbnail,
@@ -12,7 +12,7 @@
 //    v2 -> v3 : data gains "minigame"  (object)
 //    v3 -> v4 : data gains "live2d"    (object)
 //    v4 -> v5 : data gains "editor"    (object)
-//  Each fixture therefore carries ONLY the fields its era produced; the
+//  Each synthetic fixture carries fields defined by the selected schema; the
 //  migration chain must supply the rest without touching existing keys.
 // ===========================================================================
 
@@ -289,4 +289,44 @@ TEST_CASE("GoldenSaves: encrypted golden v1 migrates after decryption") {
     const json back = sm.load(43);
     REQUIRE_FALSE(back.empty());
     CHECK(back == payload);
+}
+
+TEST_CASE("U11: a captured v1.0.1 release KAG save loads through the current native reader") {
+    const auto bytes = readFileBytes(goldenDir() / "release-v1.0.1-kag-save.json");
+    const auto provenance = json::parse(readFileBytes(goldenDir() / "release-v1.0.1-provenance.json"));
+    uint8_t hash[32]{};
+    carc::CryptoEngine::sha256(reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size(), hash);
+    const char* hex = "0123456789abcdef";
+    std::string digest;
+    for (const auto byte : hash) { digest += hex[byte >> 4]; digest += hex[byte & 15]; }
+    REQUIRE(digest == "1144e1968848fc0a9e9519fdc6f88f13fe9a446b946fd5bc0b52624f6abb125b");
+    CHECK(provenance.at("save_sha256") == digest);
+    CHECK(provenance.at("kind") == "released-engine-produced-kag-save");
+    CHECK(provenance.at("release_tag") == "v1.0.1");
+    CHECK(provenance.at("envelope_schema_version") == 5);
+    CHECK(provenance.at("kag_data_schema_version") == 2);
+    CHECK(provenance.at("exit_code") == 0);
+
+    TestPaths::ScopedTempDir directory("u11_real_legacy");
+    {
+        std::ofstream output(directory.path() / "save_37.json", std::ios::binary);
+        REQUIRE(output.good());
+        output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+        REQUIRE(output.good());
+    }
+    SaveManager manager;
+    manager.init(directory.string());
+    SaveMeta meta;
+    const auto loaded = manager.load(37, &meta);
+    REQUIRE(loaded.is_object());
+    CHECK(meta.schemaVersion == manager.currentSchemaVersion());
+    CHECK(meta.sceneName == "tests/projects/u11_legacy_release/story.ks");
+    CHECK(meta.tokenIndex == 4);
+    CHECK(loaded.at("schema_version") == 2);
+    CHECK(loaded.at("f").at("route") == "forest");
+    CHECK(loaded.at("f").at("score") == 7);
+    CHECK(loaded.at("f").at("legacy_nested").at("enabled") == true);
+    CHECK(loaded.at("f").at("legacy_nested").at("sequence") == json::array({2, 4, 8}));
+    CHECK(loaded.at("sf").at("profile_marker") == "release-v1.0.1");
+    CHECK(readFileBytes(directory.path() / "save_37.json") == bytes);
 }

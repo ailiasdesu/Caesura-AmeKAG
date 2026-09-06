@@ -8,6 +8,8 @@
     "build": "vite build"
   },
   "devDependencies": {
+    "@napi-rs/canvas": "1.0.8",
+    "@vitest/coverage-v8": "2.1.9",
     "jsdom": "^30.0.1",
     "vite": "^5.4.21",
     "vitest": "^2.1.9"

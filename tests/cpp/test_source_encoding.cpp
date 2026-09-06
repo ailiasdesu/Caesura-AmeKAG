@@ -581,12 +581,15 @@ TEST_CASE("TextRenderer owns FreeType without a global context") {
     const std::string engine = readFile(repoRoot / "src" / "entry" / "Engine.cpp");
     const std::string engineHeader = readFile(repoRoot / "src" / "entry" / "Engine.h");
     const std::string renderer = readFile(repoRoot / "src" / "render" / "TextRenderer.cpp");
+    const std::string font = readFile(repoRoot / "src" / "render" / "TextRendererFont.cpp");
     const std::string modules = readFile(repoRoot / "cmake" / "CaesuraModules.cmake");
 
     CHECK(engine.find("FreeTypeContext") == std::string::npos);
     CHECK(engineHeader.find("freeTypeInitialized") == std::string::npos);
     CHECK(renderer.find("FreeTypeContext") == std::string::npos);
-    CHECK(renderer.find("FT_Init_FreeType(&nextTtf->ftLib)") != std::string::npos);
+    CHECK(font.find("FreeTypeContext") == std::string::npos);
+    CHECK(font.find("FT_Init_FreeType(&font.ftLib)") != std::string::npos);
+    CHECK(font.find("FT_New_Memory_Face(font.ftLib") != std::string::npos);
     CHECK(modules.find("FreeTypeContext.cpp") == std::string::npos);
 }
 

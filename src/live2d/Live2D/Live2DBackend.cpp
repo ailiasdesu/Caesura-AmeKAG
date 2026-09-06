@@ -269,7 +269,7 @@ bool Live2DBackend::init() {
 Live2DBackend::~Live2DBackend() = default;
 
 void Live2DBackend::shutdown() {
-    m_models.clear();
+    clearModels();
     if (m_renderPath) {
         m_renderPath->shutdown();
         delete m_renderPath;
@@ -602,6 +602,16 @@ void Live2DBackend::releaseModelTarget(Live2DModel& model) {
 }
 #endif
 bool Live2DBackend::isLoaded(int handle) const { return m_models.count(handle) > 0; }
+
+std::size_t Live2DBackend::loadedModelCount() const {
+    return m_models.size();
+}
+
+void Live2DBackend::clearModels() {
+    while (!m_models.empty()) {
+        unloadModel(m_models.begin()->first);
+    }
+}
 
 void Live2DBackend::showModel(int handle, float x, float y, float scale) {
     auto it = m_models.find(handle);

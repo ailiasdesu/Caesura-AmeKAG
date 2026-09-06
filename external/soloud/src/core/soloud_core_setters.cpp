@@ -23,6 +23,9 @@ freely, subject to the following restrictions:
 */
 
 #include "soloud_internal.h"
+#include <memory>
+#include <new>
+#include <utility>
 
 // Setters - set various bits of SoLoud state
 
@@ -74,18 +77,39 @@ namespace SoLoud
 	{
 		if (aVoiceCount == 0 || aVoiceCount >= VOICE_COUNT)
 			return INVALID_PARAMETER;
+		// Caesura: build replacement storage before releasing any live buffers.
+		// Allocation failure must leave the mixer and its mutex usable.
+		AlignedFloatBuffer buffer;
+		std::unique_ptr<float*[]> data;
+		std::unique_ptr<AudioSourceInstance*[]> owners;
+		try
+		{
+			data.reset(new float*[aVoiceCount * 2]);
+			owners.reset(new AudioSourceInstance*[aVoiceCount]());
+			if (buffer.init(SAMPLE_GRANULARITY * MAX_CHANNELS * aVoiceCount * 2) != SO_NO_ERROR)
+				return OUT_OF_MEMORY;
+		}
+		catch (const std::bad_alloc&) { return OUT_OF_MEMORY; }
+		for (unsigned int i = 0; i < aVoiceCount * 2; ++i)
+			data[i] = buffer.mData + SAMPLE_GRANULARITY * MAX_CHANNELS * i;
 		lockAudioMutex_internal();
+		for (unsigned int i = 0; i < mHighestVoice; ++i)
+		{
+			if (!mVoice[i]) continue;
+			mVoice[i]->mResampleData[0] = mVoice[i]->mResampleData[1] = 0;
+			mVoice[i]->mSrcOffset = 0;
+			mVoice[i]->mLeftoverSamples = 0;
+			mVoice[i]->mParentClockDelayFrames = 0;
+			mVoice[i]->mRestoreClockValid = false;
+		}
 		mMaxActiveVoices = aVoiceCount;
-		delete[] mResampleData;
-		delete[] mResampleDataOwner;
-		mResampleData = new float*[aVoiceCount * 2];
-		mResampleDataOwner = new AudioSourceInstance*[aVoiceCount];
-		mResampleDataBuffer.init(SAMPLE_GRANULARITY * MAX_CHANNELS * aVoiceCount * 2);
-		unsigned int i;
-		for (i = 0; i < aVoiceCount * 2; i++)
-			mResampleData[i] = mResampleDataBuffer.mData + (SAMPLE_GRANULARITY * MAX_CHANNELS * i);
-		for (i = 0; i < aVoiceCount; i++)
-			mResampleDataOwner[i] = NULL;
+		std::unique_ptr<float*[]> oldData(mResampleData);
+		std::unique_ptr<AudioSourceInstance*[]> oldOwners(mResampleDataOwner);
+		mResampleData = data.release();
+		mResampleDataOwner = owners.release();
+		std::swap(buffer.mData, mResampleDataBuffer.mData);
+		std::swap(buffer.mBasePtr, mResampleDataBuffer.mBasePtr);
+		std::swap(buffer.mFloats, mResampleDataBuffer.mFloats);
 		mActiveVoiceDirty = true;
 		unlockAudioMutex_internal();
 		return SO_NO_ERROR;

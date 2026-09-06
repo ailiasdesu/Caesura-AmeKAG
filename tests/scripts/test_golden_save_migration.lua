@@ -60,13 +60,13 @@ local v1_envelope = {
   schema_version = 1,
   timestamp = 1234567890,
   scene = "tests/scripts/golden_rt.ks",
-  token_index = 12,
+  token_index = 9,
   thumbnail = "",
   engine_version = "1.0.0",
   data = {
     f = { hero = 1, route = "forest" },
     sf = { sys_bgm = true },
-    token_index = 12,
+    token_index = 9,
     scene_path = "tests/scripts/golden_rt.ks",
     backlog = {
       { name = "Aoi", text = "legacy line", timestamp = 0,
@@ -95,7 +95,7 @@ check("migration v1->v5 editor default", type(migrated.editor) == "table")
 check("migration chain reaches v5", ver == 5)
 check("migration preserves original fields",
       migrated.f and migrated.f.hero == 1 and migrated.f.route == "forest"
-      and migrated.token_index == 12 and migrated.scene_path == v1_envelope.data.scene_path)
+      and migrated.token_index == 9 and migrated.scene_path == v1_envelope.data.scene_path)
 
 local m2, ver2 = cpp_migrate(v1_nover.data, 1)
 check("legacy envelope defaults to v1 chain", ver2 == 5 and m2.playtime == 0 and m2.editor ~= nil)
@@ -119,18 +119,19 @@ check("v1 load_result ok", ctx.tf and ctx.tf.load_result == "ok",
       ctx.tf and tostring(ctx.tf.load_result))
 check("v1 f restored", ctx.f.hero == 1 and ctx.f.route == "forest")
 check("v1 sf restored", ctx.sf.sys_bgm == true)
-check("v1 token_index restored", ctx.token_index == 12)
+check("v1 token_index restored", ctx.token_index == 9)
 check("v1 resume scene set (snake)", ctx.current_scene == "tests/scripts/golden_rt.ks")
 check("v1 resume scene set (legacy alias)", ctx.currentScene == "tests/scripts/golden_rt.ks")
 check("v1 pending load scene/token",
       ctx._pendingLoadScene == "tests/scripts/golden_rt.ks"
-      and ctx._pendingLoadToken == 12)
+      and ctx._pendingLoadToken == 9)
 check("v1 backlog text preserved", ctx.backlog and ctx.backlog[1]
       and ctx.backlog[1].text == "legacy line")
 check("v1 backlog entry keeps absent src", ctx.backlog and ctx.backlog[1]
       and ctx.backlog[1].src == nil)
-check("v1 unlockedCG stays absent (v2-only field)",
-      ctx.unlockedCG == nil and ctx.unlockedMusic == nil)
+check("v1 missing unlock fields become empty owned sets",
+      type(ctx.unlockedCG) == "table" and next(ctx.unlockedCG) == nil
+      and type(ctx.unlockedMusic) == "table" and next(ctx.unlockedMusic) == nil)
 check("v1 mode defaults normalized",
       ctx.skip_mode == false and ctx.auto_mode == false
       and ctx.nvl_mode == false and ctx.voice_muted == false)
@@ -139,7 +140,7 @@ check("v1 seen flags defaulted", type(ctx.seen_scenes) == "table"
 
 -- 重存（capture_state）：字段迁移到 schema_version=2 + unlock/voice 默认补齐
 local st2 = Save.capture_state(ctx)
-check("re-save upgrades schema_version to 2", st2.schema_version == 2)
+check("re-save upgrades to the current data schema", st2.schema_version == require("kag.save_state").VERSION)
 check("re-save adds unlockedCG/unlockedMusic defaults",
       type(st2.unlockedCG) == "table" and type(st2.unlockedMusic) == "table"
       and next(st2.unlockedCG) == nil and next(st2.unlockedMusic) == nil)
@@ -150,7 +151,7 @@ check("re-save backlog text intact", st2.backlog and st2.backlog[1]
 check("re-save backlog src stays nil for legacy entry", st2.backlog and st2.backlog[1]
       and st2.backlog[1].src == nil)
 check("re-save keeps f/sf/token",
-      st2.f and st2.f.hero == 1 and st2.sf.sys_bgm == true and st2.token_index == 12)
+      st2.f and st2.f.hero == 1 and st2.sf.sys_bgm == true and st2.token_index == 9)
 
 -- v1 引擎版本字段不产生错误结果（SaveManager.cpp L483-486：版本不匹配仅提示不阻断）
 check("v1 engine_version tolerated (no throw)", okLoad)

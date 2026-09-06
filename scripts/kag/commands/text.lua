@@ -210,7 +210,8 @@ local function _drawMessage(ctx, entry, yOverride)
                 clamp_byte(tb or 255), 255)
         else
             TextScene.add_text(
-                ctx, "[" .. speaker .. "]", opts.nameX or 540, 540, color)
+                ctx, "[" .. speaker .. "]", opts.nameX or 540, 540, color,
+                nil, 1, false, false, true)
         end
     end
 
@@ -751,8 +752,11 @@ function TextCommands.ch(ctx, params)
         msgNode = layers.add_layer(nil, {
             name = "message",
             layer_type = layers.Type.LAYER_MESSAGE,
-            x = 0, y = math.max(0, vh - 200), w = vw, h = 200, visible = true,
+            x = 0, y = math.max(0, vh - 200), visible = true,
         })
+        -- TextScene submits the persistent glyphs directly. This node only
+        -- carries message geometry/visibility and needs no empty GPU target.
+        msgNode.w, msgNode.h = vw, 200
         layers.set_z(msgNode, 2)
     end
 
@@ -829,7 +833,7 @@ function TextCommands.ch(ctx, params)
     ctx.waiting_input = true
     update_text_state(ctx, "ch", utf8.len(plain) or #plain)
     -- Typewriter reveal: animate chars in over text_speed ms/char.
-    ctx.reveal = { total = utf8.len(plain) or #plain, elapsed = 0, last_shown = 0 }
+    ctx.reveal = { total = TextScene.reveal_length(ctx), elapsed = 0, last_shown = 0 }
     TextScene.get_state(ctx).reveal_chars = 0
 end
 
@@ -899,7 +903,7 @@ function TextCommands.text(ctx, params)
     animate_text_opacity(ctx, params)
     ctx.waiting_input = true
     update_text_state(ctx, "text", utf8.len(plain) or #plain)
-    ctx.reveal = { total = utf8.len(plain) or #plain, elapsed = 0, last_shown = 0 }
+    ctx.reveal = { total = TextScene.reveal_length(ctx), elapsed = 0, last_shown = 0 }
     TextScene.get_state(ctx).reveal_chars = 0
 end
 

@@ -47,6 +47,7 @@ public:
     void render(uint16_t viewId) override;
 
     int aliveCount() const override { return m_aliveCount; }
+    int activeEmitterCount() const override;
     bool isInitialized() const override { return m_initialized; }
 
 public:

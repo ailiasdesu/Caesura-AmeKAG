@@ -992,7 +992,7 @@ TEST_CASE("Storage: UTF-8 CJK / emoji / combining-mark text roundtrips exactly")
     CHECK(sm.load(6, &meta)["text"].get<std::string>() == utf8);
 }
 
-TEST_CASE("Storage: unknown future schema version loads unmigrated (pass-through)") {
+TEST_CASE("Storage: unknown future schema remains listed but cannot replace current metadata") {
     TestPaths::ScopedTempDir dir("storage_future_ver");
     SaveManager sm;
     sm.init(dir.string());  // built-in chain tops out at v5
@@ -1013,15 +1013,17 @@ TEST_CASE("Storage: unknown future schema version loads unmigrated (pass-through
         f << env.dump();
     }
 
-    // load() only migrates when schemaVer < current, so a DEEPER-numered save
-    // passes through byte-for-byte with its original contents.
-    SaveMeta meta;
+    // Discovery may show a future save, but restoration requires a supported
+    // schema and must not publish candidate metadata when it is refused.
+    SaveMeta meta{91, 456, "sentinel-scene", "sentinel-thumbnail", 789, 90};
     json loaded = sm.load(2, &meta);
-    CHECK(loaded.is_object());
-    CHECK(loaded["futuristic_field"] == true);
-    CHECK(loaded["preserve"] == "intact");
-    // No migration applied, so outMeta keeps the original (future) version.
-    CHECK(meta.schemaVersion == 99);
+    CHECK(loaded.is_null());
+    CHECK(meta.slot == 91);
+    CHECK(meta.timestamp == 456);
+    CHECK(meta.sceneName == "sentinel-scene");
+    CHECK(meta.thumbnail == "sentinel-thumbnail");
+    CHECK(meta.tokenIndex == 789);
+    CHECK(meta.schemaVersion == 90);
     // The future save surfaces in listSaves preserving its version.
     auto saves = sm.listSaves();
     REQUIRE(saves.size() == 1);

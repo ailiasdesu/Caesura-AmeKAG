@@ -3,6 +3,7 @@ extern "C" {
 #include <lauxlib.h>
 }
 #include "RenderBinding.h"
+#include "FontRestoreBinding.h"
 #include <cmath>
 #include "../../di/BackendRegistry.h"
 #include "../../render/api/IRenderDevice.h"
@@ -959,7 +960,8 @@ static int lua_Render_invalidate_handles(lua_State* L) {
 // -- text_set_font(face, size, color) — stores font settings for renderText ---------
 // -- text_set_font(face, size, color) -- switch font face/size -------------------
 static int lua_Render_text_set_font(lua_State* L) {
-    const char* face = luaL_optstring(L, 1, "default");
+    size_t faceSize=0;
+    const char* face = luaL_optlstring(L, 1, "default", &faceSize);
     const float size = (float)luaL_optnumber(L, 2, 24.0);
 
     IRenderDevice* dev = getRender(L);
@@ -968,25 +970,10 @@ static int lua_Render_text_set_font(lua_State* L) {
         return 1;
     }
 
-    const std::string faceStr = face;
-    if (faceStr == "bitmap" || faceStr == "builtin") {
-        dev->setFont(0);  // reset to built-in bitmap font
-        lua_pushboolean(L, 1);
-        return 1;
-    }
-
-    const char* fontToLoad = (faceStr.empty() || faceStr == "default")
-        ? "assets/fonts/NotoSansCJKsc-Regular.otf"
-        : face;
-
-    if (dev->loadTTF(fontToLoad, size > 0 ? size : 22.0f)) {
-        lua_pushboolean(L, 1);
-        return 1;
-    }
-
-    DEBUG_ERR(SubSys::Render, ErrCode::Ok, "[Render] text_set_font: failed to load TTF: %s", fontToLoad);
-    dev->setFont(0);  // fall back to built-in font
-    lua_pushboolean(L, 0);
+    bool selected=false;
+    try { selected=selectScriptFont(*dev,std::string(face,faceSize),size); }
+    catch (...) {}
+    lua_pushboolean(L,selected);
     return 1;
 }
 
@@ -998,7 +985,7 @@ static int lua_Render_text_reset_state(lua_State* L) {
     (void)L;
     IRenderDevice* dev = getRender(L);
     if (dev) {
-        if (!dev->loadTTF("assets/fonts/NotoSansCJKsc-Regular.otf", 22.0f)) {
+        if (!selectScriptFont(*dev,"default",22.0f)) {
             dev->setFont(0);  // reset to default font
         }
     }

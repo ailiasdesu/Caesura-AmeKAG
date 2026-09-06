@@ -42,6 +42,7 @@ public:
 
     VideoHandle open(const char* path) override;
     void close(VideoHandle handle) override;
+    void closeAll() override;
     void setLoop(VideoHandle handle, bool loop) override;
     void setVolume(VideoHandle handle, float volume) override;
     bool update(VideoHandle handle, double dt) override;
@@ -128,7 +129,7 @@ private:
         // which moves in lockstep with the frame on a mid-stream change).
         int    expectedSampleFmt = -1;
         int    expectedSampleRate = 0;
-        long long expectedChLayout[2] = {0, 0};
+        std::shared_ptr<void> expectedChLayout; // owned AVChannelLayout copy
         std::vector<uint8_t> rgbaBuffer;
 #endif
     };

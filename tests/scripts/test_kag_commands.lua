@@ -227,8 +227,13 @@ do
     if src4:find("state.language = ", 1, true) then
         passed = passed + 1 print("  [PASS] save captures language")
     else failed = failed + 1 end
-    if src4:find('settingsValues.language = state.language', 1, true) then
-        passed = passed + 1 print("  [PASS] restore reapplies language")
+    local locale = require("i18n")
+    local before = locale.current
+    local staged = require("kag.save_state").prepare({
+        scene_path = "tests/projects/u11_restore/base.ks", language = "en",
+    }, require("kag.commands.save")._safeScenePath, require("flow").prepare_scene)
+    if staged.language == "en" and locale.current == before then
+        passed = passed + 1 print("  [PASS] restore stages language without changing the live locale")
     else failed = failed + 1 end
 end
 
@@ -326,13 +331,16 @@ do
        and tr_src3:find('VFX.blur', 1, true) then
         passed = passed + 1 print("  [PASS] blur command registered")
     else failed = failed + 1 end
-    -- Crafted-save token_index clamp (regression: 0/negative/string -> 1)
-    local sv_src2 = io.open("scripts/kag/commands/save.lua", "r"):read("*a")
-    local kr_src2 = io.open("scripts/kag_runner.lua", "r"):read("*a")
-    if sv_src2:find("math.max(1, tonumber(state.token_index) or 1)", 1, true)
-       and kr_src2:find("math.max(1, tonumber(ctx._pendingLoadToken) or 1)", 1, true)
-       and kr_src2:find("math.max(1, tonumber(target.index) or 1)", 1, true) then
-        passed = passed + 1 print("  [PASS] crafted-save token clamp present")
+    -- Invalid saved positions must fail preparation, not redirect to token 1.
+    local all_rejected = true
+    for _, index in ipairs({ 0, -1, "bad", false, 1.5, 999999 }) do
+        local ok = pcall(require("kag.save_state").prepare, {
+            scene_path = "tests/projects/u11_restore/base.ks", token_index = index,
+        }, require("kag.commands.save")._safeScenePath, require("flow").prepare_scene)
+        if ok then all_rejected = false end
+    end
+    if all_rejected then
+        passed = passed + 1 print("  [PASS] crafted saved positions are rejected")
     else failed = failed + 1 end
     -- Save capture completeness: all persistent fields present
     if sv_src:find("state.language", 1, true)
@@ -384,7 +392,10 @@ do
     local sv = nil
     f = io.open("scripts/kag/commands/save.lua", "r")
     if f then sv = f:read("*a") f:close() end
-    if sv and sv:find("state.seen_endings", 1, true) and sv:find('type(state.seen_endings) == "table"', 1, true) then
+    local staged = require("kag.save_state").prepare({
+        scene_path = "tests/projects/u11_restore/base.ks", seen_endings = { ending_a = true },
+    }, require("kag.commands.save")._safeScenePath, require("flow").prepare_scene)
+    if staged.seen_endings.ending_a == true then
         passed = passed + 1 print("  [PASS] endings persisted in save")
     else failed = failed + 1 end
 end

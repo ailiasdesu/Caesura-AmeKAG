@@ -10,6 +10,7 @@ local backend = require("backend")
 local layers  = require("layers")
 local audio   = require("audio")
 local i18n    = require("i18n")
+local Operation = require("kag.operation")
 local layout_math = require("kag.layout_math")  -- [R107-A] declarative vbox/hbox/grid math
 
 -- Language hot-switch full-page redraw: after i18n.load the already
@@ -40,6 +41,36 @@ local state = {
 -- Helper: safe solid texture
 local function solid(r, g, b, a)
     return backend.create_solid_texture(math.floor(r), math.floor(g), math.floor(b), math.floor(a or 255))
+end
+
+-- Cancellation retires the UI without applying its pending settings.
+local function cleanup(ctx, owner)
+    if not state.active or state.ctx ~= ctx then return false end
+    if owner and state.scope ~= owner then return false end
+    state.active = false
+    state.ctx = nil
+    state.scope = nil
+    ctx._settingsActive = false
+    for _, key in ipairs({"bgLayer", "borderLayer", "panelLayer", "cursorLayer"}) do
+        local layer = state[key]
+        state[key] = nil
+        if layer then
+            local texture = layer.texture
+            layer.visible, layer.texture = false, nil
+            if texture then pcall(backend.destroy_texture, texture) end
+        end
+    end
+    if ctx.input_focus == "settings" then
+        ctx.input_focus = state.previousFocus
+        for _, key in ipairs({"UP", "DOWN", "LEFT", "RIGHT", "ENTER", "ESC"}) do
+            _G["_GAME_KEY_" .. key] = false
+        end
+        pcall(backend.set_input_focus, state.previousBackendFocus)
+    end
+    state.items = {}
+    state.panelX, state.panelY, state.panelW, state.panelH = nil, nil, nil, nil
+    state.previousFocus, state.previousBackendFocus = nil, nil
+    return true
 end
 
 -- ===========================================================================
@@ -120,8 +151,17 @@ end
 -- ===========================================================================
 function Settings.show(ctx)
     if state.active then return end
+    local scope <close> = Operation.start(ctx)
+    scope.token:register(function() cleanup(ctx, scope) end)
+    state.scope = scope
+    state.ctx = ctx
+    state.previousFocus = ctx.input_focus or "kag"
+    local ok, focus = pcall(backend.get_input_focus)
+    state.previousBackendFocus = ok and type(focus) == "string" and focus
+        or (state.previousFocus == "kag" and "KAG" or "GAME")
     state.active = true
     ctx._settingsActive = true
+    ctx.input_focus = "settings"
     state.items = Settings._buildMenu(ctx)
     state.cursor = 1
 
@@ -183,6 +223,7 @@ function Settings.show(ctx)
     while true do
         Settings._render(ctx)
         coroutine.yield()
+        if scope.token.cancelled or state.scope ~= scope then return end
 
         if _G._GAME_KEY_UP == true then
             _G._GAME_KEY_UP = false
@@ -210,28 +251,18 @@ function Settings.show(ctx)
         end
     end
     Settings.hide(ctx)
+    scope:complete()
 end
 
 -- ===========================================================================
 -- Settings.hide(ctx) — close settings, restore KAG focus
 -- ===========================================================================
 function Settings.hide(ctx)
-    state.active = false
-    ctx._settingsActive = false
-    for _, name in ipairs({"_settings_bg", "_settings_border", "_settings_panel", "_settings_cursor"}) do
-        local layer = layers.find(name)
-        if layer then
-            layer.visible = false
-            if layer.texture then backend.destroy_texture(layer.texture); layer.texture = nil end
-        end
-    end
+    if not cleanup(ctx) then return end
     -- Save settings values
     if ctx.settingsValues then
         Settings._applyAll(ctx)
     end
-    backend.set_input_focus("KAG")
-    state.items = {}
-    state.panelX = nil; state.panelY = nil; state.panelW = nil; state.panelH = nil
     print("[Settings] Menu closed.")
 end
 

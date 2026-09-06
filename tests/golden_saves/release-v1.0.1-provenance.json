@@ -1,0 +1,31 @@
+{
+  "kind": "released-engine-produced-kag-save",
+  "release_tag": "v1.0.1",
+  "tag_commit": "9aa299d4b78e5a62e25786d8771539bdc1adb65d",
+  "release_asset_id": 523231008,
+  "release_asset_url": "https://github.com/ailiasdesu/Caesura-AmeKAG/releases/download/v1.0.1/CaesuraAmeKAG-1.0.1-Windows-AMD64.zip",
+  "release_published_asset_sha256": "sha256:b8e39dde60185b2098e72815eb8cfb1e706b8c4268adb01af9492126be1e0acd",
+  "download_sha256": "b8e39dde60185b2098e72815eb8cfb1e706b8c4268adb01af9492126be1e0acd",
+  "binary_path_in_archive": "CaesuraAmeKAG-1.0.1-Windows-AMD64/CaesuraAmeKAG.exe",
+  "binary_sha256": "6c13ff4af81025f9679bb612e79a28370ac5ffa2ada3b0950bcbd8968b168f80",
+  "command": [
+    "D:\\文件存放处\\code\\Caesura(AmeKAG)\\artifacts\\validation\\u11-native\\producer-attempt-2\\release-v1.0.1-runtime\\CaesuraAmeKAG-1.0.1-Windows-AMD64\\CaesuraAmeKAG.exe",
+    "--headless"
+  ],
+  "cwd": "D:\\文件存放处\\code\\Caesura(AmeKAG)\\artifacts\\validation\\u11-native\\producer-attempt-2\\release-v1.0.1-runtime\\CaesuraAmeKAG-1.0.1-Windows-AMD64",
+  "process_id": 32948,
+  "exit_code": 0,
+  "scene_path": "tests/projects/u11_legacy_release/story.ks",
+  "scene_sha256": "12ebcac1615ed7355a8810ffb359a5f7ba54ff7f4ff724b5d4e43241eed74d45",
+  "producer_input_sha256": "ff3e6e138ddc7f477e35c95f07362ee8d9e5f3ed29a616c07140c2628e26c12f",
+  "save_path": "saves/save_37.json",
+  "save_sha256": "1144e1968848fc0a9e9519fdc6f88f13fe9a446b946fd5bc0b52624f6abb125b",
+  "envelope_schema_version": 5,
+  "envelope_engine_version": "1.0.0",
+  "kag_data_schema_version": 2,
+  "limits": [
+    "Produced by release v1.0.1; not an envelope-v1 specimen.",
+    "A pre-supplied thumbnail avoids GPU capture; no rendered-image claim.",
+    "Tag association is recorded; no independent build attestation was available."
+  ]
+}

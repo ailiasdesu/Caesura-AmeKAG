@@ -8,10 +8,12 @@ local MusicRoom = {}
 local backend = require("backend")
 local audio   = require("audio")
 local fileutil = require("fileutil")
+local Operation = require("kag.operation")
 
 local trackCache = nil
 local favorites = {}
 local currentPreview = nil
+local activeRoom = nil
 
 -- [P1-2] Capture os.execute before potential sandboxing
 local _os_execute = os.execute
@@ -151,23 +153,62 @@ end
 -- MusicRoom._cleanupTextures() — destroy all module-owned textures
 -- ===========================================================================
 function MusicRoom._cleanupTextures()
-    for _, texId in pairs(ownedTextures) do
-        if texId and texId > 0 then
+    local textures = ownedTextures
+    ownedTextures = {}
+    for _, texId in pairs(textures) do
+        if type(texId) == "number" and texId > 0 then
             pcall(function() backend.destroy_texture(texId) end)
         end
     end
-    ownedTextures = {}
+end
+
+local function cleanup(ctx, cancelled)
+    local room = activeRoom
+    if not room or room.ctx ~= ctx then return end
+    activeRoom = nil
+    if room.overlay then
+        room.overlay.visible, room.overlay.texture = false, nil
+    end
+    MusicRoom._cleanupTextures()
+    if cancelled and currentPreview then
+        currentPreview = nil
+        pcall(audio.stop_bgm, 0)
+    end
+    if ctx.input_focus == "music_room" then
+        ctx.input_focus = room.previousFocus
+        for _, key in ipairs({"UP", "DOWN", "ENTER", "F", "ESC"}) do
+            _G["_GAME_KEY_" .. key] = false
+        end
+        pcall(backend.set_input_focus, room.previousBackendFocus)
+    end
 end
 
 -- ===========================================================================
 -- MusicRoom.show(ctx)
 -- ===========================================================================
 function MusicRoom.show(ctx)
+    if activeRoom then return end
     local tracks = MusicRoom.list(ctx)
     if #tracks == 0 then
         backend.render_text("[Music Room] No tracks found.", 32, 100)
         return
     end
+
+    local scope <close> = Operation.start(ctx)
+    local previousFocus = ctx.input_focus or "kag"
+    local ok, focus = pcall(backend.get_input_focus)
+    local room = {
+        ctx = ctx,
+        previousFocus = previousFocus,
+        previousBackendFocus = ok and type(focus) == "string" and focus
+            or (previousFocus == "kag" and "KAG" or "GAME"),
+    }
+    activeRoom = room
+    scope.token:register(function()
+        if activeRoom == room then cleanup(ctx, true) end
+    end)
+    ctx.input_focus = "music_room"
+    backend.set_input_focus("GAME")
 
     local w, h = backend.get_resolution()
     local vw, vh = require("viewport").wh()  -- viewported from 1280x720
@@ -180,6 +221,7 @@ function MusicRoom.show(ctx)
     pcall(function()
         local layers = require("layers")
         local overlay = layers.ensure(ctx, "_music_overlay", 95)
+        room.overlay = overlay
         overlay.visible = true
         overlay.x, overlay.y = 0, 0
         overlay.w, overlay.h = w, h
@@ -258,6 +300,7 @@ function MusicRoom.show(ctx)
         _printed = true
     end
         coroutine.yield()
+        if scope.token.cancelled or activeRoom ~= room then return end
 
         if _G._GAME_KEY_UP == true then
             _G._GAME_KEY_UP = false
@@ -286,22 +329,14 @@ function MusicRoom.show(ctx)
         scroll = math.max(0, math.min(#tracks - ITEMS, scroll))
     end
     MusicRoom.hide(ctx)
+    scope:complete()
 end
 
 -- ===========================================================================
 -- MusicRoom.hide(ctx) — cleanup and restore input focus
 -- ===========================================================================
 function MusicRoom.hide(ctx)
-    pcall(function()
-        local layers = require("layers")
-        local overlay = layers.find("_music_overlay")
-        if overlay then
-            overlay.visible = false
-            overlay.texture = nil  -- texture owned by module; cleaned below
-        end
-    end)
-    MusicRoom._cleanupTextures()
-    backend.set_input_focus("KAG")
+    cleanup(ctx, false)
     print("[MusicRoom] Closed.")
 end
 

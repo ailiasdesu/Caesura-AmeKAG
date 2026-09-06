@@ -377,6 +377,45 @@ runtime coroutine, which nothing drives in that entry (overlay freeze with
 `input_focus` stuck on "history").
 
 
+## Restore
+
+`Restore` is an internal runtime bridge used by `kag.presentation` and the save/load transaction. It is separate from the low-level `KAG.save_game` storage API. Scripts should normally use KAG `[save]` / `[load]` rather than applying individual presentation resources.
+
+| Function | Signature | Contract |
+|---|---|---|
+| `prepare_image` | `(assetPath) → ticket` | Read and decode an independent image without changing the active scene. |
+| `prepare_color` | `(r, g, b, a) → ticket` | Prepare a 1×1 RGBA colour; components are integers 0–255. |
+| `image_info` | `(ticket) → width, height` | Query an unconsumed image preparation. |
+| `materialize_image` | `(ticket) → textureId` | Consume once and create an owned texture; failure also consumes the ticket. |
+| `discard_image` | `(ticket)` | Release preparation; repeated discard is harmless. |
+| `describe_texture` | `(textureId) → description` | Return a portable asset or colour description, excluding GPU handles. |
+| `capture_audio` | `() → snapshot` | Capture story-owned BGM state; `bgm=false` represents silence. |
+| `prepare_audio` | `(snapshot) → ticket` | Read/decode independently; do not start a voice. |
+| `apply_audio` | `(ticket) → boolean` | Consume preparation, stop voice/SE, resume BGM; failure leaves session audio stopped. |
+| `discard_audio` | `(ticket)` | Release unconsumed preparation. |
+| `stop_audio` | `() → boolean` | Stop story audio without changing user volume preferences. |
+| `capture_font` / `default_font` | `() → snapshot` | Describe current / startup font state. |
+| `prepare_font` | `(snapshot) → ticket` | Own font bytes and prepare glyph data without changing the current font. |
+| `apply_font` | `(ticket) → boolean` | Consume once and install the prepared font. |
+| `discard_font` / `clear_font` | `(ticket)` / `()` | Release preparation / clear the active font. |
+| `capture_transients` | `() → counts` | Return nonnegative integer `videos`, `particles`, `emitters`, `models`, `postfx` counts. |
+| `stop_transients` | `() → boolean` | Attempt cleanup of every available transient backend; report the first failure. |
+
+Native preparation/query failures return `nil, error`; boolean operations return `false, error`. Prepared values are opaque and cannot be saved or reused after consumption. Web preparations may await fetch/decode through the Lua bridge; the runner verifies that their originating session is still current before committing.
+
+Audio snapshots use `{version=1, bgm=false}` or a BGM description containing `path`, `position`, `gain`, `looping` and an optional native `cursor`. Font snapshots use `{version=1, active=false}` or `active=true` with `font`, `path`, `size`; bitmap fonts use IDs 0/1 and sizes 16/32, TTF uses ID 2 with a portable resource path.
+
+### KAG save state contract
+
+The current KAG payload version is **3**, inside the native storage envelope version **5**. These versions describe different layers. Old release samples and their producer hashes are recorded in `tests/golden_saves/README.md`; an artificial legacy fixture is not evidence of an old executable's output.
+
+- Slot-owned values include exact `f`, `sf`, `lf`, `mp`, variables, unlock/seen state, call/loop/conditional frames, continuation cursor, language, layers, text, font and BGM. Loading removes future keys absent from the slot. `tf` is rebuilt; `sf.save_list` is derived and excluded.
+- User preferences such as master/bus volumes and favourites remain outside the slot. Voice/SE and unsupported transient effects stop during commit.
+- Scenes and caller frames are reconstructed from trusted current source; saved tokens are never executed. Ordinary call/for/if frames and stable text/wait boundaries are supported. Saved wait/delay state retains the remaining time; old slots without this field restart the wait duration.
+- Saving during a choice, input dialog, menu, history view, active video/particle/model/postfx, unfinished tween or other active operation is rejected with a reason. Macro definitions and streams rewritten by runtime macro expansion are also rejected. Live coroutines and native handles are never serialized.
+- Parse, migration, validation and resource preparation precede the commit point. Failure before commit preserves the old session. A serious failure after commit stops the candidate, cancels its operations and releases partial resources; a new session may then be started.
+- Values must be finite and serializable: dense arrays or string-keyed maps, valid UTF-8 strings (including embedded NUL), bounded depth/node count. Sparse/mixed-key tables, unsupported values and invalid numbers are rejected without overwriting an existing slot.
+
 ## Save (registered on the KAG module)
 
 ```lua

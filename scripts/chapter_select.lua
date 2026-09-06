@@ -9,6 +9,7 @@
 local ChapterSelect = {}
 local backend = require("backend")
 local layers = require("layers")
+local Operation = require("kag.operation")
 
 local function solid(r, g, b, a)
     return backend.create_solid_texture(math.floor(r), math.floor(g), math.floor(b), math.floor(a or 255))
@@ -48,11 +49,40 @@ function ChapterSelect.show(ctx)
         return nil
     end
 
-    local bg = layers.ensure(ctx, "_chapter_bg", 190)
+    local scope <close> = Operation.start(ctx)
+    local previousFocus = ctx.input_focus or "kag"
+    local ok, focus = pcall(backend.get_input_focus)
+    local previousBackendFocus = ok and type(focus) == "string" and focus
+        or (previousFocus == "kag" and "KAG" or "GAME")
+    local bg, texture, cleaned
+    local function cleanup()
+        if cleaned then return end
+        cleaned = true
+        if bg then bg.visible, bg.texture = false, nil end
+        if texture then pcall(backend.destroy_texture, texture) end
+        if ctx.input_focus == "chapter" then
+            ctx.input_focus = previousFocus
+            for _, key in ipairs({"UP", "DOWN", "ENTER", "ESC"}) do
+                _G["_GAME_KEY_" .. key] = false
+            end
+            pcall(backend.set_input_focus, previousBackendFocus)
+        end
+    end
+    local function finish(result)
+        cleanup()
+        scope:complete()
+        return result
+    end
+    scope.token:register(cleanup)
+    ctx.input_focus = "chapter"
+    backend.set_input_focus("GAME")
+
+    bg = layers.ensure(ctx, "_chapter_bg", 190)
     bg.visible = true
     local vw, vh = require("viewport").wh()  -- viewported from 1280x720
     bg.x, bg.y, bg.w, bg.h = 0, 0, vw, vh
-    bg.texture = solid(0, 0, 0, 210)
+    texture = solid(0, 0, 0, 210)
+    bg.texture = texture
 
     local cursor, scroll, ITEMS = 1, 0, 12
     while true do
@@ -71,6 +101,7 @@ function ChapterSelect.show(ctx)
         end
         backend.render_text("[Up/Down] Select  [Enter] Jump  [Esc] Cancel", 20, vh - 30, 120, 120, 160, 255)
         coroutine.yield()
+        if scope.token.cancelled then return end
 
         if _G._GAME_KEY_UP == true then
             _G._GAME_KEY_UP = false
@@ -81,11 +112,11 @@ function ChapterSelect.show(ctx)
         elseif _G._GAME_KEY_ENTER == true then
             _G._GAME_KEY_ENTER = false
             bg.visible = false
-            return chapters[cursor].label
+            return finish(chapters[cursor].label)
         elseif _G._GAME_KEY_ESC == true then
             _G._GAME_KEY_ESC = false
             bg.visible = false
-            return nil
+            return finish(nil)
         end
         if cursor <= scroll then scroll = cursor - 1
         elseif cursor >= scroll + ITEMS then scroll = cursor - ITEMS + 1 end

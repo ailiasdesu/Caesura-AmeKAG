@@ -398,12 +398,12 @@ function Backend.video_play(file, opts)
     return render_or_guard("video_play", file, opts)
 end
 
-function Backend.video_stop()
-    return render_or_guard("video_stop")
+function Backend.video_stop(handle)
+    return render_or_guard("video_stop", handle)
 end
 
-function Backend.video_is_playing()
-    return render_or_guard("video_is_playing")
+function Backend.video_is_playing(handle)
+    return render_or_guard("video_is_playing", handle)
 end
 
 function Backend.set_fullscreen(enabled)

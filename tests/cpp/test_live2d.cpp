@@ -71,6 +71,7 @@ public:
     bool isValid(uint32_t id) const override {
         return liveIds.contains(id);
     }
+    bool describeTexture(uint32_t, TextureSourceInfo&) const override { return false; }
 
     uint64_t totalTextureBytes() const override { return 0; }
     bool checkBudget(uint32_t, uint16_t, uint16_t) override { return true; }
@@ -154,6 +155,11 @@ public:
                     uint8_t, uint8_t, uint8_t, uint8_t) override {}
     void setFont(int) override {}
     bool loadTTF(const char*, float) override { return false; }
+    FontRestoreState captureFontState() const override { return {}; }
+    FontRestoreState defaultFontState() const override { return {}; }
+    std::unique_ptr<IPreparedFontState> prepareFontState(const FontRestoreState&, const uint8_t*, size_t) override { return {}; }
+    bool applyFontState(std::unique_ptr<IPreparedFontState>) override { return false; }
+    void clearFontState() override {}
     float textLineHeight() const override { return 0.0f; }
     void submitBlend(uint16_t, RenderTextureHandle, RenderTextureHandle, int,
                      float, float, float) override {}
@@ -347,6 +353,94 @@ TEST_CASE("NullAnimationBackend remains safe through IAnimationBackend") {
     animation->render(0.0f);
     CHECK(fixture.renderer.blits.empty());
     animation->shutdown();
+}
+
+TEST_CASE("NullAnimationBackend counts loaded models regardless of visibility") {
+    NullAnimationFixture fixture;
+    IAnimationBackend& animation = fixture.animation;
+    const IAnimationBackend& query = animation;
+    CHECK(query.loadedModelCount() == 0);
+    animation.clearModels();
+    REQUIRE(animation.init());
+
+    const int visible = animation.loadModel("visible.png", "visible");
+    const int hidden = animation.loadModel("hidden.png", "hidden");
+    REQUIRE(visible > 0);
+    REQUIRE(hidden > 0);
+    animation.showModel(visible, 0.0f, 0.0f, 1.0f);
+    CHECK(query.loadedModelCount() == 2);
+    animation.hideModel(visible);
+    CHECK(query.loadedModelCount() == 2);
+    fixture.textures.failLoads = true;
+    CHECK(animation.loadModel("missing.png", "missing") == 0);
+    CHECK(query.loadedModelCount() == 2);
+
+    animation.unloadModel(hidden);
+    CHECK(query.loadedModelCount() == 1);
+    animation.unloadModel(hidden);
+    CHECK(query.loadedModelCount() == 1);
+    animation.shutdown();
+    CHECK(query.loadedModelCount() == 0);
+    animation.clearModels();
+    CHECK(fixture.textures.destroyedIds.size() == 2);
+}
+
+TEST_CASE("NullAnimationBackend clearModels releases visible and hidden models once") {
+    NullAnimationFixture fixture;
+    IAnimationBackend& animation = fixture.animation;
+    REQUIRE(animation.init());
+    const int visible = animation.loadModel("visible.png", "visible");
+    const int hidden = animation.loadModel("hidden.png", "hidden");
+    REQUIRE(visible > 0);
+    REQUIRE(hidden > 0);
+    animation.showModel(visible, 0.0f, 0.0f, 1.0f);
+    animation.render(0.016f);
+    REQUIRE(fixture.renderer.blits.size() == 1);
+
+    animation.clearModels();
+    CHECK(animation.loadedModelCount() == 0);
+    CHECK_FALSE(animation.isLoaded(visible));
+    CHECK_FALSE(animation.isLoaded(hidden));
+    CHECK(fixture.textures.liveIds.empty());
+    const std::unordered_set<uint32_t> released(
+        fixture.textures.destroyedIds.begin(), fixture.textures.destroyedIds.end());
+    CHECK(released == std::unordered_set<uint32_t>{11, 12});
+    CHECK(fixture.textures.destroyedIds.size() == 2);
+    animation.render(0.016f);
+    CHECK(fixture.renderer.blits.size() == 1);
+
+    animation.clearModels();
+    animation.unloadModel(visible);
+    animation.unloadModel(hidden);
+    animation.shutdown();
+    CHECK(fixture.textures.destroyedIds.size() == 2);
+}
+
+TEST_CASE("NullAnimationBackend clearModels keeps the backend ready without reusing handles") {
+    NullAnimationFixture fixture;
+    IAnimationBackend& animation = fixture.animation;
+    REQUIRE(animation.init());
+    const int stale = animation.loadModel("hero.png", "hero");
+    REQUIRE(stale > 0);
+    animation.clearModels();
+    animation.clearModels();
+
+    const int fresh = animation.loadModel("hero.png", "hero");
+    REQUIRE(fresh > 0);
+    CHECK(fresh != stale);
+    CHECK(animation.loadedModelCount() == 1);
+    animation.showModel(fresh, 10.0f, 20.0f, 1.0f);
+    animation.hideModel(stale);
+    animation.unloadModel(stale);
+    CHECK(animation.isLoaded(fresh));
+    animation.render(0.016f);
+    REQUIRE(fixture.renderer.blits.size() == 1);
+    CHECK(fixture.renderer.blits.front().texture == fixture.textures.rawHandleBase + 12);
+    CHECK(fixture.textures.liveIds == std::unordered_set<uint32_t>{12});
+
+    animation.shutdown();
+    CHECK(animation.loadedModelCount() == 0);
+    CHECK(fixture.textures.destroyedIds == std::vector<uint32_t>{11, 12});
 }
 
 TEST_CASE("confineToModelRoot rejects absolute paths outside the working directory") {

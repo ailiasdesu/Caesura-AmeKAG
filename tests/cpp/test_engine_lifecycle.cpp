@@ -281,21 +281,27 @@ TEST_CASE("Engine: shutdown clears the entire owned registry") {
         BackendRegistry& reg = BackendRegistry::instance();
         CHECK(reg.getRenderDevice() != nullptr);
         CHECK(reg.getAudioBackend() != nullptr);
+        CHECK(reg.getAudioRestore() != nullptr);
         CHECK(reg.getPlatformBackend() != nullptr);
         CHECK(reg.getMiniGameBackend() != nullptr);
         CHECK(reg.getAnimationBackend() != nullptr);
         CHECK(reg.getJobSystem() != nullptr);
         CHECK(reg.getCryptoEngine() != nullptr);
+        CHECK(reg.getAssetReader() != nullptr);
+        CHECK(reg.getImageDecoder() != nullptr);
         engine.shutdown();
     }
     BackendRegistry& reg = BackendRegistry::instance();
     CHECK(reg.getRenderDevice() == nullptr);
     CHECK(reg.getAudioBackend() == nullptr);
+    CHECK(reg.getAudioRestore() == nullptr);
     CHECK(reg.getPlatformBackend() == nullptr);
     CHECK(reg.getMiniGameBackend() == nullptr);
     CHECK(reg.getAnimationBackend() == nullptr);
     CHECK(reg.getJobSystem() == nullptr);
     CHECK(reg.getCryptoEngine() == nullptr);
+    CHECK(reg.getAssetReader() == nullptr);
+    CHECK(reg.getImageDecoder() == nullptr);
 }
 
 // (2a) headless=true selects Null (no-GPU) adapters in the registry. The
@@ -421,4 +427,3 @@ TEST_CASE("Engine: negative dimensions accepted with no clamp (headless)") {
     CHECK(engine.platform().getWindowHeight() == -2);
     engine.shutdown();
 }
-

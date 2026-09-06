@@ -310,19 +310,22 @@ while frames < FMAX do
               .. " counter=" .. tostring(ctx.f.rtCounter))
         local okL, SaveCmds = pcall(require, "kag.commands.save")
         local okH, herr = false, nil
+        local previous, previous_co = ctx, ctx.co
         if okL then okH, herr = pcall(SaveCmds.load, ctx, { slot = 9 }) end
+        ctx = kag_runner.get_ctx()
         print("RT_LOAD_CALL ok=" .. tostring(okH) .. (herr and (" " .. tostring(herr)) or ""))
-        -- t58 hardening: the restore greps alone cannot distinguish the full
-        -- resume chain from restore-only (a _safeScenePath rejection still
-        -- restores state but never arms the resume). _pendingLoadScene is set
-        -- ONLY on the accepted path, so asserting it locks the replay chain.
-        local pls = ctx._pendingLoadScene
-        if pls == "tests/scripts/golden_rt.ks" then
+        -- Prove the committed session has its own live coroutine and that the
+        -- previous coroutine was closed, rather than trusting a pending flag.
+        local pls = ctx and ctx.current_scene
+        if okH and herr == true and ctx ~= previous and ctx._session_active
+            and ctx.co and coroutine.status(ctx.co) == "suspended"
+            and (not previous_co or coroutine.status(previous_co) == "dead")
+            and pls == "tests/scripts/golden_rt.ks" then
             print("RT_RESUME_ARMED scene=" .. tostring(pls))
         else
             print("RT_RESUME_MISSING scene=" .. tostring(pls))
         end
-        if okH and ctx.f.rtMarker == "PRE_SAVE" and ctx.f.rtCounter == 1 then
+        if okH and herr == true and ctx.f.rtMarker == "PRE_SAVE" and ctx.f.rtCounter == 1 then
             print("ROUNDTRIP_OK")
         else
             print("RT_RESTORE_BAD marker=" .. tostring(ctx.f.rtMarker)
@@ -491,7 +494,14 @@ while frames < FMAX do
     if reason == "ended" then
         if RB and rbDone then print("RB_REPLAY_END") end
         if HIST and ctx and ctx.f and ctx.f.historyClosed == 1 then print("HISTORY_OK") end
-        if RT and rtLoaded then print("RT_REPLAY_END") end
+        if RT and rtLoaded then
+            print("RT_REPLAY_END")
+            local current = kag_runner.get_ctx()
+            if current and current.f.rtMarker == "POST_SAVE_MUTATED"
+                and current.f.rtCounter == 2 and current.f.rtReady == 1 then
+                print("RT_CONTINUATION_OK")
+            end
+        end
         if NVL and nvlOffed then print("NVL_REPLAY_END") end
         if VOICE and voicePlay then print("VOICE_REPLAY_END") end
         result = "DONE:" .. frames

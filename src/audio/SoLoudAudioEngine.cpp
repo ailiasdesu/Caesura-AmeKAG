@@ -91,10 +91,12 @@ bool SoLoudAudioEngine::init(){
     if (m_initialized) return true;
     m_voiceCompletionsPending = 0;
 
+    const bool manual = m_outputMode == OutputMode::ManualMix;
     SoLoud::result res = m_soloud.init(
         SoLoud::Soloud::CLIP_ROUNDOFF,
-        SoLoud::Soloud::AUTO,
-        SoLoud::Soloud::AUTO,
+        manual ? SoLoud::Soloud::NULLDRIVER : SoLoud::Soloud::AUTO,
+        manual ? 48000 : SoLoud::Soloud::AUTO,
+        manual ? 2048 : 2,
         2
     );
     if (res != SoLoud::SO_NO_ERROR) {
@@ -103,6 +105,13 @@ bool SoLoudAudioEngine::init(){
     }
 
     m_soloud.setGlobalVolume(m_globalVolume);
+
+    // Buses produce the mixer's output rate; the default 44100 Hz bus would
+    // otherwise introduce a second resampling stage on 48000 Hz devices.
+    const float mixRate = static_cast<float>(m_soloud.getBackendSamplerate());
+    m_bgmBus.mBaseSamplerate = mixRate;
+    m_voiceBus.mBaseSamplerate = mixRate;
+    m_seBus.mBaseSamplerate = mixRate;
 
     // Create and play audio buses -- all must succeed or init fails.
     // Apply any bus volume configured before init() (stored pending values),
@@ -139,6 +148,7 @@ bool SoLoudAudioEngine::init(){
 void SoLoudAudioEngine::shutdown(){
     CAESURA_ASSERT_MAIN_THREAD();
     if (!m_initialized) return;
+    stopSessionAudio();
 
     std::size_t allocatedHandles = m_activeSE.size()
         + m_retiringBGM.size()
@@ -230,6 +240,8 @@ void SoLoudAudioEngine::stopRetiringHandles(
 void SoLoudAudioEngine::cullFinishedHandles() {
     std::size_t released = 0;
 
+    if (m_currentBGM && m_soloud.hasConsumedVoiceTail(m_currentBGM, bgmSampleCount()))
+        m_soloud.stop(m_currentBGM);
     if (m_currentBGM != 0 && !m_soloud.isValidVoiceHandle(m_currentBGM)) {
         m_currentBGM = 0;
         ++released;
@@ -279,6 +291,10 @@ void SoLoudAudioEngine::cullFinishedHandles() {
     cullRetiring(m_retiringBGM);
     cullRetiring(m_retiringVoice);
     releaseAudioHandles(released);
+    if (m_restoredBGMHandle && !m_soloud.isValidVoiceHandle(m_restoredBGMHandle)) {
+        m_restoredBGMHandle = 0;
+        m_restoredBGMSource.reset();
+    }
 }
 
 // -- Global volume ---------------------------------------------------------
@@ -304,13 +320,22 @@ void SoLoudAudioEngine::setBusVolume(const char* bus, float volume){
     std::string b(bus);
     if (b == "bgm") {
         m_bgmVolume = volume;
-        if (m_initialized) m_bgmBus.setVolume(volume);
+        if (m_initialized) {
+            m_bgmBus.setVolume(volume);
+            m_soloud.setVolume(m_bgmBusHandle, m_bgmDucked ? volume * 0.35f : volume);
+        }
     } else if (b == "voice") {
         m_voiceVolume = volume;
-        if (m_initialized) m_voiceBus.setVolume(volume);
+        if (m_initialized) {
+            m_voiceBus.setVolume(volume);
+            m_soloud.setVolume(m_voiceBusHandle, volume);
+        }
     } else if (b == "se") {
         m_seVolume = volume;
-        if (m_initialized) m_seBus.setVolume(volume);
+        if (m_initialized) {
+            m_seBus.setVolume(volume);
+            m_soloud.setVolume(m_seBusHandle, volume);
+        }
     }
     printf("[Audio] Bus %s volume = %.2f\n", bus, volume);
 }
@@ -357,15 +382,24 @@ void SoLoudAudioEngine::flushWaveCache() {
 unsigned int SoLoudAudioEngine::playBGM(const std::string& file, float fadeTime) {
     if (!m_initialized) return 0;
 
+    std::string playingPath = file;
+    // Retirement bookkeeping must be allocated before creating a new voice.
+    if (m_currentBGM) m_retiringBGM.reserve(m_retiringBGM.size() + 1);
+
     auto wav = loadWave(file);
     if (!wav) return 0;
+
+    std::unique_ptr<SoLoud::AudioSourceInstance> instance(wav->createInstance());
+    if (!instance) return 0;
+    // Decoder EOF can precede the last audible source/bus interpolation frames.
+    instance->mFlags |= SoLoud::AudioSourceInstance::DISABLE_AUTOSTOP;
 
     cullFinishedHandles();
     auto& registry = BackendRegistry::instance();
     if (!registry.tryAlloc("audio_handles")) return 0;
 
     // Start new BGM at volume 0, then fade in
-    SoLoud::handle h = m_bgmBus.play(*wav, 0.0f);
+    SoLoud::handle h = m_soloud.playPrepared(*wav, instance.release(), 0.0f, 0.0f, true, m_bgmBusHandle);
     if (h == 0 || !m_soloud.isValidVoiceHandle(h)) {
         registry.release("audio_handles");
         return 0;
@@ -375,10 +409,17 @@ unsigned int SoLoudAudioEngine::playBGM(const std::string& file, float fadeTime)
     // quota remains held until the physical SoLoud voice actually stops.
     if (m_currentBGM != 0) {
         retireHandle(m_currentBGM, fadeTime, m_retiringBGM);
+        m_currentBGM = 0;
     }
 
     m_soloud.fadeVolume(h, 1.0f, fadeTime);
+    if (m_soloud.startBusVoice(h, m_bgmBus) != SoLoud::SO_NO_ERROR) {
+        m_soloud.stop(h);
+        registry.release("audio_handles");
+        return 0;
+    }
     m_currentBGM = h;
+    m_currentBGMPath.swap(playingPath);
 
     printf("[Audio] BGM: %s (handle %u, fade %.1fs)\n", file.c_str(), h, fadeTime);
     return static_cast<unsigned int>(h);
@@ -430,7 +471,7 @@ unsigned int SoLoudAudioEngine::playVoice(const std::string& file){
     if (!m_bgmDucked && m_currentBGM != 0
         && m_soloud.isValidVoiceHandle(m_currentBGM)) {
         m_bgmDucked = true;
-        m_soloud.fadeVolume(m_bgmBusHandle, 0.35f, 0.15f);
+        m_soloud.fadeVolume(m_bgmBusHandle, m_bgmVolume * 0.35f, 0.15f);
     }
 
     printf("[Audio] Voice: %s (handle %u, slot %u)\n", file.c_str(), h, slot);

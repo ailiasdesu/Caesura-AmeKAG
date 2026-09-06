@@ -16,6 +16,14 @@ _schema4.define("stopvideo", {
 
 local VideoCommands = {}
 
+local function close_playback(ctx, playback)
+    if not playback or playback.closed then return true end
+    playback.closed = true
+    if ctx._videoPlayback == playback then ctx._videoPlayback = nil end
+    if playback.handle then return backend.video_stop(playback.handle) end
+    return true
+end
+
 local function resolve_file(params)
     -- string-only bare fallback (audit sweep: same as audio/layer)
     local f = params.storage or params.path or params.file
@@ -65,31 +73,36 @@ function VideoCommands.video(ctx, params)
         return
     end
 
+    close_playback(ctx, ctx._videoPlayback)
     local operation <close> = Operation.start(ctx)
     local ct = operation.token
+    -- Allocate ownership before open. A later playback may reuse the same
+    -- numeric decoder handle, so late cancellation owns this record only.
+    local playback = {handle=false, closed=false}
     local function stop_video()
-        if backend.video_stop then
-            backend.video_stop()
-        end
+        return close_playback(ctx, playback)
     end
     ct:register(stop_video)
 
     -- Start video playback via backend
-    local ok = backend.video_play and backend.video_play(file, {
+    local handle = backend.video_play and backend.video_play(file, {
         loop   = loop,
         volume = volume,
     })
-    if not ok then
+    if type(handle) ~= "number" or handle < 1 or handle > 4294967295
+        or handle ~= math.floor(handle) then
         print("[VideoCmd] video: failed to play " .. file)
         return
     end
+    playback.handle = handle
+    ctx._videoPlayback = playback
 
     -- Block until video ends, user cancels, or the 60s cap (a stuck
     -- decoder must not hang the runner -- same bound as waitsound).
     -- loop=true videos therefore auto-stop after the cap; scripts that
     -- need longer loops should re-issue [video] or use [stopvideo].
     local elapsed = 0
-    while backend.video_is_playing and backend.video_is_playing()
+    while not playback.closed and backend.video_is_playing and backend.video_is_playing(handle)
           and not ct.cancelled and elapsed < 60000 do
         elapsed = elapsed + (coroutine.yield() or 16)
     end
@@ -108,9 +121,7 @@ end
 -- ═══════════════════════════════════════════════════════════════════════════
 
 function VideoCommands.stopvideo(ctx, params)
-    if backend.video_stop then
-        backend.video_stop()
-    end
+    return close_playback(ctx, ctx._videoPlayback)
 end
 
 return VideoCommands

@@ -104,6 +104,166 @@ check("extreme scale under 12 MB cap",
 print(string.format("  [mem] 64 snaps @ 2000vars+2000draws: %.1f KB (%.1f KB/snap)",
       mem4, mem4 / 64))
 
+-- 6. Seen-token state grows throughout a story. Keep all 64 history entries
+-- without retaining a full numeric-key hash table in each snapshot.
+do
+    local seen_ctx = make_ctx(0, 0)
+    local flags = {}
+    for i = 1, 3000 do flags[i * 3] = true end
+    -- Exercise both ends of a 64-bit block and a very sparse valid index.
+    flags[1], flags[63], flags[64], flags[65], flags[2147483647] = true, true, true, true, true
+    seen_ctx.seen_scenes = { ["large.ks"] = flags, ["empty.ks"] = {} }
+    collectgarbage("collect")
+    local before = collectgarbage("count")
+    local history = {}
+    local started = os.clock()
+    for i = 1, 64 do
+        flags[10000 + i] = true
+        history[i] = snapshot.capture(seen_ctx)
+    end
+    local capture_ms = (os.clock() - started) * 1000
+    collectgarbage("collect")
+    local retained = collectgarbage("count") - before
+    check("64 large seen snapshots under 512 KB", retained < 512, string.format("%.1f KB", retained))
+    print(string.format("  [seen] 64 snaps @ 3000 flags: %.1f KB; capture %.3f ms", retained, capture_ms))
+
+    flags[3], flags[64], flags[9001] = nil, false, true
+    seen_ctx.seen_scenes = { ["future.ks"] = { [1] = true } }
+    snapshot.restore(seen_ctx, history[1])
+    local restored = seen_ctx.seen_scenes["large.ks"]
+    local exact = restored and seen_ctx.seen_scenes["future.ks"] == nil
+        and type(seen_ctx.seen_scenes["empty.ks"]) == "table"
+        and restored[1] == true and restored[63] == true and restored[64] == true
+        and restored[65] == true and restored[2147483647] == true and restored[9001] == nil
+        and restored[10001] == true and restored[10002] == nil
+    for i = 1, 3000 do exact = exact and restored[i * 3] == true end
+    local count = 0
+    for _ in pairs(restored or {}) do count = count + 1 end
+    exact = exact and count == 3005
+    check("large seen snapshot restores exact flags despite live mutation", exact)
+    restored[64], restored[10002] = false, true
+    snapshot.restore(seen_ctx, history[1])
+    check("restoring twice never mutates the retained seen snapshot",
+        seen_ctx.seen_scenes["large.ks"][64] == true and seen_ctx.seen_scenes["large.ks"][10002] == nil)
+    snapshot.restore(seen_ctx, history[64])
+    check("the latest of all 64 snapshots retains its own additions",
+        seen_ctx.seen_scenes["large.ks"][10064] == true)
+end
+
+-- Unusual legacy key/value shapes retain deep-copy behavior, including
+-- aliases, cycles, false flags, table keys, and non-token metadata.
+do
+    local seen_ctx = make_ctx(0, 0)
+    local key = { label = "key" }
+    local shared = { [1] = true, [0] = false, [3.5] = "fractional", meta = { value = 7 },
+        [key] = { value = "table-key" } }
+    shared.self = shared
+    seen_ctx.seen_scenes = { first = shared, second = shared, count = 2 }
+    local saved = snapshot.capture(seen_ctx)
+    shared.meta.value, shared[0], key.label = 99, true, "changed"
+    snapshot.restore(seen_ctx, saved)
+    local result = seen_ctx.seen_scenes
+    check("non-token seen values and aliases survive rollback", result.first == result.second
+        and result.first.self == result.first and result.count == 2 and result.first[0] == false
+        and result.first[3.5] == "fractional" and result.first.meta.value == 7)
+    local copied_key
+    for candidate in pairs(result.first) do if type(candidate) == "table" then copied_key = candidate end end
+    check("table keys retain deep-copy isolation", copied_key ~= key and copied_key.label == "key"
+        and result.first[copied_key].value == "table-key")
+    -- A standard-shaped graph can also contain a shared per-scene map.
+    local common = { [64] = true }
+    seen_ctx.seen_scenes = { first = common, second = common }
+    saved = snapshot.capture(seen_ctx)
+    common[64] = false
+    snapshot.restore(seen_ctx, saved)
+    check("standard-shaped aliases remain shared after restore",
+        seen_ctx.seen_scenes.first == seen_ctx.seen_scenes.second and seen_ctx.seen_scenes.first[64] == true)
+
+    local legacy = { scene = "legacy.ks", token_index = 1, seen_scenes = { ["legacy.ks"] = { [91] = true } } }
+    snapshot.restore(seen_ctx, legacy)
+    seen_ctx.seen_scenes["legacy.ks"][91] = false
+    snapshot.restore(seen_ctx, legacy)
+    check("old snapshots restore without the new private representation",
+        seen_ctx.seen_scenes["legacy.ks"][91] == true)
+end
+
+-- Incremental private encoding must notice removals as well as additions,
+-- including an equal-sized replacement and transitions to/from fallback.
+do
+    local seen_ctx = make_ctx(0, 0)
+    local flags = { [1] = true, [64] = true, [65] = true, [4096] = true }
+    seen_ctx.seen_scenes = { story = flags }
+    local original = snapshot.capture(seen_ctx)
+    flags[1], flags[64], flags[65], flags[4096] = nil, nil, nil, nil
+    flags[8192], flags[8193], flags[8194], flags[8195] = true, true, true, true
+    local replaced = snapshot.capture(seen_ctx)
+    flags[8192] = false
+    local unusual = snapshot.capture(seen_ctx)
+    flags[8192], flags[8193] = true, nil
+    local standard_again = snapshot.capture(seen_ctx)
+    snapshot.restore(seen_ctx, original)
+    check("earlier packed snapshots survive later block replacements",
+        seen_ctx.seen_scenes.story[64] == true and seen_ctx.seen_scenes.story[8192] == nil)
+    snapshot.restore(seen_ctx, replaced)
+    check("equal-sized key replacement removes old flags",
+        seen_ctx.seen_scenes.story[1] == nil and seen_ctx.seen_scenes.story[8192] == true)
+    snapshot.restore(seen_ctx, unusual)
+    check("false flags use lossless fallback", seen_ctx.seen_scenes.story[8192] == false)
+    snapshot.restore(seen_ctx, standard_again)
+    check("returning from fallback captures current flags exactly",
+        seen_ctx.seen_scenes.story[8192] == true and seen_ctx.seen_scenes.story[8193] == nil)
+end
+
+-- Cache work buffers may retain only current flags. Holding the newest
+-- snapshot must not keep the original live tables or historical empty blocks.
+do
+    local seen_ctx = make_ctx(0, 0)
+    local flags = { [1] = true }
+    seen_ctx.seen_scenes = { story = flags }
+    collectgarbage("collect")
+    local before = collectgarbage("count")
+    local last
+    for i = 1, 2000 do
+        flags[(i - 1) * 64 + 1] = nil
+        flags[i * 64 + 1] = true
+        last = snapshot.capture(seen_ctx)
+    end
+    collectgarbage("collect")
+    local retained = collectgarbage("count") - before
+    check("removed sparse blocks do not accumulate in private cache", retained < 64,
+        string.format("%.1f KB", retained))
+    local original = setmetatable({ [flags] = true }, { __mode = "k" })
+    seen_ctx, flags = nil, nil
+    collectgarbage("collect")
+    collectgarbage("collect")
+    check("retained snapshots do not keep mutable source tables alive", next(original) == nil)
+    local target = make_ctx(0, 0)
+    snapshot.restore(target, last)
+    check("snapshot remains usable after its source table is collected", target.seen_scenes.story[128001] == true)
+end
+
+-- A failed encoding must not leave a half-updated work buffer that silently
+-- drops a newly seen flag on the next capture. Prior snapshots remain usable.
+do
+    local seen_ctx = make_ctx(0, 0)
+    local flags = { [1] = true }
+    seen_ctx.seen_scenes = { story = flags }
+    local earlier = snapshot.capture(seen_ctx)
+    flags[2] = true
+    local original_pack = string.pack
+    string.pack = function() error("injected seen encoding failure", 0) end
+    local captured = pcall(snapshot.capture, seen_ctx)
+    string.pack = original_pack
+    check("encoding failure is observable without altering live flags", not captured and flags[2] == true)
+    local target = make_ctx(0, 0)
+    snapshot.restore(target, earlier)
+    check("encoding failure cannot damage a retained snapshot", target.seen_scenes.story[1] == true
+        and target.seen_scenes.story[2] == nil)
+    snapshot.restore(target, snapshot.capture(seen_ctx))
+    check("capture after encoding failure rebuilds exact seen flags", target.seen_scenes.story[1] == true
+        and target.seen_scenes.story[2] == true)
+end
+
 package.loaded["layers"] = layers_saved
 
 if failed > 0 then

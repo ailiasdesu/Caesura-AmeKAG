@@ -9,6 +9,10 @@
 local _type    = type
 
 local System = require("system")
+local SaveState = require("kag.save_state")
+local Presentation = require("kag.presentation") -- preload before sandbox lockdown
+local Transients = require("kag.transient_state")
+local WaitState = require("kag.wait_state")
 
 local SaveCommands = {}
 
@@ -47,30 +51,28 @@ end
 -- ═══════════════════════════════════════════════════════════════════════════
 
 local function capture_state(ctx)
+    Transients.assert_saveable(ctx)
     local state = {}
 
     -- f-variables (global flags)
-    state.f = {}
-    if ctx.f then
-        for k, v in pairs(ctx.f) do
-            if _type(k) == "string" then
-                state.f[k] = v
-            end
-        end
-    end
+    state.f = ctx.f or {}
 
     -- sf-variables (system flags)
     state.sf = {}
     if ctx.sf then
         for k, v in pairs(ctx.sf) do
-            if _type(k) == "string" then
+            if k ~= "save_list" then
                 state.sf[k] = v
             end
         end
     end
 
     -- Token position
-    state.token_index = ctx.token_index or 1
+    state.token_index = ctx._executing_index or ctx._resume_index or ctx.token_index or 1
+    state.display_token_index = ctx.token_index or state.token_index
+    if ctx._executing_command == "save" or ctx._executing_command == "saveload" then
+        state.token_index = state.token_index + 1
+    end
 
     -- Scene path: scheduler writes current_scene (snake_case) on
     -- jump/call/link; currentScene is the legacy camelCase alias.
@@ -128,8 +130,10 @@ local function capture_state(ctx)
     if ctx.call_stack then
         for _, frame in ipairs(ctx.call_stack) do
             table.insert(state.call_stack, {
-                tokens = frame.tokens,
+                scene = frame.scene or ctx.current_scene or ctx.currentScene,
                 index  = frame.index or 1,
+                lf = frame.lf or {}, mp = frame.mp or {},
+                control = frame.control,
             })
         end
     end
@@ -170,6 +174,7 @@ local function capture_state(ctx)
     -- restores the player's locale instead of resetting to zh.
     state.language = (ctx.settingsValues and ctx.settingsValues.language)
         or require("i18n").current or "zh"
+    state.language_default = require("i18n").default_language or "en"
 
     -- [R7-FIX] Persist seen flags for Read Skip
     state.seen_scenes = ctx.seen_scenes or {}
@@ -198,7 +203,19 @@ local function capture_state(ctx)
         end
     end
 
-    return state
+    state.schema_version = SaveState.VERSION
+    state.lf, state.mp = ctx.lf or {}, ctx.mp or {}
+    state.variables = ctx.variables or {}
+    state.text_snapshot = require("kag.text_scene").capture(ctx)
+    state.wait_snapshot = WaitState.capture(ctx)
+    local presentation = Presentation.capture()
+    state.layer_snapshot, state.audio_snapshot = presentation.layers, presentation.audio
+    state.font_snapshot = presentation.font
+    state.layers, state.characters = ctx.layers or {}, ctx.characters or {}
+    state.loop_stacks = SaveState.capture_control(ctx)
+    state.seen_scenes = SaveState.capture_seen(ctx.seen_scenes)
+    state.sf.save_list = nil
+    return SaveState.copy(state)
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -246,7 +263,12 @@ function SaveCommands.save(ctx, params)
 
     -- Capture context state
     ctx.saveDescription = desc
-    local state = capture_state(ctx)
+    local captured, state = pcall(capture_state, ctx)
+    if not captured then
+        ctx.tf = ctx.tf or {}
+        ctx.tf.save_result, ctx.tf.save_error = "error", tostring(state)
+        return false, state
+    end
 
 
 
@@ -270,7 +292,7 @@ function SaveCommands.save(ctx, params)
 
     -- Call C++ SaveManager via KAG binding
     local sceneName = ctx.current_scene or ctx.currentScene or "unknown"
-    local tokenIdx  = ctx.token_index or 1
+    local tokenIdx  = state.token_index
 
     local ok = kag_binding("save_game")(slot, state, sceneName, tokenIdx, thumbnail)
     -- Phase G8-U1: explicit GC collect after save
@@ -295,189 +317,78 @@ end
 --  After restoring variables, re-executes scene script from the saved position.
 -- ═══════════════════════════════════════════════════════════════════════════
 
+-- Prepare a slot without touching any live context, coroutine or presentation.
+-- The caller owns the returned candidate until it commits or discards it.
+function SaveCommands.prepare_load(params)
+    if params ~= nil and type(params) ~= "table" then return nil, "Invalid load parameters" end
+    local slot = resolve_slot(params or {})
+    local binding = kag_binding("load_game")
+    if not binding then return nil, "save backend unavailable" end
+    local read, state, meta = pcall(binding, slot)
+    if not read or type(state) ~= "table" then
+        return nil, read and (meta or "save unavailable") or state
+    end
+    local provider = require("flow")
+    local safe_scene = type(provider.is_restore_scene) == "function"
+        and provider.is_restore_scene or SaveCommands._safeScenePath
+    local prepared, candidate = pcall(SaveState.prepare, state, safe_scene, provider.prepare_scene)
+    if not prepared then return nil, candidate end
+    candidate.tf.load_result, candidate.tf.load_slot = "ok", slot
+    candidate.tf.load_meta = meta
+    return candidate
+end
+
 function SaveCommands.load(ctx, params)
-    local slot = resolve_slot(params)
-
-    -- Call C++ SaveManager via KAG binding
-    local state, meta = kag_binding("load_game")(slot)    if not state or type(state) ~= "table" then
-        print("[SaveCmd] Load failed for slot " .. slot .. ": " .. tostring(meta or "unknown error"))
+    local function rejected(reason)
         ctx.tf = ctx.tf or {}
-        ctx.tf.load_result = "error"
-        return
+        ctx.tf.load_result, ctx.tf.load_error = "error", tostring(reason)
+        return false, reason
     end
-
-
-
-    -- Restore f-variables
-    if state.f then
-        ctx.f = ctx.f or {}
-        for k, v in pairs(state.f) do
-            ctx.f[k] = v
-        end
+    local runner = package.loaded["kag_runner"]
+    local runner_owned = ctx._native_runner_owner or (runner and runner.get_ctx() == ctx)
+    local owner_co = ctx.co
+    if runner_owned and (not runner or runner.get_ctx() ~= ctx) then
+        return rejected("restore-owner-expired")
     end
-
-    -- Restore sf-variables
-    if state.sf then
-        ctx.sf = ctx.sf or {}
-        for k, v in pairs(state.sf) do
-            ctx.sf[k] = v
-        end
+    local candidate, prepare_error = SaveCommands.prepare_load(params)
+    if not candidate then return rejected(prepare_error) end
+    -- Asset preparation may yield. A retired runner owner must never fall
+    -- through into the direct-host path when the awaited work completes.
+    if package.loaded["kag_runner"] ~= runner or (runner_owned
+        and (runner.get_ctx() ~= ctx or ctx.co ~= owner_co)) then
+        local discarded, discard_error = Presentation.discard(candidate._presentation)
+        return rejected("restore-owner-expired" .. (discarded and "" or "; discard: " .. tostring(discard_error)))
     end
-
-    -- Restore label map
-    if state.label_map then
-        ctx.labelMap = ctx.labelMap or {}
-        for k, v in pairs(state.label_map) do
-            ctx.labelMap[k] = v
+    if runner_owned then
+        local restored, reason = runner.restore_candidate(ctx, candidate)
+        if not restored then
+            Presentation.discard(candidate._presentation)
+            return rejected(reason)
         end
+        return true, reason
     end
-
-    -- Restore unlock state (gallery + music room)
-    if state.unlockedCG then
-        ctx.unlockedCG = ctx.unlockedCG or {}
-        for k, v in pairs(state.unlockedCG) do
-            ctx.unlockedCG[k] = v
-        end
-    end
-    if state.unlockedMusic then
-        ctx.unlockedMusic = ctx.unlockedMusic or {}
-        for k, v in pairs(state.unlockedMusic) do
-            ctx.unlockedMusic[k] = v
-        end
-    end
-
-    -- Restore call stack
-    if state.call_stack and #state.call_stack > 0 then
-        ctx.call_stack = {}
-        for _, frame in ipairs(state.call_stack) do
-            table.insert(ctx.call_stack, frame)
-        end
-    end
-
-    -- Restore backlog (capped: history UI iterates it per frame, and a
-    -- crafted save could inflate it to stall the loop)
-    if state.backlog then
-        ctx.backlog = {}
-        local cap = ctx.backlog_max or 500
-        for _, entry in ipairs(state.backlog) do
-            if #ctx.backlog >= cap then break end
-            ctx.backlog[#ctx.backlog + 1] = entry
-        end
-    end
-
-    -- [R6-FIX] Restore skip/auto mode
-    -- Whitelist-normalize (security LOW): `or false` is a nil-guard, not
-    -- a type-guard -- a crafted save could inject a truthy non-boolean
-    -- (behaviorally equivalent, but the pattern should not spread).
-    local sm = state.skip_mode
-    ctx.skip_mode = (sm == true or sm == "seen") and sm or false
-    ctx.auto_mode = (state.auto_mode == true)
-    ctx.voice_muted = (state.voice_muted == true)
-    ctx.nvl_mode = (state.nvl_mode == true)
-    -- Restore visual/text state (audit completion)
-    if type(state.text_state) == "table" then
-        ctx.text_state = ctx.text_state or {}
-        if type(state.text_state.font_face) == "string" then
-            ctx.text_state.font_face = state.text_state.font_face
-        end
-        if type(state.text_state.font_size) == "number" then
-            ctx.text_state.font_size = state.text_state.font_size
-        end
-        if type(state.text_state.font_color) == "string" then
-            ctx.text_state.font_color = state.text_state.font_color
-        end
-    end
-    if _type(state.textbox_style) == "table" then
-        local st = state.textbox_style
-        -- EVERY numeric field type-guarded (review warn: h/x/y/opacity
-        -- were nil-guards only -- a crafted save injected a string/table
-        -- that crashed the next [cl] rebuild via math.floor(opacity))
-        if _type(st.w) == "number" and _type(st.h) == "number"
-           and _type(st.x) == "number" and _type(st.y) == "number"
-           and _type(st.opacity) == "number" then
-            ctx.textbox_style = {
-                x = st.x, y = st.y, w = st.w, h = st.h,
-                color = _type(st.color) == "string" and st.color or "0,0,0",
-                opacity = st.opacity,
-                visible = st.visible ~= false,
-            }
-        end
-    end
-
-    -- Restore the UI language and hot-switch the locale
-    if type(state.language) == "string" and #state.language > 0 then
+    -- Hosts that drive scheduler.run directly consume the existing scene
+    -- continuation fields. They still receive a fully prepared value set.
+    local applied, apply_error = pcall(function()
+    SaveState.apply_values(ctx, candidate)
+    Presentation.apply(candidate._presentation, ctx)
+    if candidate.language then
         ctx.settingsValues = ctx.settingsValues or {}
-        ctx.settingsValues.language = state.language
-        pcall(function() require("i18n").load(state.language) end)
+        ctx.settingsValues.language = candidate.language
+        require("i18n").commit(candidate._locale)
     end
-
-    -- [R7-FIX] Restore seen flags -- type-guarded: a crafted save with a
-    -- non-table seen_scenes would crash the first on_click (security LOW).
-    ctx.seen_scenes =
-        (type(state.seen_scenes) == "table") and state.seen_scenes or {}
-    ctx.seen_endings =
-        (type(state.seen_endings) == "table") and state.seen_endings or {}
-
-    -- Restore live loop/branch stacks (round 75): the re-spawned
-    -- scheduler.run consumes this marker at entry. Type-guarded -- a
-    -- crafted save may carry anything here; entries are only replayed
-    -- if they look like the arrays capture_state wrote.
-    local ls = state.loop_stacks
-    if type(ls) == "table" then
-        local marker = {}
-        for k2, arr in pairs(ls) do
-            if type(arr) == "table" then marker[k2] = arr end
-        end
-        if next(marker) then ctx._resumeLoopStacks = marker end
+    ctx._pendingLoadScene = candidate.current_scene
+    ctx._pendingLoadToken = candidate._resume_index
+    ctx._preparedRestore = candidate
+    ctx.stop_flag = true
+    end)
+    if not applied then
+        ctx.stop_flag, ctx._session_active, ctx.waiting_input = true, false, false
+        ctx.text_state = {draws={}}
+        Presentation.stop(ctx, true)
+        return rejected(apply_error)
     end
-
-    -- Set token position for resume
-    ctx.token_index = math.max(1, tonumber(state.token_index) or 1)
-
-    -- Set scene path for reload (both aliases: the runner reads the
-    -- snake_case variant during the coroutine-death window). The path is
-    -- attacker-controlled in crafted saves: allowlist it to a .ks under
-    -- assets/scripts (or demo/) so [load] cannot point the tokenizer at
-    -- an arbitrary readable local file.
-    local sp = state.scene_path or ""
-    if SaveCommands._safeScenePath(sp) then
-        -- [round 97] Record the scene the [load] was issued FROM, before
-        -- current_scene is overwritten below: the bridge needs it to tell a
-        -- self-referential load ([save]+[load] in the same scene — resume
-        -- point at/before the [load] re-runs the block forever) from a real
-        -- cross-scene load (resume point must be honored exactly). round 95
-        -- compared current_scene == _pendingLoadScene AFTER this overwrite,
-        -- which is true for EVERY load, so every load got cursor+1 and a
-        -- page was skipped (slots.boundary regression).
-        ctx._pendingLoadOriginScene = ctx.current_scene or ctx.currentScene
-        ctx.currentScene = sp
-        ctx.current_scene = sp
-        -- Set stop_flag so the current script execution stops
-        -- and the engine reloads from the saved scene
-        ctx.stop_flag = true
-        -- The save JSON may carry a crafted call_stack; resume_from_save
-        -- would clear it, but drop it here too so a valid-path crafted save
-        -- cannot [return] into a forged frame before the resume runs.
-        ctx.call_stack = nil
-        ctx._pendingLoadScene = state.scene_path
-        ctx._pendingLoadToken = state.token_index
-    else
-        -- Rejected path: still harden state so a crafted save cannot
-        -- leave a stale call_stack / non-table seen_scenes live (the
-        -- continuing script could hit [return] into a crafted frame).
-        ctx.stop_flag = true
-        ctx.call_stack = nil
-        if type(ctx.seen_scenes) ~= "table" then ctx.seen_scenes = {} end
-    end
-
-    -- Set load result flag for UI feedback
-    ctx.tf = ctx.tf or {}
-    ctx.tf.load_result = "ok"
-    ctx.tf.load_slot    = slot
-    ctx.tf.load_meta    = meta
-
-    print("[SaveCmd] Loaded slot " .. slot .. " (scene: " ..
-          (state.scene_path or "?") .. ", token: " .. (state.token_index or 0) .. ")")
+    return true
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════

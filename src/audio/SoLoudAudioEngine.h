@@ -1,5 +1,6 @@
 #pragma once
 #include "../audio/api/IAudioBackend.h"
+#include "api/IAudioRestore.h"
 #include <soloud.h>
 #include <soloud_bus.h>
 #include <soloud_wav.h>
@@ -20,9 +21,12 @@ namespace Caesura {
 // Waveform cache uses LRU eviction (spec [10.2.69]) with O(1) touch via
 // unordered_map + list.  Cache is a class member, not a global static.
 
-class SoLoudAudioEngine : public IAudioBackend {
+class SoLoudAudioEngine : public IAudioBackend, public IAudioRestore {
 public:
-    SoLoudAudioEngine() = default;
+    enum class OutputMode { Device, ManualMix };
+    // ManualMix uses the actual SoLoud mixer, advanced explicitly by its host.
+    explicit SoLoudAudioEngine(OutputMode outputMode = OutputMode::Device)
+        : m_outputMode(outputMode) {}
     ~SoLoudAudioEngine() override;
 
     SoLoudAudioEngine(const SoLoudAudioEngine&) = delete;
@@ -75,6 +79,12 @@ public:
 
     const char* getBackendName() const override { return "SoLoud"; }
 
+    AudioRestoreState captureAudioState() override;
+    std::unique_ptr<IPreparedAudioState> prepareAudioState(
+        const AudioRestoreState& state, const uint8_t* bytes, size_t size) override;
+    bool applyAudioState(std::unique_ptr<IPreparedAudioState> prepared) override;
+    void stopSessionAudio() override;
+
     // -- Direct SoLoud access (for advanced use) ---------------------------
     SoLoud::Soloud& soloud() { return m_soloud; }
     SoLoud::Bus& bgmBus()    { return m_bgmBus; }
@@ -85,11 +95,13 @@ private:
     // -- Internal helpers -------------------------------------------------
     std::shared_ptr<SoLoud::AudioSource> loadWave(const std::string& file);
     void cullFinishedHandles();
+    uint64_t bgmSampleCount() const;
     void releaseAudioHandles(std::size_t count);
     void retireHandle(SoLoud::handle handle, float fadeTime,
                       std::vector<SoLoud::handle>& retiringHandles);
     void stopRetiringHandles(std::vector<SoLoud::handle>& retiringHandles);
 
+    const OutputMode m_outputMode;
     SoLoud::Soloud m_soloud;
     SoLoud::Bus    m_bgmBus;
     SoLoud::Bus    m_voiceBus;
@@ -105,6 +117,9 @@ private:
     unsigned int m_voiceSlot    = 0;
     bool         m_bgmDucked    = false;  // ducking state (voice lowers BGM)
     unsigned int m_currentBGM   = 0;
+    std::string m_currentBGMPath;
+    std::shared_ptr<SoLoud::AudioSource> m_restoredBGMSource;
+    unsigned int m_restoredBGMHandle = 0;
     unsigned int m_voiceCompletionsPending = 0;
     std::vector<SoLoud::handle> m_retiringBGM;
     std::vector<SoLoud::handle> m_retiringVoice;
