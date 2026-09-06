@@ -1,6 +1,7 @@
 #include "BackendRegistry.h"
 // All interface includes needed for getService<I>() / setService<I>() template instantiation
 #include "../audio/api/IAudioBackend.h"
+#include "../audio/api/IAudioRestore.h"
 #include "../platform/api/IPlatformBackend.h"
 #include "../render/api/IRenderDevice.h"
 #include "../render/api/IVideoPlayer.h"
@@ -11,6 +12,8 @@
 #include "../debug/api/IDebugManager.h"
 #include "../resource/api/IAsyncLoader.h"
 #include "../resource/api/IResourceGenerationTracker.h"
+#include "../resource/api/IAssetReader.h"
+#include "../resource/api/IImageDecoder.h"
 #include "../minigame/api/IMiniGameBackend.h"
 #include "../live2d/api/IAnimationBackend.h"
 #include "../archive/api/ICryptoEngine.h"
@@ -64,6 +67,7 @@ int BackendRegistry::count(const char* kind) {
 
 DEF_GETTER(IRenderDevice,    RenderDevice)
 DEF_GETTER(IAudioBackend,    AudioBackend)
+DEF_GETTER(IAudioRestore,    AudioRestore)
 DEF_GETTER(IPlatformBackend, PlatformBackend)
 DEF_GETTER(IInputRouter,     InputRouter)
 DEF_GETTER(IVideoPlayer,     VideoPlayer)
@@ -81,6 +85,8 @@ DEF_GETTER(ISandboxQuota,    SandboxQuota)
 DEF_GETTER(ITextureBudget,   TextureBudget)
 DEF_GETTER(ISaveManager,     SaveManager)
 DEF_GETTER(IResourceGenerationTracker, ResourceGenerationTracker)
+DEF_GETTER(IAssetReader, AssetReader)
+DEF_GETTER(IImageDecoder, ImageDecoder)
 DEF_GETTER(ISteamBackend,    SteamBackend)
 DEF_GETTER(IMobileAdapter,   MobileAdapter)
 DEF_GETTER(IDisplayService,  DisplayService)
@@ -90,6 +96,7 @@ DEF_GETTER(IMeshRenderer,    MeshRenderer)
 
 DEF_SETTER(IRenderDevice,    RenderDevice)
 DEF_SETTER(IAudioBackend,    AudioBackend)
+DEF_SETTER(IAudioRestore,    AudioRestore)
 DEF_SETTER(IPlatformBackend, PlatformBackend)
 DEF_SETTER(IInputRouter,     InputRouter)
 DEF_SETTER(IMiniGameBackend, MiniGameBackend)
@@ -107,6 +114,8 @@ DEF_SETTER(ILayerManager,    LayerManager)
 DEF_SETTER(ITextureBudget,   TextureBudget)
 DEF_SETTER(ISaveManager,     SaveManager)
 DEF_SETTER(IResourceGenerationTracker, ResourceGenerationTracker)
+DEF_SETTER(IAssetReader, AssetReader)
+DEF_SETTER(IImageDecoder, ImageDecoder)
 DEF_SETTER(ISteamBackend,    SteamBackend)
 DEF_SETTER(IMobileAdapter,   MobileAdapter)
 DEF_SETTER(IDisplayService,  DisplayService)

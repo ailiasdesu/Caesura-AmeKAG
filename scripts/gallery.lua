@@ -8,6 +8,7 @@ local Gallery = {}
 local backend = require("backend")
 local layers  = require("layers")
 local fileutil = require("fileutil")
+local Operation = require("kag.operation")
 
 -- Cache of scanned CG entries
 local cgCache = nil
@@ -83,12 +84,13 @@ end
 -- Gallery._cleanupTextures() — destroy all module-owned textures
 -- ===========================================================================
 function Gallery._cleanupTextures()
-    for _, texId in pairs(ownedTextures) do
-        if texId and texId > 0 then
+    local textures = ownedTextures
+    ownedTextures = {}
+    for _, texId in pairs(textures) do
+        if type(texId) == "number" and texId > 0 then
             pcall(function() backend.destroy_texture(texId) end)
         end
     end
-    ownedTextures = {}
 end
 
 -- ===========================================================================
@@ -120,14 +122,25 @@ function Gallery.show(ctx, startId)
         return
     end
 
+    local scope <close> = Operation.start(ctx)
+    local previousFocus = ctx.input_focus or "kag"
+    local ok, focus = pcall(backend.get_input_focus)
     ctx.galleryState = {
         active = true,
+        previousFocus = previousFocus,
+        previousBackendFocus = ok and type(focus) == "string" and focus
+            or (previousFocus == "kag" and "KAG" or "GAME"),
         cgs = unlocked,
         index = math.max(1, math.min(idx, #unlocked)),
         bgLayer = nil,
         overlayLayer = nil,
         flashTimer = 0,     -- navigation flash indicator
     }
+    local galleryState = ctx.galleryState
+    scope.token:register(function()
+        if ctx.galleryState == galleryState then Gallery.hide(ctx) end
+    end)
+    ctx.input_focus = "gallery"
 
     -- Switch input focus to GAME to prevent KAG text advancement
     backend.set_input_focus("GAME")
@@ -160,6 +173,7 @@ function Gallery.show(ctx, startId)
     while true do
         Gallery._renderCurrent(ctx)
         coroutine.yield()
+        if scope.token.cancelled or ctx.galleryState ~= galleryState then return end
 
         if _G._GAME_KEY_LEFT == true then
             _G._GAME_KEY_LEFT = false
@@ -177,24 +191,36 @@ function Gallery.show(ctx, startId)
         end
     end
     Gallery.hide(ctx)
+    scope:complete()
 end
 
 -- ===========================================================================
 -- Gallery.hide(ctx)
 -- ===========================================================================
 function Gallery.hide(ctx)
-    if not ctx.galleryState then return end
-    local layerNames = {"_gallery", "_gallery_overlay"}
-    for _, name in ipairs(layerNames) do
-        local layer = layers.find(name)
+    local gs = ctx.galleryState
+    if not gs then return end
+    ctx.galleryState = nil
+    gs.active = false
+    for _, key in ipairs({"bgLayer", "overlayLayer"}) do
+        local layer = gs[key]
+        gs[key] = nil
         if layer then
-            layer.visible = false
-            if layer.texture then backend.destroy_texture(layer.texture); layer.texture = nil end
+            local texture = layer.texture
+            layer.visible, layer.texture = false, nil
+            -- The overlay is already owned by ownedTextures.
+            if texture and key == "bgLayer" then pcall(backend.destroy_texture, texture) end
         end
     end
     Gallery._cleanupTextures()
-    ctx.galleryState = nil
-    backend.set_input_focus("KAG")
+    if ctx.input_focus == "gallery" then
+        ctx.input_focus = gs.previousFocus
+        for _, key in ipairs({"LEFT", "RIGHT", "ENTER", "ESC"}) do
+            _G["_GAME_KEY_" .. key] = false
+        end
+        _G._GAME_MOUSE_DOWN = false
+        pcall(backend.set_input_focus, gs.previousBackendFocus)
+    end
     print("[Gallery] Closed.")
 end
 

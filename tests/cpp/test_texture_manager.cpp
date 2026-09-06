@@ -124,6 +124,10 @@ TEST_CASE("TextureManager::getTextureSizeById for nonexistent ID") {
     tm.getTextureSizeById(0, w, h);
     CHECK(w == 0);
     CHECK(h == 0);
+    TextureSourceInfo source{TextureSourceKind::Asset, "unchanged", {}};
+    CHECK_FALSE(tm.describeTexture(0, source));
+    CHECK_FALSE(tm.describeTexture(99999, source));
+    CHECK(source.path == "unchanged");
 }
 
 TEST_CASE("TextureManager accounts maximum interface dimensions without 32-bit overflow") {

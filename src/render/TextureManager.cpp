@@ -10,6 +10,7 @@
 #include <limits>
 #include <new>
 #include <vector>
+#include <algorithm>
 
 #include "../di/BackendRegistry.h"
 #include "../di/api/ISandboxQuota.h"
@@ -488,8 +489,10 @@ uint32_t TextureManager::loadTexture(const std::string& path) {
     uint16_t width = 0;
     uint16_t height = 0;
     std::vector<uint8_t> encodedBytes;
+    RestoreSource restoreSource;
     bgfx::TextureHandle tex = BGFX_INVALID_HANDLE;
     try {
+        restoreSource.assetPath = path;
         tex = loadFromFile(path, width, height, encodedBytes);
     } catch (const std::bad_alloc&) {
         DEBUG_ERR(SubSys::Render, ErrCode::Render_TextureCreateFailed,
@@ -503,7 +506,6 @@ uint32_t TextureManager::loadTexture(const std::string& path) {
         return 0;
     }
 
-    RestoreSource restoreSource;
     restoreSource.kind = RestoreSourceKind::Encoded;
     restoreSource.bytes = std::move(encodedBytes);
     restoreSource.width = width;
@@ -551,6 +553,7 @@ uint32_t TextureManager::loadTextureFromRGBA(const uint8_t* rgba, uint16_t w, ui
     restoreSource.width = w;
     restoreSource.height = h;
     try {
+        restoreSource.assetPath = cacheKey;
         restoreSource.bytes.assign(
             rgba, rgba + static_cast<size_t>(rgbaBytes));
     } catch (const std::bad_alloc&) {
@@ -610,6 +613,7 @@ uint32_t TextureManager::loadTextureFromMemory(const uint8_t* data, uint32_t siz
     RestoreSource restoreSource;
     restoreSource.kind = RestoreSourceKind::Encoded;
     try {
+        restoreSource.assetPath = cacheKey;
         restoreSource.bytes.assign(data, data + static_cast<size_t>(size));
     } catch (const std::bad_alloc&) {
         DEBUG_ERR(SubSys::Render, ErrCode::Render_TextureCreateFailed,
@@ -740,7 +744,15 @@ uint32_t TextureManager::registerTexture(bgfx::TextureHandle tex,
         bgfx::destroy(tex);
         return 0;
     }
-    if (!checkBudget(id, width, height)) {
+    bool accepted = false;
+    try {
+        accepted = checkBudget(id, width, height);
+    } catch (...) {
+        // Registration already owns the GPU handle and quota. A failed
+        // accounting allocation/backend call must retire that ownership here;
+        // the caller has not received an ID it could destroy.
+    }
+    if (!accepted) {
         destroyTexture(id);
         return 0;
     }
@@ -791,6 +803,24 @@ uint32_t TextureManager::getTextureHandle(uint32_t id) const {
     if (it != m_cache.end() && bgfx::isValid(it->second))
         return it->second.idx;
     return 0;
+}
+
+bool TextureManager::describeTexture(uint32_t id, TextureSourceInfo& output) const {
+    const auto found = m_restoreSources.find(id);
+    if (found == m_restoreSources.end()) return false;
+    const auto& source = found->second;
+    TextureSourceInfo description;
+    if (!source.assetPath.empty()) {
+        description.path = source.assetPath;
+    } else if (source.kind == RestoreSourceKind::Rgba && source.width == 1
+               && source.height == 1 && source.bytes.size() == 4) {
+        description.kind = TextureSourceKind::Color;
+        std::copy(source.bytes.begin(), source.bytes.end(), description.color.begin());
+    } else {
+        return false;
+    }
+    output = std::move(description);
+    return true;
 }
 
 bool TextureManager::isValid(uint32_t id) const {

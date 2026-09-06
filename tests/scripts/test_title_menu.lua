@@ -12,6 +12,8 @@ package.preload["backend"] = function()
         create_solid_texture = function() return { _mock = true } end,
         render_text = function() end,
         get_input_focus = function() return "kag" end,
+        set_input_focus = function() end,
+        destroy_texture = function() end,
     }
 end
 -- suite hygiene: the preload mock + cache clear PERSIST past this

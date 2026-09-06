@@ -450,6 +450,25 @@ check("12f: ${ nested table constructor (balanced braces)", p12f.text == "T=2")
 
 
 
+do
+    local source = tokenizer.parse('*entry\n[if exp="true"]\n[set var="f.value" value=1]\n[endif]\n[end]')
+    compiler.compile(source)
+    local packed = assert(compiler.serialize(source))
+    local first = assert(compiler.deserialize(packed))
+    local second = assert(compiler.deserialize(packed))
+    check("13a: deserialize does not attach runtime state to the bundle", packed.tokens._compiled == nil)
+    check("13b: each executable stream owns its tokens", first ~= second and first ~= packed.tokens)
+    check("13c: params sharing stays local to each stream", first[3][2] == first._compiled.params[3]
+        and second[3][2] == second._compiled.params[3] and first[3][2] ~= second[3][2])
+    first[3][2].value = 'mutated'
+    first._compiled.labels.entry = 9
+    first._compiled.flow[2].jump = -99
+    check("13d: token mutations cannot edit the trusted bundle or another stream",
+        packed.params[3].value ~= 'mutated' and second[3][2].value ~= 'mutated')
+    check("13e: prepared label maps are independent", packed.labels.entry == 1 and second._compiled.labels.entry == 1)
+    check("13f: prepared control metadata is independent", packed.flow[2].jump ~= -99 and second._compiled.flow[2].jump ~= -99)
+end
+
 if failed > 0 then
     print(string.format("COMPILER TESTS: %d passed, %d FAILED", passed, failed))
     os.exit(1)

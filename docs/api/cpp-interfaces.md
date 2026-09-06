@@ -1,7 +1,7 @@
 # Caesura (AmeKAG) — C++ API Interface Reference
 
-> **34 个纯虚接口，16 个模块；25 个运行时引擎服务通过 `BackendRegistry` 访问**
-> 最后更新: 2026-08-23
+> **38 个 API 接口头文件；28 个具名运行时服务槽位通过 `BackendRegistry` 访问**
+> 最后更新: 2026-09-06；逐文件统计见 [API Statistics](api-stats.md)。同一个接口头可以包含多个纯虚类，头文件数不等于类数。
 >
 > **更新记录**: 2026-08-23 — STEP14 (Track P5 Audio Focus Service): interface census 33 -> 34 (+`IAudioFocusService`)，Registry 服务槽位 24 -> 25
 > 2026-08-23 — STEP13 (Track P4 组合根默认存档 provider): 无新增接口头（census 保持 33；`Engine::init` 缺省安装 `LocalFileSaveProvider`，修复未装 provider 时存档静默失效）
@@ -47,6 +47,27 @@ auto* lua      = BackendRegistry::instance().getLuaManager()->state();
 - 子系统通过 `set*()` 注册，通过 `get*()` 访问。
 - 禁止绕过 BackendRegistry 直接访问单例（DEBUG_* 宏除外）。
 - RPC/Editor 属于宿主入站传输适配器，不注册到 BackendRegistry。宿主负责其所有权；当前 `main.cpp` 实例化 `RpcServer`（stdio），`--editor` 模式下另启动 `EditorServer`（HTTP，18 端点）。
+
+### U11：恢复资源的准备与提交
+
+恢复入口先读取和验证独立资源，再交给后端提交。准备阶段不替换当前 GPU 纹理、字体或音源；准备对象由 `unique_ptr` 持有，提交消费一次。提交后的错误由会话恢复层统一停止并清理，不能继续执行混合的新旧状态。
+
+| 接口 / 头文件 | 方法与契约 |
+|---|---|
+| `resource/api/IAssetReader.h` | `readAsset(path, maxBytes) -> vector<uint8_t>`：按资源优先级读取，最高优先级来源失败不能回退到其它内容；空结果表示不可用、失败或超限。上限约束返回字节，各 provider 的读取峰值另有约束。 |
+| `resource/api/IImageDecoder.h` | `decode(bytes, size, maxDecodedBytes) -> DecodedImage`：只做 CPU 解码；结果包含 `rgba`、`width`、`height`、`ok`，不暴露第三方图像类型。 |
+| `audio/api/IAudioRestore.h` | `captureAudioState()`、`prepareAudioState(state, bytes, size)`、`applyAudioState(unique_ptr<IPreparedAudioState>)`、`stopSessionAudio()`。准备对象仅通过 `description()` 暴露描述。 |
+| `render/api/IRenderDevice.h` | `captureFontState()`、`defaultFontState()`、`prepareFontState(state, bytes, size)`、`applyFontState(unique_ptr<IPreparedFontState>)`、`clearFontState()`。准备对象仅通过 `description()` 暴露描述。 |
+| `render/api/ITextureManager.h` | `describeTexture(id, TextureSourceInfo&)` 描述资源路径或 RGBA 纯色来源；未知、临时纹理返回 false 且不改变输出。恢复通过 `loadTextureFromRGBA` 创建独占纹理。 |
+| `render/api/IVideoPlayer.h` | `closeAll()` 逻辑停止全部视频，沿用播放器更新中的延迟释放；保留后端初始化状态。 |
+| `render/api/IParticleSystem.h` | `activeEmitterCount() const` 查询活动发射器；`shutdown()` 清空发射器和粒子池，恢复层按原初始化状态决定重新初始化。 |
+| `live2d/api/IAnimationBackend.h` | `loadedModelCount() const -> size_t`、`clearModels()`；清空模型但保留后端与设备关联，不复用旧模型句柄。 |
+
+`AudioRestoreState` 保存 BGM 路径、秒位置、声源增益和循环状态；可选精确游标由 `framePosition`、20 位 `frameFraction`、`sourceRate` 与 `outputRate` 组成，`sourceRate == 0` 表示旧的秒位置格式。恢复停止 voice/SE，用户主音量与总线音量不属于存档。
+
+`FontRestoreState` 包含 `active`、`FontId::{Small,Large,TTF}`、资源路径与像素尺寸。准备阶段拥有字体字节与 CPU 字形数据，提交和设备恢复不重新读取来源文件。
+
+Engine 将 `IAssetReader`、`IImageDecoder`、`IAudioRestore` 注册到 Registry；Registry 只持有非拥有接口指针。音频恢复接口由现有音频后端实现，不创建第二套播放系统。Lua 调用契约见 [Restore](lua-modules.md#restore)。
 
 ---
 

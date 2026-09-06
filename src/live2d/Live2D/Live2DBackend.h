@@ -32,6 +32,8 @@ public:
     int  loadModel(const std::string& path, const std::string& name) override;
     void unloadModel(int handle) override;
     bool isLoaded(int handle) const override;
+    std::size_t loadedModelCount() const override;
+    void clearModels() override;
 
     void showModel(int handle, float x, float y, float scale) override;
     void hideModel(int handle) override;

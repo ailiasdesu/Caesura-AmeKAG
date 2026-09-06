@@ -1,0 +1,19 @@
+{
+  "scene_path": "tests/projects/u11_legacy_release/story.ks",
+  "scene": "*start\n[set var=\"f.route\" value=\"forest\"]\n[set var=\"f.score\" value=7]\n[set var=\"sf.profile_marker\" value=\"release-v1.0.1\"]\n[wait time=60000]\n[end]\n",
+  "requests": [
+    {
+      "id": 1,
+      "method": "ping"
+    },
+    {
+      "id": 2,
+      "method": "eval",
+      "code": "local runner = require('kag_runner'); assert(runner.start('tests/projects/u11_legacy_release/story.ks')); local ctx = assert(runner.get_ctx()); for turn=1,32 do  if ctx.f.route == 'forest' and ctx.f.score == 7 and ctx.sf.profile_marker then break end;  runner.update(0.016); end; assert(ctx.f.route == 'forest' and ctx.f.score == 7,  'scene did not reach saved state: route=' .. tostring(ctx.f.route) .. ' score=' .. tostring(ctx.f.score)); ctx.f.legacy_nested = {enabled = true, sequence = {2, 4, 8}}; require('kag.commands.save').save(ctx, {slot=37, desc='U11 historical release KAG fixture', thumbnail='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='}); assert(ctx.tf.save_result == 'ok'); return 'U11_HISTORICAL_KAG_SAVE_CREATED'"
+    },
+    {
+      "id": 3,
+      "method": "stop"
+    }
+  ]
+}

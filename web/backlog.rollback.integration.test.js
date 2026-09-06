@@ -151,7 +151,7 @@ describe('web backlog / history / rollback (round-87 parity deep)', () => {
   }, 300000)
 
   // ---------------------------------------------------------------- task 3 --
-  it('[rollback] mid-scene degrades no-context: page cursor NOT rewound, later pages advance', async () => {
+  it('[rollback] through the shared runner completes and later pages advance', async () => {
     player.core.backlog = []
     player.core.events.length = 0
     const ks = [
@@ -164,13 +164,13 @@ describe('web backlog / history / rollback (round-87 parity deep)', () => {
     const out = await player.runScene(ks, 'rb_mid.ks', { maxFrames: 200000, autoClick: true })
     expect(out.startsWith('DONE:'), out).toBe(true)
     const errs = player.core.events.filter((e) => String(e.kind).includes('error'))
-    expect(errs, 'degraded rollback must surface no error event').toEqual([])
+    expect(errs, 'rollback must surface no error event').toEqual([])
     const texts = player.core.backlog.map((b) => b.text)
     expect(player.core.backlog.length).toBe(3)
     expect(texts).toEqual(['[N]P1', '[N]P2', '[N]P3'])
   }, 120000)
 
-  it('[rollback] to a [p] boundary aborts nothing; the parked scene still advances (round 87)', async () => {
+  it('[rollback] preserves explicit ch and p waits before later pages advance', async () => {
     player.core.backlog = []
     const ks = [
       '[ch name="A" text="R1"]', '[p]',
@@ -184,9 +184,14 @@ describe('web backlog / history / rollback (round-87 parity deep)', () => {
 
     out = await player.runScene(ks, 'rb_p.ks', { maxFrames: 50000, advance: true, advanceScene: 'rb_p.ks' })
     expect(out.startsWith('WAIT:'), out).toBe(true)
-    expect(pageText()).toContain('R2')
-
-    out = await player.runScene(ks, 'rb_p.ks', { maxFrames: 50000, advance: true, advanceScene: 'rb_p.ks' })
+    // The common runner respects both the ch wait and the explicit p wait.
+    expect(pageText()).toContain('R1')
+    let sawSecond = false
+    for (let clicks = 0; clicks < 6 && out.startsWith('WAIT:'); clicks++) {
+      out = await player.runScene(ks, 'rb_p.ks', { maxFrames: 50000, advance: true, advanceScene: 'rb_p.ks' })
+      sawSecond ||= pageText().includes('R2')
+    }
+    expect(sawSecond).toBe(true)
     expect(out.startsWith('DONE:'), out).toBe(true)
     const texts = player.core.backlog.map((b) => b.text)
     expect(texts).toEqual(['[A]R1', '[A]R2'])
@@ -228,10 +233,10 @@ describe('web backlog / history / rollback (round-87 parity deep)', () => {
     expect(backlogTexts()).toContain('TWO')
   }, 120000)
 
-  it('[load] restores its own scene without clobbering the accumulated session history', async () => {
+  it('[load] restores slot-owned history and discards future loader pages', async () => {
     for (const k of [...Object.keys(localStorage)]) if (k.startsWith('caesura.save.')) localStorage.removeItem(k)
     // Scene A commits 2 pages before the [save] and 1 page after; the
-    // pre-save pages are session history, as is SA3 (committed on the run).
+    // snapshot owns the first two pages. SA3 is replayed once after loading.
     const sceneA = [
       '[ch name="N" text="SA1"]', '[p]',
       '[ch name="N" text="SA2"]', '[p]',
@@ -246,9 +251,8 @@ describe('web backlog / history / rollback (round-87 parity deep)', () => {
     expect(beforeLoad).toBe(3) // SA1, SA2, SA3
 
     // loadSlot builds its own loader scene ([System]Loading slot N... [p]
-    // [load slot=N]) and resumes from the saved token (SA3). The web backlog
-    // is pure session history: nothing is clobbered, the loader page and the
-    // resumed SA3 line are APPENDED in arrival order.
+    // [load slot=N]) and resumes from the saved token (SA3). The loader is
+    // future state and must disappear when the slot replaces the session.
     const outL = await player.loadSlot(3, { sceneSources: { 'bl_save_a.ks': sceneA } })
     expect(outL.startsWith('DONE:'), outL).toBe(true)
     const texts = player.core.backlog.map((b) => b.text)
@@ -256,11 +260,9 @@ describe('web backlog / history / rollback (round-87 parity deep)', () => {
     expect(texts[0]).toContain('SA1')
     expect(texts[1]).toContain('SA2')
     // the loader page and the resumed SA3 appear AFTER the pre-load history
-    const loaderIdx = texts.findIndex((t) => t.includes('Loading slot 3'))
-    const sa3After = texts.lastIndexOf('[N]SA3')
-    expect(loaderIdx).toBeGreaterThanOrEqual(beforeLoad)
-    expect(sa3After).toBeGreaterThan(loaderIdx)
-    expect(player.core.backlog.length).toBeGreaterThan(beforeLoad)
+    expect(texts.some((t) => t.includes('Loading slot 3'))).toBe(false)
+    expect(texts).toEqual(['[N]SA1', '[N]SA2', '[N]SA3'])
+    expect(player.core.backlog.length).toBe(beforeLoad)
     const errs = player.core.events.filter((e) => String(e.kind).includes('error'))
     expect(errs).toEqual([])
     player.deleteSlot(3)

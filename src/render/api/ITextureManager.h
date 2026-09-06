@@ -1,8 +1,16 @@
 #pragma once
 #include <cstdint>
+#include <array>
 #include <string>
 
 namespace Caesura {
+
+enum class TextureSourceKind { Asset, Color };
+struct TextureSourceInfo {
+    TextureSourceKind kind = TextureSourceKind::Asset;
+    std::string path;
+    std::array<uint8_t, 4> color{};
+};
 
 // ============================================================================
 // ITextureManager — pure virtual interface for texture lifecycle
@@ -37,6 +45,9 @@ public:
     virtual void getTextureSizeById(uint32_t id, uint16_t& width,
                                     uint16_t& height) const = 0;
     virtual bool isValid(uint32_t id) const = 0;
+    // Serializable origin, without GPU handles or borrowed pixel buffers.
+    // Unknown/transient textures return false and leave output unchanged.
+    virtual bool describeTexture(uint32_t id, TextureSourceInfo& output) const = 0;
 
     virtual uint64_t totalTextureBytes() const = 0;
     virtual bool checkBudget(uint32_t id, uint16_t w, uint16_t h) = 0;

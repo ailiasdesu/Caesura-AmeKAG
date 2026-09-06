@@ -235,7 +235,7 @@ end
 -- ===========================================================================
 -- i18n._loadBuiltin(langCode) — minimal built-in tables for when no file exists
 -- ===========================================================================
-function i18n._loadBuiltin(langCode)
+function i18n._builtinStrings(langCode)
     local builtins = {
         zh = {
             title_screen = "标题画面",
@@ -312,7 +312,84 @@ function i18n._loadBuiltin(langCode)
             auto_mode = "オート",
         },
     }
-    i18n.strings = builtins[langCode] or builtins.zh
+    return builtins[langCode] or builtins.zh
+end
+
+function i18n._loadBuiltin(langCode)
+    i18n.strings = i18n._builtinStrings(langCode)
+end
+
+local MAX_DICTIONARY_BYTES = 32 * 1024 * 1024
+
+local function copyDictionary(data, depth)
+    if type(data) ~= "table" or depth > 1 then error("Invalid language dictionary", 0) end
+    local result = {}
+    for key, value in pairs(data) do
+        if type(key) ~= "string" then error("Language dictionary keys must be strings", 0) end
+        local kind = type(value)
+        if kind == "table" then result[key] = copyDictionary(value, depth + 1)
+        elseif kind == "string" then result[key] = value
+        elseif kind == "number" and value == value and math.abs(value) ~= math.huge then
+            result[key] = value
+        else error("Unsupported language dictionary value", 0) end
+    end
+    return result
+end
+
+local function prepareDictionary(code)
+    if type(code) ~= "string" or not code:match("^[%w_-]+$") then
+        error("Invalid language code", 0)
+    end
+    local file, message, errno = io.open("assets/lang/" .. code .. ".lua", "r")
+    if not file then
+        if errno and errno ~= 2 then error(message, 0) end
+        return copyDictionary(i18n._builtinStrings(code), 0)
+    end
+    local text = file:read(MAX_DICTIONARY_BYTES + 1)
+    file:close()
+    if type(text) ~= "string" or #text > MAX_DICTIONARY_BYTES then
+        error("Language dictionary exceeds its input limit", 0)
+    end
+    local body = text:gsub("^\239\187\191", "")
+    while body:match("^%s*%-%-") do body = body:gsub("^%s*%-%-[^\n]*\n?", "", 1) end
+    if not body:match("^%s*return") then body = "return " .. body end
+    local chunk, parse_error = load(body, "i18n:" .. code, "t", {})
+    if not chunk then error(parse_error, 0) end
+    return copyDictionary(chunk(), 0)
+end
+
+-- Snapshot both dictionaries without changing the active language or doing I/O
+-- at commit. Restore callers can reject malformed resources before closing A.
+local function prepareTranslationDictionary(code)
+    local strings = prepareDictionary(code)
+    if strings.lines ~= nil then
+        if type(strings.lines) ~= "table" then error("Invalid line translation dictionary", 0) end
+        for _, line in pairs(strings.lines) do
+            if type(line) ~= "string" then error("Line translations must be strings", 0) end
+        end
+    end
+    return strings
+end
+
+function i18n.prepare(code, fallbackCode)
+    code = code or "zh"
+    local strings = prepareTranslationDictionary(code)
+    local fallback = {}
+    local default = fallbackCode or i18n.default_language or "en"
+    if code ~= default then fallback = prepareTranslationDictionary(default) end
+    return { current = code, default_language = default,
+        strings = strings, lines = strings.lines or {}, fallback = fallback }
+end
+
+function i18n.commit(prepared)
+    assert(type(prepared) == "table" and type(prepared.current) == "string"
+        and type(prepared.strings) == "table" and type(prepared.lines) == "table"
+        and type(prepared.fallback) == "table" and type(prepared.default_language) == "string",
+        "Invalid prepared locale")
+    i18n.current, i18n.strings, i18n.lines, i18n.fallback =
+        prepared.current, prepared.strings, prepared.lines, prepared.fallback
+    i18n.default_language = prepared.default_language
+    return i18n.strings
 end
 
 -- ===========================================================================

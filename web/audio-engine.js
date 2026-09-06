@@ -1,29 +1,49 @@
-// G5 web player - audio engine. Wraps WebAudio for real playback;
-// degrades to a state machine when no AudioContext exists (jsdom/tests).
+// WebAudio owns playback truth; UI telemetry must not impersonate a source.
+import { readAssetBytes } from './restore-assets.js'
+
+export const MAX_AUDIO_BYTES = 64 * 1024 * 1024
+const MAX_DECODED_AUDIO_BYTES = 256 * 1024 * 1024
+const BUSES = ['bgm', 'se', 'voice']
+
+function validateBuffer(buffer) {
+  if (!buffer || !Number.isFinite(buffer.duration) || buffer.duration <= 0 || buffer.duration > 86400
+      || !Number.isSafeInteger(buffer.length) || buffer.length <= 0
+      || !Number.isInteger(buffer.numberOfChannels) || buffer.numberOfChannels <= 0
+      || !Number.isFinite(buffer.sampleRate) || buffer.sampleRate <= 0
+      || buffer.length * buffer.numberOfChannels * 4 > MAX_DECODED_AUDIO_BYTES
+      || Math.abs(buffer.duration - buffer.length / buffer.sampleRate) > 1 / buffer.sampleRate) {
+    throw new Error('Invalid decoded audio or decoded size limit exceeded')
+  }
+}
 
 export class AudioEngine {
   constructor(opts = {}) {
     this._ctx = opts.ctx ?? null
+    this._fetchImpl = opts.fetchImpl
     this._buffers = new Map()
     this._sources = new Map()
     this._busGains = new Map()
+    this._busVolumes = new Map(BUSES.map(kind => [kind, 1]))
+    this._generations = new Map()
+    this._pending = new Map()
+    this._revision = 0
     this.ready = false
     this._init()
   }
 
   _init() {
-    if (this._ctx) {
-      for (const kind of ['bgm', 'se', 'voice']) {
-        const g = this._ctx.createGain()
-        g.gain.value = 1
-        g.connect(this._ctx.destination)
-        this._busGains.set(kind, g)
-      }
-      this.ready = true
+    if (!this._ctx) return
+    for (const kind of BUSES) {
+      const gain = this._ctx.createGain()
+      gain.gain.value = this._busVolumes.get(kind)
+      gain.connect(this._ctx.destination)
+      this._busGains.set(kind, gain)
     }
+    this.ready = true
   }
+
   ensureContext() {
-    if (this._ctx) return this._ctx
+    if (this._ctx) return this._ctx.state === 'closed' ? null : this._ctx
     const Ctor = globalThis.AudioContext || globalThis.webkitAudioContext
     if (!Ctor) return null
     this._ctx = new Ctor()
@@ -31,123 +51,176 @@ export class AudioEngine {
     return this._ctx
   }
 
-  async _load(path, assetUrl) {
-    if (!this._ctx) return null
+  _nextGeneration(kind) {
+    const generation = (this._generations.get(kind) ?? 0) + 1
+    this._generations.set(kind, generation)
+    return generation
+  }
+
+  /** Decode owned bytes without starting or stopping any source. The packet is
+   * internal to audio restoration and tied to this context's lifetime. */
+  async decodePrepared(bytes, context = this.ensureContext()) {
+    if (!context) throw new Error('AudioContext is unavailable')
+    if (context !== this._ctx || context.state === 'closed') throw new Error('Prepared audio context expired')
+    if (!(bytes instanceof Uint8Array) || bytes.byteLength === 0 || bytes.byteLength > MAX_AUDIO_BYTES) {
+      throw new Error('Invalid encoded audio size limit')
+    }
+    const revision = this._revision
+    const owned = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+    const buffer = await context.decodeAudioData(owned)
+    if (context !== this._ctx || revision !== this._revision || context.state === 'closed') {
+      throw new Error('Prepared audio context expired')
+    }
+    validateBuffer(buffer)
+    return Object.freeze({ buffer, context, revision })
+  }
+
+  async _load(path, assetUrl, context) {
     if (this._buffers.has(path)) return this._buffers.get(path)
-    const url = typeof assetUrl === 'function' ? assetUrl(path) : assetUrl + path
-    const p = (async () => {
-      const res = await fetch(url)
-      if (!res.ok) throw new Error('audio fetch ' + res.status + ' ' + url)
-      const buf = await res.arrayBuffer()
-      return await this._ctx.decodeAudioData(buf)
-    })()
-    this._buffers.set(path, p)
-    try {
-      const buf = await p
-      return buf
-    } catch {
-      // load/decode failure: drop the failed entry so a later play(path)
-      // can retry, and signal "unavailable" to the caller instead of
-      // surfacing the rejection (graceful degradation).
-      this._buffers.delete(path)
+    const revision = this._revision
+    const resolveUrl = typeof assetUrl === 'string' ? value => assetUrl + value : assetUrl
+    const promise = (async () => {
+      const bytes = await readAssetBytes(path, {
+        fetchImpl: this._fetchImpl ?? globalThis.fetch,
+        assetUrl: resolveUrl ?? (value => value), maxBytes: MAX_AUDIO_BYTES,
+      })
+      if (context !== this._ctx || revision !== this._revision || context.state === 'closed') return null
+      return this.decodePrepared(bytes, context)
+    })().catch(() => {
+      if (this._buffers.get(path) === promise) this._buffers.delete(path)
       return null
+    })
+    this._buffers.set(path, promise)
+    return promise
+  }
+
+  _validatePrepared(packet, position, gain) {
+    if (!packet || packet.context !== this._ctx || packet.revision !== this._revision
+        || !this._ctx || this._ctx.state === 'closed') throw new Error('Prepared audio context expired')
+    validateBuffer(packet.buffer)
+    if (!Number.isFinite(position) || position < 0 || position >= packet.buffer.duration) {
+      throw new Error('Audio position is outside the decoded clip')
+    }
+    if (!Number.isFinite(gain) || gain < 0 || gain > 16) throw new Error('Invalid clip gain')
+  }
+
+  _release(record, stop) {
+    if (record.released) return
+    record.released = true
+    if (stop) { try { record.source.stop() } catch { /* Already stopped or not started. */ } }
+    try { record.source.disconnect() } catch { /* Detached source. */ }
+    try { record.clipGain?.disconnect() } catch { /* Detached gain. */ }
+  }
+
+  _stopSource(kind) {
+    const record = this._sources.get(kind)
+    if (!record) return
+    this._sources.delete(kind)
+    this._release(record, true)
+  }
+
+  _start(kind, packet, { path, position = 0, gain = 1, looping = false }) {
+    this._validatePrepared(packet, position, gain)
+    const context = this._ctx
+    const source = context.createBufferSource()
+    const record = { source, clipGain: null, gain: this._busGains.get(kind), path,
+      started: context.currentTime, offset: position, duration: packet.buffer.duration, released: false }
+    try {
+      record.clipGain = context.createGain()
+      record.clipGain.gain.value = gain
+      source.buffer = packet.buffer
+      source.loop = looping
+      source.connect(record.clipGain)
+      record.clipGain.connect(record.gain)
+      source.onended = () => {
+        if (this._sources.get(kind) === record) this._sources.delete(kind)
+        this._release(record, false)
+      }
+      this._stopSource(kind)
+      this._sources.set(kind, record)
+      source.start(0, position)
+      return true
+    } catch (error) {
+      if (this._sources.get(kind) === record) this._sources.delete(kind)
+      this._release(record, true)
+      throw error
     }
   }
+
   async play(kind, path, opts = {}) {
-    const ctx = this.ensureContext()
-    if (!ctx) return false
-    const buffer = await this._load(path, opts.assetUrl)
-    if (!buffer) return false
-    this.stop(kind)
-    const source = ctx.createBufferSource()
-    source.buffer = buffer
-    source.loop = !!opts.loop
-    const bus = this._busGains.get(kind) ?? ctx.destination
-    source.connect(bus)
-    if (opts.volume != null) {
-      const v = Number(opts.volume)
-      if (Number.isFinite(v)) bus.gain.value = v
-    }
-    // When WebAudio signals the clip has naturally ended, drop it from the
-    // active map so isPlaying reflects the end without waiting on the clock
-    // (and so a later play(same kind) is not fought by a stale entry).
-    source.onended = () => {
-      const cur = this._sources.get(kind)
-      if (cur && cur.source === source) this._sources.delete(kind)
-    }
-    source.start()
-    this._sources.set(kind, { source, gain: bus, started: ctx.currentTime, duration: buffer.duration })
-    return true
+    if (!BUSES.includes(kind)) return false
+    const generation = this._nextGeneration(kind)
+    try {
+      const context = this.ensureContext()
+      if (!context) return false
+      this._pending.set(kind, generation)
+      const packet = await this._load(path, opts.assetUrl, context)
+      if (!packet || this._generations.get(kind) !== generation || context !== this._ctx) return false
+      return this._start(kind, packet, { path, position: opts.position ?? 0,
+        gain: opts.volume == null ? 1 : Number(opts.volume), looping: !!opts.loop })
+    } catch { return false }
+    finally { if (this._pending.get(kind) === generation) this._pending.delete(kind) }
+  }
+
+  /** Apply a fully decoded candidate synchronously, preserving user bus gains. */
+  applyPreparedBgm(packet, state) {
+    this._validatePrepared(packet, state.position, state.gain)
+    this.stopAll()
+    return this._start('bgm', packet, state)
   }
 
   stop(kind) {
-    const s = this._sources.get(kind)
-    if (s) {
-      try { s.source.stop() } catch { }
-      try { s.source.disconnect() } catch { }
-      this._sources.delete(kind)
-    }
+    this._nextGeneration(kind)
+    this._pending.delete(kind)
+    this._stopSource(kind)
   }
 
   isPlaying(kind) {
-    const s = this._sources.get(kind)
-    if (!s) return false
-    const elapsed = this._ctx.currentTime - s.started
-    return elapsed < s.duration
+    const record = this._sources.get(kind)
+    if (!record || record.released || !this._ctx || this._ctx.state === 'closed') return false
+    return record.source.loop || record.offset + Math.max(0, this._ctx.currentTime - record.started) < record.duration
   }
 
-  setBusVolume(kind, v) {
-    const g = this._busGains.get(kind)
-    if (!g) return
-    const n = Number(v)
-    g.gain.value = Number.isFinite(n) ? n : 1
+  captureBgm() {
+    if (this._pending.has('bgm')) throw new Error('BGM preparation is pending')
+    if (!this.isPlaying('bgm')) return false
+    const record = this._sources.get('bgm')
+    const looping = record.source.loop === true
+    const elapsed = record.offset + Math.max(0, this._ctx.currentTime - record.started)
+    const position = looping ? elapsed % record.duration : elapsed
+    const gain = record.clipGain.gain.value
+    if (!Number.isFinite(position) || !Number.isFinite(gain) || gain < 0 || gain > 16) {
+      throw new Error('Invalid active BGM state')
+    }
+    return { path: record.path, position, gain, looping }
   }
 
-  stopAll() { for (const k of [...this._sources.keys()]) this.stop(k) }
-
-  // ---- lifecycle (round 83 tests) ----
-  /** Suspend the underlying AudioContext. */
-  suspend() {
-    if (this._ctx && typeof this._ctx.suspend === 'function') return this._ctx.suspend()
-    return undefined
-  }
-  /** Resume the underlying AudioContext. */
-  resume() {
-    if (this._ctx && typeof this._ctx.resume === 'function') return this._ctx.resume()
-    return undefined
+  setBusVolume(kind, value) {
+    if (!BUSES.includes(kind)) return
+    const number = Number(value)
+    const volume = Number.isFinite(number) ? Math.max(0, Math.min(16, number)) : 1
+    this._busVolumes.set(kind, volume)
+    const gain = this._busGains.get(kind)
+    if (gain) gain.gain.value = volume
   }
 
-  /** Current AudioContext lifecycle state: 'running' | 'suspended' |
-   *  'closed' | 'none' (no context — jsdom/headless). The UI hook and the
-   *  real-browser smoke read this before/after a user gesture (plan W1). */
-  get state() {
-    return this._ctx ? (this._ctx.state ?? 'running') : 'none'
-  }
+  stopAll() { for (const kind of BUSES) this.stop(kind) }
+  suspend() { return this._ctx?.suspend?.() }
+  resume() { return this._ctx?.resume?.() }
+  get state() { return this._ctx ? (this._ctx.state ?? 'running') : 'none' }
 
-  /**
-   * User-gesture unlock (autoplay policy): browsers keep a fresh
-   * AudioContext 'suspended' until a trusted gesture. Idempotent — resume()
-   * is only called while the context is suspended, so repeated gestures /
-   * repeated unlock calls are safe (W1: '多次 unlock 不重复破坏状态').
-   * Creates the context lazily on first gesture when play() has not run yet.
-   * Returns true when the context is (or became) 'running', false when no
-   * AudioContext exists (test/headless degradation).
-   */
   async unlock() {
-    const ctx = this.ensureContext()
-    if (!ctx) return false
-    try {
-      if (ctx.state === 'suspended' && typeof ctx.resume === 'function') {
-        await ctx.resume()
-      }
-    } catch { /* resume can transiently fail outside a gesture; next call retries */ }
-    return this.state !== 'suspended'
+    const context = this.ensureContext()
+    if (!context) return false
+    try { if (context.state === 'suspended') await context.resume?.() }
+    catch { /* A later trusted gesture can retry. */ }
+    return this.state === 'running'
   }
-  /** Tear down: stop sources, close the context, clear state. Later calls
-   *  degrade safely (play returns false, stop no-ops). */
+
   destroy() {
+    this._revision++
     this.stopAll()
-    try { if (this._ctx && typeof this._ctx.close === 'function') this._ctx.close() } catch { }
+    try { this._ctx?.close?.()?.catch?.(() => {}) } catch { /* Already closed. */ }
     this._ctx = null
     this.ready = false
     this._busGains.clear()

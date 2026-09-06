@@ -30,11 +30,13 @@ set(TEST_SOURCES
     cpp/test_job_shutdown.cpp
     cpp/test_image_decoder.cpp
     cpp/test_audio.cpp
+    cpp/test_audio_restore.cpp
     cpp/test_audio_integration.cpp
     cpp/test_gpu_monitor.cpp
     cpp/test_rtt_pool.cpp
     cpp/test_text_cache.cpp
     cpp/test_text_renderer.cpp
+    cpp/test_font_restore.cpp
     cpp/test_quad_batch.cpp
     cpp/test_ndc_math.cpp
     cpp/test_color_filter.cpp
@@ -56,6 +58,9 @@ set(TEST_SOURCES
     cpp/test_save_atomicity.cpp
     cpp/test_save_migration.cpp
     cpp/test_save_roundtrip.cpp
+    cpp/test_save_binding.cpp
+    cpp/test_restore_binding.cpp
+    cpp/test_transient_restore.cpp
     cpp/test_golden_saves.cpp
     cpp/test_mobile_adapter.cpp
     cpp/test_render_device.cpp
@@ -83,6 +88,7 @@ set(TEST_SOURCES
     cpp/test_mini_game.cpp
     cpp/test_steam.cpp
     cpp/test_live2d.cpp
+    cpp/test_video.cpp
     cpp/test_archive.cpp
     cpp/test_delta_carc.cpp
     cpp/test_render_metal_contract.cpp
@@ -169,23 +175,23 @@ add_caesura_doctest(CaesuraEntryTests
 add_caesura_doctest(CaesuraStorageTests
     LABELS storage filesystem
     RESOURCE_LOCK save-files
-    ARGS --source-file=*test_storage.cpp,*test_save_atomicity.cpp,*test_system.cpp,*test_save_migration.cpp,*test_save_roundtrip.cpp,*test_golden_saves.cpp
+    ARGS --source-file=*test_storage.cpp,*test_save_atomicity.cpp,*test_system.cpp,*test_save_migration.cpp,*test_save_roundtrip.cpp,*test_save_binding.cpp,*test_golden_saves.cpp
 )
 add_caesura_doctest(CaesuraScriptTests
     LABELS script lua
     RESOURCE_LOCK global-singletons
-    ARGS --source-file=*test_lua_manager.cpp,*test_script_bindings.cpp,*test_script_boundary.cpp,*test_kag_binding.cpp,*test_kag_integration.cpp,*test_kag_execution.cpp,*test_game_state.cpp
+    ARGS --source-file=*test_lua_manager.cpp,*test_script_bindings.cpp,*test_script_boundary.cpp,*test_restore_binding.cpp,*test_transient_restore.cpp,*test_kag_binding.cpp,*test_kag_integration.cpp,*test_kag_execution.cpp,*test_game_state.cpp
 )
 add_caesura_doctest(CaesuraRenderResourceTests
     LABELS render resource
     RESOURCE_LOCK global-singletons
-    ARGS --source-file=*test_render_device.cpp,*test_render_pipeline.cpp,*test_render_integration.cpp,*test_texture_manager.cpp,*test_texture_budget_edge.cpp,*test_resource.cpp,*test_resource_handle.cpp,*test_async.cpp,*test_async_cancellation.cpp,*test_image_decoder.cpp,*test_gpu_monitor.cpp,*test_rtt_pool.cpp,*test_text_cache.cpp,*test_text_renderer.cpp,*test_quad_batch.cpp,*test_ndc_math.cpp,*test_color_filter.cpp,*test_layer_manager.cpp,*test_particle_system.cpp
+    ARGS --source-file=*test_render_device.cpp,*test_render_pipeline.cpp,*test_render_integration.cpp,*test_font_restore.cpp,*test_texture_manager.cpp,*test_texture_budget_edge.cpp,*test_resource.cpp,*test_resource_handle.cpp,*test_async.cpp,*test_async_cancellation.cpp,*test_image_decoder.cpp,*test_gpu_monitor.cpp,*test_rtt_pool.cpp,*test_text_cache.cpp,*test_text_renderer.cpp,*test_quad_batch.cpp,*test_ndc_math.cpp,*test_color_filter.cpp,*test_layer_manager.cpp,*test_particle_system.cpp
 )
 add_caesura_doctest(CaesuraAudioTests
     LABELS audio
     RUN_SERIAL
     RESOURCE_LOCK audio-device
-    ARGS --source-file=*test_audio.cpp,*test_audio_integration.cpp
+    ARGS --source-file=*test_audio.cpp,*test_audio_integration.cpp,*test_audio_restore.cpp
 )
 
 add_test(
@@ -217,6 +223,24 @@ endif()
 
 if(Python3_EXECUTABLE)
     if(WIN32)
+        add_executable(CaesuraPresentationColdProbe probes/presentation_cold_probe.cpp)
+        target_link_libraries(CaesuraPresentationColdProbe PRIVATE Caesura::Engine)
+        # The adjacent test binary supplies the same native runtime DLLs.
+        add_dependencies(CaesuraPresentationColdProbe CaesuraTests)
+        add_test(
+            NAME CaesuraColdPresentationRestore
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/presentation_cold_restore.py
+                    $<TARGET_FILE:CaesuraPresentationColdProbe>
+        )
+        set_tests_properties(CaesuraColdPresentationRestore PROPERTIES
+            LABELS "storage;script;gpu;audio;isolation"
+            TIMEOUT 300
+            RUN_SERIAL TRUE
+            RESOURCE_LOCK "global-singletons"
+            FIXTURES_REQUIRED caesura-test-assets
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        )
         add_executable(CarcMemoryProbe probes/carc_memory_probe.cpp)
         target_link_libraries(CarcMemoryProbe PRIVATE
             Caesura::Archive Caesura::Debug Caesura::BuildOptions psapi)
@@ -288,6 +312,21 @@ if(Python3_EXECUTABLE)
         PASS_REGULAR_EXPRESSION "ALL HEADLESS RPC TESTS PASSED"
         TIMEOUT 120
         WORKING_DIRECTORY "$<TARGET_FILE_DIR:CaesuraAmeKAG>"
+    )
+    add_test(
+        NAME CaesuraColdSaveRestore
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/headless_save_restore.py
+                $<TARGET_FILE:CaesuraAmeKAG>
+    )
+    set_tests_properties(CaesuraColdSaveRestore PROPERTIES
+        LABELS "storage;script;headless;cli"
+        RUN_SERIAL TRUE
+        RESOURCE_LOCK "global-singletons"
+        FIXTURES_REQUIRED caesura-test-assets
+        PASS_REGULAR_EXPRESSION "ALL NATIVE COLD SAVE RESTORE TESTS PASSED"
+        TIMEOUT 120
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )
     add_test(
         NAME CaesuraHeadlessHttpSmoke

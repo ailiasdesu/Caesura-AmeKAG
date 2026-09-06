@@ -74,6 +74,57 @@ TEST_CASE("ParticleSystem::destroyEmitter sets inactive") {
     CHECK(id >= 0);
 }
 
+TEST_CASE("ParticleSystem::shutdown discards emitters without initialization") {
+    ParticleSystem ps;
+    const int firstId = ps.createEmitter(ParticleEmitterConfig{});
+    const int secondId = ps.createEmitter(ParticleEmitterConfig{});
+
+    CHECK(ps.activeEmitterCount() == 2);
+    ps.shutdown();
+    CHECK(ps.activeEmitterCount() == 0);
+
+    CHECK_FALSE(ps.isInitialized());
+    CHECK_FALSE(ps.destroyEmitter(firstId));
+    CHECK_FALSE(ps.destroyEmitter(secondId));
+    ps.emit(firstId, 5);
+    ps.update(1.0f, 1280, 720);
+    CHECK(ps.aliveCount() == 0);
+}
+
+TEST_CASE("ParticleSystem::shutdown starts a fresh emitter sequence") {
+    ParticleSystem ps;
+    const int firstId = ps.createEmitter(ParticleEmitterConfig{});
+    const int secondId = ps.createEmitter(ParticleEmitterConfig{});
+    REQUIRE(ps.destroyEmitter(firstId));
+    CHECK(ps.activeEmitterCount() == 1);
+
+    ps.shutdown();
+
+    const int freshId = ps.createEmitter(ParticleEmitterConfig{});
+    CHECK(freshId == firstId);
+    CHECK_FALSE(ps.destroyEmitter(secondId));
+    CHECK(ps.destroyEmitter(freshId));
+    CHECK_FALSE(ps.destroyEmitter(freshId));
+}
+
+TEST_CASE("ParticleSystem::shutdown is idempotent across emitter lifetimes") {
+    ParticleSystem ps;
+    ps.shutdown();
+    ps.shutdown();
+
+    for (int cycle = 0; cycle < 3; ++cycle) {
+        const int id = ps.createEmitter(ParticleEmitterConfig{});
+        ps.shutdown();
+        ps.shutdown();
+
+        CHECK_FALSE(ps.isInitialized());
+        CHECK_FALSE(ps.destroyEmitter(id));
+        ps.emit(id, 1);
+        ps.update(0.1f, 640, 480);
+        CHECK(ps.aliveCount() == 0);
+    }
+}
+
 TEST_CASE("ParticleSystem::aliveCount within MAX_PARTICLES") {
     Caesura::ParticleSystem ps;
     int cnt = ps.aliveCount(); CHECK(cnt <= 1024);

@@ -9,14 +9,14 @@
 | Metric | Count |
 |--------|-------|
 | Module libraries (src/) | 15 |
-| API interface headers (src/*/api/I*.h) | 35 |
-| Pure-virtual interface methods | 421 |
-| Lua binding functions (luaL_Reg entries) | 162 |
+| API interface headers (src/*/api/I*.h) | 38 |
+| Pure-virtual interface methods | 439 |
+| Lua binding functions (luaL_Reg entries) | 181 |
 | KAG command handler files | 13 |
 | KAG contract commands (command-contracts.md) | 134 |
 | RPC HTTP endpoints (EditorServer) | 36 |
 | RPC stdin JSON-RPC methods | 29 |
-| Lua runtime scripts (scripts/, excl. demo/check) | 78 |
+| Lua runtime scripts (scripts/, excl. demo/check) | 85 |
 
 ## 2. C++ interfaces by module
 
@@ -27,13 +27,14 @@
 | archive | ICryptoEngine.h | 12 |
 | audio | IAudioBackend.h | 31 |
 | audio | IAudioFocusService.h | 5 |
+| audio | IAudioRestore.h | 5 |
 | debug | IDebugManager.h | 26 |
 | di | IDeviceLostListener.h | 2 |
 | di | ISandboxQuota.h | 5 |
 | di | ITextureBudget.h | 7 |
 | input | IInputRouter.h | 14 |
 | job | IJobSystem.h | 8 |
-| live2d | IAnimationBackend.h | 13 |
+| live2d | IAnimationBackend.h | 15 |
 | minigame | IMiniGameBackend.h | 13 |
 | platform | IDisplayService.h | 1 |
 | platform | ILifecycleService.h | 4 |
@@ -42,12 +43,14 @@
 | render | IGpuMonitor.h | 8 |
 | render | ILayerManager.h | 21 |
 | render | IMeshRenderer.h | 8 |
-| render | IParticleSystem.h | 9 |
-| render | IRenderDevice.h | 53 |
-| render | ITextureManager.h | 17 |
-| render | IVideoPlayer.h | 18 |
+| render | IParticleSystem.h | 10 |
+| render | IRenderDevice.h | 59 |
+| render | ITextureManager.h | 18 |
+| render | IVideoPlayer.h | 19 |
 | resource | IAssetProvider.h | 5 |
+| resource | IAssetReader.h | 1 |
 | resource | IAsyncLoader.h | 9 |
+| resource | IImageDecoder.h | 1 |
 | resource | IResourceGenerationTracker.h | 4 |
 | rpc | IEditorServer.h | 9 |
 | rpc | IRpcDispatcher.h | 1 |
@@ -63,15 +66,19 @@
 | Binding file | API count | Registered globals |
 |--------------|-----------|--------------------|
 | AIBinding.cpp | 5 | _AI_CALLBACKS, _AI_CALLBACKS, AI |
+| AudioRestoreBinding.cpp | 5 | — |
 | DebugBinding.cpp | 10 | Debug |
 | DevCoreBinding.cpp | 13 | _CAESURA_QUIT, DevCore |
 | EngineBinding.cpp | 6 | Engine |
+| FontRestoreBinding.cpp | 6 | — |
 | KAGBinding.cpp | 36 | KAG |
 | MiniGameBinding.cpp | 5 | mini_game |
 | RenderBinding.cpp | 38 | _ASYNC_CALLBACKS, _ASYNC_CALLBACKS, Render |
+| RestoreBinding.cpp | 6 | Restore |
 | SaveBinding.cpp | 12 | KAG |
 | SmaBinding.cpp | 8 | sma |
 | SteamBinding.cpp | 19 | steam |
+| TransientRestoreBinding.cpp | 2 | — |
 | VFXBinding.cpp | 10 | VFX |
 
 ## 4. RPC surface

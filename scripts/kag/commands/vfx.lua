@@ -326,7 +326,7 @@ function VFXCommands.vfx(ctx, params)
 
         elseif action == "clear" then
             backend.clear_particles()
-            ctx._particleEmitters = {}
+            VFXCommands._clear_runtime_state(ctx)
         end
 
     -- ── Quake ───────────────────────────────────────────────────────────
@@ -417,7 +417,7 @@ function VFXCommands.particles(ctx, params)
     elseif action == "clear" then
         -- the backend name is clear_particles (not particles_clear)
         backend.clear_particles()
-        if ctx._particleEmitters then ctx._particleEmitters = {} end
+        VFXCommands._clear_runtime_state(ctx)
     end
 end
 
@@ -586,6 +586,11 @@ local WEATHER_PRESETS = {
 -- scripts, editor eval). ctx._weatherEmitters is authoritative when present.
 local _activeWeatherEmitters = {}
 
+function VFXCommands._clear_runtime_state(ctx)
+    _activeWeatherEmitters={}
+    if ctx then ctx._weatherEmitters={};ctx._particleEmitters={} end
+end
+
 function VFXCommands.particle_weather(ctx, params)
     local action    = params.action or "start"
     -- A missing type means "rain" when starting, but "every type" when
@@ -674,12 +679,9 @@ function VFXCommands.particle_weather(ctx, params)
         end
 
     elseif action == "clear" then
-        backend.clear_particles()
-        if ctx then
-            ctx._weatherEmitters = {}
-            ctx._particleEmitters = {}
-        end
-        _activeWeatherEmitters = {}
+        local ok=backend.clear_particles()
+        VFXCommands._clear_runtime_state(ctx)
+        return ok
     end
 end
 

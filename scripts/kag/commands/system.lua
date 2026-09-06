@@ -8,6 +8,7 @@
 -- =============================================================================
 
 local Operation = require("kag.operation")
+local WaitState = require("kag.wait_state")
 -- Sandbox is loaded by C++ lockdownScriptEnv() AFTER all modules are preloaded.
 -- Do NOT require("sandbox") here ? it would activate lockdown too early.
 local _sandbox_cache = nil
@@ -52,15 +53,23 @@ function SystemCommands.wait(ctx, params)
     -- default (so [delay ms=500] waits 500ms, not the injected 1000ms
     -- default -- and [delay duration=2000] gets 2000, review warn)
     -- bare positional [wait 200] -> params[1] (tokenizer bare-value)
-    local ms = params.ms or tonumber(params[1]) or params.duration
-               or params.time or 1000
+    local ms=WaitState.duration(params)
     -- clamp here too: bare positional args bypass schema's 0..60000
     -- (security minor: [wait 999999] must not block for 16 minutes)
-    if ms <= 0 then return end
-    if ms > 60000 then ms = 60000 end
+    local scene=ctx.current_scene or ctx.currentScene or ''
+    local index=ctx._executing_index or ctx.token_index
+    if ctx._restoredWait then
+        local restored=WaitState.prepare(ctx._restoredWait,scene,ctx.tokens,index)
+        ctx._restoredWait=nil
+        ms=restored.remaining_ms
+    end
+    if ms<=0 then return end
 
     local operation <close> = Operation.start(ctx)
     local ct = operation.token
+    local state={scene=scene,token_index=index,remaining_ms=ms}
+    ctx._waitState=state
+    ct:register(function() if ctx._waitState==state then ctx._waitState=nil end end)
 
     local elapsed = 0
     local frameTime = 16  -- ~60fps default dt
@@ -75,11 +84,13 @@ function SystemCommands.wait(ctx, params)
         local dt = coroutine.yield() or frameTime
         if ct.cancelled then break end
         elapsed = elapsed + dt
+        state.remaining_ms=math.max(0,ms-elapsed)
     end
 
     if not ct.cancelled then
         operation:complete()
     end
+    if ctx._waitState==state then ctx._waitState=nil end
 end
 
 -- ═══════════════════════════════════════════════════════════════════════════

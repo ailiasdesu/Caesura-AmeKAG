@@ -69,6 +69,10 @@ void ParticleSystem::shutdown() {
         bgfx::destroy(m_particleTex);
         m_particleTex = BGFX_INVALID_HANDLE;
     }
+    m_emitters.clear();
+    m_particles.clear();
+    m_freeSlots.clear();
+    m_aliveCount = 0;
     m_initialized = false;
 }
 
@@ -77,6 +81,12 @@ int ParticleSystem::createEmitter(const ParticleEmitterConfig& cfg) {
     m_emitters.emplace_back(cfg);
     printf("[ParticleSystem] Emitter %d created\n", id);
     return id;
+}
+
+int ParticleSystem::activeEmitterCount() const {
+    int count = 0;
+    for (const auto& emitter : m_emitters) if (emitter.active) ++count;
+    return count;
 }
 
 bool ParticleSystem::destroyEmitter(int id) {

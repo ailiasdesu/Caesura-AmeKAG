@@ -80,7 +80,9 @@ print("[demo] iscript set demo_value=" .. tostring(ctx.tf.demo_value))
 ; ---- Save / load ----
 [save slot=1]
 [ch name="Narrator" text="Progress saved to slot 1."]
+[if exp="tf.load_result != 'ok'"]
 [load slot=1]
+[endif]
 [p]
 [er]
 

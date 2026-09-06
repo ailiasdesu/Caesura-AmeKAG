@@ -513,7 +513,7 @@ async function renderSlots() {
     loadBtn.textContent = 'Load'
     loadBtn.addEventListener('click', async () => {
       log('loading slot ' + s.slot + '…')
-      const out = await player.loadSlot(s.slot, { sceneSources: {} })
+      const out = await player.loadSlot(s.slot)
       syncTextures()
       await renderer.render()
       syncBacklog()

@@ -81,6 +81,12 @@ public:
                     uint8_t r, uint8_t g, uint8_t b, uint8_t a) override;
     void setFont(int fontId) override;
     bool loadTTF(const char* path, float fontSize) override;
+    FontRestoreState captureFontState() const override;
+    FontRestoreState defaultFontState() const override;
+    std::unique_ptr<IPreparedFontState> prepareFontState(
+        const FontRestoreState& state, const uint8_t* bytes, size_t size) override;
+    bool applyFontState(std::unique_ptr<IPreparedFontState> prepared) override;
+    void clearFontState() override;
     float textLineHeight() const override;
     void flushAllRTT() override;
 

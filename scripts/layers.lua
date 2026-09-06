@@ -128,6 +128,28 @@ function Layers.init()
     Layers.get_root()
 end
 
+-- A restore commit retires the entire old tree. Clear lookup ownership first,
+-- then try every distinct RTT even if a backend cleanup fails. Path-cached
+-- textures remain TextureManager-owned; the restore module tracks its own IDs.
+function Layers.clear_for_restore()
+    local previous = layerMap
+    Layers.init()
+    local released, errors = {}, {}
+    for _, node in pairs(previous) do
+        for _, field in ipairs({"rt", "_prev_rt"}) do
+            local handle = node[field]
+            node[field] = nil
+            if type(handle) == "number" and handle > 0 and not released[handle] then
+                released[handle] = true
+                local ok, err = pcall(rtt.destroy, handle)
+                if not ok then errors[#errors + 1] = tostring(err) end
+            end
+        end
+        node.tex, node.texture, node.view_id = nil, nil, nil
+    end
+    return #errors == 0, table.concat(errors, "; ")
+end
+
 -- ═══════════════════════════════════════════════════════════════════════════
 --  Layers.get_root() → root LayerNode (lazy init)
 -- ═══════════════════════════════════════════════════════════════════════════

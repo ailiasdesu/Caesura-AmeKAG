@@ -38,6 +38,7 @@ class ITextureManager;
 class ILayerManager;
 class ISandboxQuota;
 class AssetManager;
+class IImageDecoder;
 class IAsyncLoader;
 class IJobSystem;
 class ISaveManager;
@@ -191,6 +192,7 @@ private:
     std::unique_ptr<ISandboxQuota>     m_sandboxQuota;
     std::unique_ptr<IJobSystem>        m_jobSystem;
     std::unique_ptr<AssetManager>      m_assetManager;
+    std::unique_ptr<IImageDecoder>     m_imageDecoder;
     std::unique_ptr<IAsyncLoader>      m_asyncLoader;
     std::unique_ptr<ISaveManager>      m_saveManager;
     std::unique_ptr<carc::ICryptoEngine> m_cryptoEngine;

@@ -2,7 +2,7 @@
 
 当前计划：docs/plans/2026-09-05-001-refactor-runtime-foundation-plan.md。
 
-路线图保留 U1–U29，底层优先，Studio 暂停。用户最新决定：今天的实现止于 U10，不开展 U11；完成提交、推送、合并 master，并修复 CI 至全绿。U11–U29保留为后续工作，本记录不把排期当成完成证据。
+路线图保留 U1–U29，底层优先，Studio 暂停。U10 已通过 PR #3 合并到 master（7430ca29），PR 的7项检查和合并后10项CI任务全部成功。当前从 codex/u11-state-restore 推进；2026-09-06 用户明确要求本次完成 U11、合并 master、确认 CI 全绿后暂停，U12 及后续等待恢复。完整路线图尚未完成，本记录不把排期当成完成证据。
 
 ## 工作区
 
@@ -25,7 +25,107 @@
 | U8 | 本机适用验收通过 | 预启动宿主公钥、全部识别CARC层固定验证、失败回滚与CLI已接通；12项核心及39项CLI回归通过；不认证整个分发目录 |
 | U9 | 本机及POSIX定向验收通过 | 合法签名边界、并发/短读、真实分配失败及恢复已测；Reader有界拒绝、OpenSSL上下文异常释放已修复；真实包内存/耗时留样，不宣称全平台或穷尽fuzz |
 | U10 | 本机适用验收通过 | 唯一会话引用、start/stop/reload/EOF/失败终态、真实协程与输入清理、资源/AI回调失效及Engine关停顺序已验证；Cpp1229与Lua147/30全绿 |
-| U11–U29 | 待执行 | 仍属于完整目标；U11恢复状态、提交前副作用和旧格式证据已完成只读地图，尚未实现或验收 |
+| U11 | 本机验收完成，交付中 | 存档契约、真实旧格式/冷启动、原生及Web恢复与取消已验证；最终Debug profile全部通过，待合并及master CI |
+| U12–U29 | 待执行 | 用户已恢复后续迭代；按依赖推进，Studio继续暂停 |
+
+### U11 实施顺序
+
+1. 建立字段所有权与持久值契约，先验证坏字段/坏场景不能污染旧会话，以及未来f/tf、lf/mp和空控制栈的恢复缺口。
+2. 分离解码校验、场景/调用帧准备与提交；复用U10的协程关闭和请求失效边界。提交前失败保留旧会话，提交后严重后端失败统一停止新会话。
+3. 补齐声明式图层/文字/音频状态及候选资源生命周期；共享纹理不能作为候选独占资源销毁，准备阶段不更改全局图层或开始播放。
+4. 通过真实SaveBinding/SaveManager验证JSON往返和迁移边界；历史产物必须有来源，合成旧格式样本单独标注。
+5. 用独立OS进程验证加密磁盘槽的冷启动恢复、后续分支和失败时状态，再执行适用完整构建/测试及独立审查。未完成的后端/历史样本证明不能被单元测试替代。
+
+### U11 当前证据与未完成边界
+
+迁移边界先取得4个原生失败用例，再通过包含既有失败元数据保护的6项检查、128条断言。真实SaveBinding的9项回归、321条断言覆盖空对象、数组顺序、NUL/Unicode、混合/稀疏键拒绝、循环/深度/非法值和旧槽保护。旧发行版v1.0.1 ZIP/二进制/输入/场景/存档摘要已核对，实际产出的envelope5/data2样本纳入tests/golden_saves；原手工v1..v5样本明确标为合成，不能代替历史产物证明。
+
+变量/局部帧/控制状态的准备与提交已分离，调用者控制帧独立于被调场景。已保留正确前置条件下的旧实现RED与当前GREEN；真实双进程检查验证加密磁盘槽、错密钥保留旧会话、热/冷状态及后续循环一致，并实际读取旧发行版KAG样本。该检查明确不证明GPU像素或真实音频。核心集成run的Debug构建、Cpp1242/1242（389096断言、0 failed/0 skipped）、Lua147/147与孤儿31/31、新进程检查均通过，记录artifacts/validation/u11-restore/core-result.json。
+
+随后新增语言资源准备/提交：损坏字典和非法行翻译先拒绝，commit只使用已准备的字典，不再读文件。语言定向21/21、含损坏语言资源的恢复事务62/62通过；新增孤儿套件后门槛为32，后续完整集成仍需复核。
+
+2026-09-06继续推进图层与原生准备边界：
+
+- Engine通过BackendRegistry注册IAssetReader和IImageDecoder。资源读取保持最高优先级来源的所有权，读取失败不悄悄换来源；Restore绑定先读/解码为Lua持有的像素，再于提交时创建独占纹理。纹理API能描述资源路径或纯色来源，准备对象的取消、重复使用和创建失败均有实际绑定检查。
+- 独立图片接口审查发现截断TGA/KTX及纹理注册后预算异常的三个问题。保留失败记录并修复：完整图片与逐段截断对照通过；真实D3D11子进程确认注册后异常会释放纹理、来源、字节统计和配额，且随后可以再次创建纹理。该GPU检查不等于整页恢复后的像素一致性证明。
+- 新增kag.layer_state按父子顺序保存可重建图层，准备不改旧树；提交安装新树，失败继续清理已创建的纹理与RTT。记录型Layers.render的27条检查覆盖变换、裁切、同z顺序、失败停止、取消与旧owner隔离；真实runner恢复检查增加到80条。文字仅通过TextScene提交，其message几何节点不再申请无内容的RTT。f/sf混合键现在明确拒绝，密集数组保留，避免静默丢值。
+- 上述图层快照Debug全量构建退出0；完整CaesuraTests **1249/1249、389322断言、0 failed/0 skipped**，证据为`artifacts/validation/u11-restore/layer-cpp-full-2.json`及同名日志。Lua主套件**147/147**、孤儿套件**34/34**，耦合与182 Lua/81 C++文件注册检查通过。主套件首次失败的两个旧夹具已补空图层隔离及精确状态断言；失败日志保留，没有减少测试。
+- 双进程冷启动检查首次发现沙箱锁定前未预加载新模块，修复后`artifacts/validation/u11-cold/layer-attempt-2/result.json`记录PASS、两进程退出状态和二进制/存档摘要。范围仍是原生磁盘槽、变量/控制及文字提交，不宣称图层GPU像素或声音一致。
+- 最近一次Web定向bundle套件为6/7，存档捕获失败于Web适配器的数字根节点；真实Lua图层与JS AdapterCore需要统一恢复入口。首次完整Web运行及一次C++运行被会话中断，未生成终态，不能记为通过；C++已用关闭stdin的独立启动器完成复测。音频接线后的Web全套与完整CTest尚需在后续集成后重跑。
+- 在以上完整快照之后修复KAG音频播放绑定：BGM、voice、SE、3D SE不再丢弃后端返回的0，也不让C++异常穿过Lua调用边界。新用例先复现失败，再通过含实际音频集成的91项/425断言检查（`audio-result-green.log`）；该阶段Cpp门槛为1250，音频准备/位置恢复/硬停止当时尚未实现。该次定向检查不能替代修改后的完整验收。
+
+随后完成音频恢复接线：
+
+- 新增IAudioRestore，通过原AudioBackend实例在Engine注册非拥有接口；独立流式数据准备不改旧音源、缓存或配额，提交后恢复BGM位置/声源增益/循环，voice与SE停止，用户主音量及总线设置不随槽回滚。Lua准备对象由GC或显式取消释放，消费后不能再次应用。
+- 新增presentation统一图层与音频准备、提交及清理。准备失败保留旧上下文和声音；提交中任一恢复失败清理部分图像/音源并停止；旧owner不能停止新会话。真实runner检查增加到88条，图层27条保持通过。
+- 真实SoLoud回归定位并修复WavStream将codec union的WAV指针误作Ogg，以及Ogg seek错误未传播、旧帧缓存/读取API不匹配导致PCM错位的问题。保留失败证据；当前WAV/Ogg/FLAC及非静音PCM片段对照通过。详见`docs/solutions/runtime-crashes/soloud-stream-seek-codec-union.md`。该检查证明解码/混音器行为，不冒充声卡输出证明。
+- 初次全量Cpp有4项独立LuaVM生命周期失败，原因是无音频服务也被当作恢复接口缺失；无后端的停止现为安全no-op，已注册但不支持恢复的后端仍报告失败。4项原失败及相关20项检查通过后，完整Cpp **1255/1255、389409断言、0 failed/0 skipped**（`audio-cpp-full-2.json`及同名日志）；Lua主147/147、孤儿34/34，耦合与182 Lua/82 C++注册检查通过。当前Cpp门槛1255，Web模块索引84项。
+- 当前原生双进程基础探针`u11-cold/audio-attempt-1/result.json`通过；该探针仍以无音频设备的运行方式验证磁盘槽、变量/控制/文字，不是BGM或图层像素跨进程验收。音频/presentation有界独立审查已落盘`audio-presentation-review.md`，不替代U11最终整体验收。
+- 补上图层提交的预算边界：准备时拒绝超过原生4096上限的有图像RTT，物化整组纹理后检查所有ID仍有效，避免后续上传淘汰前面的必要图像却报告成功。3条新增失败先复现，修复后图层30/30、runner88/88通过；独立增量审查已记录。最新全量Debug构建退出0，双进程探针`audio-attempt-2`通过。
+
+随后补齐字体恢复和持久值准备：
+
+- 场景准备在单次候选内按路径复用同一份已解析内容，下一次恢复重新读取；语言主字典和回退字典一起准备，旧槽缺失字段使用历史默认zh/en，不沿用未来会话。语言25/25通过。文字快照拒绝分数计数、非法布尔值、非有限数字及损坏的来源/布局字段，文字21/21通过，保留各自RED/GREEN记录。
+- 字体接口经IRenderDevice暴露纯值描述和单次准备对象。TTF由IAssetReader一次读取，候选持有字节、FreeType face及CPU图集；提交不重新读路径，先成功创建新纹理再替换活动字体。Small/Large共享不可变位图源，Large实际二维放大2倍。真实GPU读回先复现旧Large像素错误，再验证修复；设备恢复复用CPU内容，逻辑路径在磁盘不存在也不影响已准备字体恢复。
+- Lua字体快照进入presentation准备/提交/清理链，旧槽使用后端启动默认字体。真实D3D11检查覆盖位图/TTF/空字体、listener及Bgfx设备恢复、正常脚本选择和准备一次读取/提交零读取；CPU定向39项/336断言通过。独立审查发现的外层提交失败残留字体已补回归（105通过/1失败→106/106），并由审查者只读核对关闭；详见`artifacts/validation/u11-restore/font-review.md`。
+- 字体阶段全量Debug构建退出0（`font-full-build-3.json`），完整Cpp **1259/1259、389438断言、0 failed/0 skipped**（`font-cpp-full-2.json`及日志），Lua主147/147（`font-lua-main-3.json`）与孤儿34/34。初次Cpp旧源码位置断言及Lua隔离依赖夹具失败均保留并修正，未删除用例。Web模块索引为85项。基础双进程`u11-cold/font-attempt-1/result.json`通过，仍是无窗口的磁盘槽/控制/文字证明。之后的新增修改需要新验证，不能沿用本次结果。
+
+再补齐加载入口和原生值边界：
+
+- 独立scheduler宿主在语言提交失败后也清空字体，真实fallback路径先108/109再109/109；独立审查关闭同源P2。自动/NVL/静音/跳读字段的非法类型现在在准备阶段拒绝，保留旧上下文、协程和临时字段；事务回归141/141。
+- 原生save/load/list元数据使用完整Lua字符串长度，包含NUL的场景与缩略图不再静默截断；非法UTF8不能覆盖旧槽。列表使用受保护的Lua构造过程，避免分配失败跳过C++容器析构。原9项检查先2失败，再9/9、329断言通过；独立元数据审查未发现新问题。新增真实lua_setallocf逐点失败验证load/list恢复后VM和旧槽仍可用，10项/899断言通过；Cpp发现门槛随新增用例递增。
+- 删除native按当前load位置跳过保存点的旧逻辑。五种入口、菜单保存及有界两次回读使用同一份测试先80/91再91/91，恢复后第一条赋值、分支和MARKER都实际重放；无条件回读由脚本自身控制，不能伪造执行load之后的命令。独立复核确认RED/GREEN测试摘要完全一致，记录`cursor-native-result.md`。
+- 扩展真实Engine双进程探针：producer执行同场景inline load，退出后consumer仅从加密磁盘槽外部load；比较提交瞬间与随后分支/文字提交，原call/loop及真实历史槽验证同时保留。`u11-cold/cursor-attempt-1/result.json`为PASS，两槽摘要在读取前后不变。仍不宣称整页GPU像素或BGM输出已跨进程对齐。
+- 上述游标/元数据快照通过完整windows-debug profile，run `dd983f3a-8b61-4c30-b2a1-e736221f3a75`，原始receipt为`artifacts/validation/raw/windows-debug-u11-cursor-01/run.json`。全量构建退出0，Cpp1260/1260、390016断言、0failed/0skipped，Lua147/147和34/34，全部验证器/耦合/注册及CTest通过（外部AI服务按固定配置跳过，255.21秒）。源码与夹具运行前后摘要一致，collector/diagnostic verifier均PASS；该结果仅证明本机dirty快照，不代表U11最终验收或发布资格。
+
+真实表现层冷进程验证继续推进：
+
+- 新增实际Engine/D3D11/SoLoud probe及Python顺序进程编排，输出整页PNG/RGBA、非静音双声道PCM、加密槽与素材摘要。ManualMix使用真实SoLoud NULLDRIVER、48000Hz、2声道和显式mix时钟，不是NullAudio；默认Device初始化参数未变。新CTest为CaesuraColdPresentationRestore。
+- `presentation-cold-attempt-2`两进程均正常退出，保存/热读/冷读整页640×360逐像素差异为0；换图/空页/启动前态各改变230400像素，隐藏文字改变3682像素。该次整体仍FAIL，因为连续播放与恢复PCM不同。结果只证明该页面的恢复像素一致，不能声称所有字形渲染质量或音频已通过。
+- 真实混音先发现默认44100Hz总线多余重采样、float混音时间导致一次8192帧推进后seek少一帧；总线对齐实际输出率和double时钟已部分修正。曾尝试整数1:1的linear复制优化，72项专项通过后独立审查指出变速相位跳变，已撤回；该72/72是历史证据，不能作为当前完成依据。多callback累计floor与非整块总线历史仍需专门处理。
+- 实际probe还发现运行中setBusVolume只改变AudioSource默认值，没有改变活跃总线；现同步真实handle音量并保持duck比例。正确handle夹具先三项gain仍为1的RED，再8209断言GREEN。初次夹具未解析SoLoud惰性bus handle，以及Copy-Item还原源码保留旧mtime造成构建复用旧对象，两次失败日志均保留；修复后确认重新编译SoLoudAudioEngine.cpp，未沿用陈旧程序。
+- `presentation-cold-attempt-4`已执行真实热冷读与65536帧跨EOF输出；原receipt因单调时钟相邻tick相等而如实FAIL。编排器已将重叠判断改为严格大于，允许合法相等tick及OS复用PID；两个Popen分别等待退出，子进程PID仍各自核对。对该既有样本的只读重算显示PCM仅头4个float（2帧）不同，其余样本完全一致；原FAIL receipt没有改写。
+- 硬停止后下一块混音残留2个旧样本已先RED。新增SoLoud clearResamplerBuffers在audio mutex内清除三总线缓存/offset/leftover，无分配；同一实际混音检查8209断言GREEN。完整默认linear历史恢复、非512边界、精确样本clock还在实现，不能用清缓存或两帧误差概括为已完成。
+
+精确音频恢复和Web接线的后续证据：
+
+- 音频实现改为整数帧游标、精确codec帧seek、锁外准备与audio mutex内有界短预滚，保留默认linear公式。修复部分立体声读取的声道stride/实际读数、跨512源块的分数相位丢失，并加宽offset运算。`mix-history-green-3.json/.log`记录音频专项74/74、8764断言通过，包含18×512、72×128、非512前缀、起点、44100/1000采样率及独立linear参考。
+- `presentation-cold-attempt-5/result.json`整体PASS：真实producer退出后consumer新建Engine，从加密磁盘槽恢复；整页RGBA零差异，65536帧默认linear跨EOF的连续/热读/冷读PCM对照通过，未使用POINT、样本移位或删头。声音证据为实际SoLoud离线混音，不是声卡观测。
+- 可选cursor的真实Lua→原生JSON→Lua→恢复以及37类非法输入检查通过（`audio-cursor-length-check.log`，22个doctest断言，内部Lua循环逐项断言）。此前暴露的夹具搜索路径问题及WavStream长度先经float舍入导致合法EOF前分数帧被拒绝已修；生产长度验证现直接以整数样本数/double采样率计算。
+- Web加入真实Lua图层facade、共享LayerState最终安装hook、场景prepare和嵌套Promise透传。共享图层36/36、compiler63/63、Promise成功/拒绝与source/bundle准备6项通过。compiler.deserialize不再修改可信bundle或与另一执行共享可变tokens/labels/params/flow。首次整合41/41，审查修正匿名图层ID碰撞及get_world_rect返回契约后，相关47/47通过。
+- Web移除两处按load位置跳过保存点的旧guard，并消费已准备tokens；同场景无条件回读由现有frame预算限制，不伪造尾部执行。场景恢复使用Web自有安全语法与可信scene-map白名单，原生文件系统allowlist保持不变。source跨场景续跑已补齐；jump后保存、local call内保存的source/bundle回归均通过。历史记录与结局显示按槽拥有的数据同步，相关30/30通过；损坏backlog形状/字段在提交前拒绝，事务165/165通过。
+- 最新完整Web诊断为`web-u11-full-1.json/.log`：385/395、10失败、0 skipped，失败集中在真实资源存在时的存读档链路（flow、slot lifecycle、main UI）。这是待修复结果，不以只含空图层的定向绿灯覆盖。真实图片/字体/WebAudio准备票据及外部loadSlot事务仍未完成。
+- 后续独立审查另发现音频P1：WAV原始声道数超过8时被截断，但decoder仍按原声道写入固定缓冲；安全RED只调用prepare，9声道错误通过已复现，尚未执行越界mix，正在修入口拒绝。另有普通BGM在空闲bus残块后启动的时钟及非循环EOF尾音两条待实测边界。审查报告为`audio-final-review.md`。Web审查P1还剩bundle普通load_tokens与prepare的exact/alias优先级分叉；同名冲突最小探针已复现，报告为`web-increment-review.md`。
+
+2026-09-06 网络恢复后的增量：
+
+- 音频原始声道数 P1 已关闭：Wav/WavStream 四类 decoder 的加载与实例重开均检查实际声道数，超出8声道拒绝。完整 Debug 构建退出0；`audio-channels-green.log` 为11/11定向用例、8479断言通过（不是完整C++套件）。普通空闲启动游标及非循环尾段两个P2仍在补实测。
+- Web exact/alias优先级已统一，`web-alias-priority-green.log` 为61/61。新增实际浏览器图像解码票据、独占纹理及canvas消费；`web-images-green-5.log` 为37项新测试与22项既有测试共59/59。测试注入decoder不等于实际浏览器证明；编码读取有界，像素检查发生在解码返回后，不宣称解码前峰值内存有界。
+- 两个Web入口现共用`kag_runner`，外部`loadSlot`不再创建Loading场景。新增准备失败保留旧owner/co/provider、inline关闭旧co、无owner冷加载、含引号场景名、颜色资源恢复与并发入口拒绝回归。`web-runner-restore-red.log`先复现4项失败；`web-runner-resource-green.log`记录6/6通过。NUL截断由Lua先转JSON再跨Wasmoon边界修复，磁盘内容和冷加载Lua字节均检查；Lua字面量的十进制控制字符转义固定为3位。
+- 共享Lua扩展`start(path,{replace=true})`、`prepare_load`和nil-owner冷恢复，初次186/186事务回归通过。独立审查进一步复现准备挂起后owner过期（load/start）及pending提交清理失败时CPU票据丢失；这三条仍在修复，初次绿灯不覆盖它们。Web的明确ch等待与显式p等待改为共用原生语义；未将旧Web跳过等待的断言作为保留条件。
+
+2026-09-06 后续集成与实际浏览器证据：
+
+- Web source/bundle 两入口已经共用 `kag_runner`；删除重复协程循环和虚拟 Loading 场景。准备失败保留旧 owner/co/provider，正常替换关闭旧协程；共享 Lua 的异步准备后 owner 复核、pending 清理失败释放责任已通过独立审查。UI 未提供 skip 覆盖时保留存档的 seen-skip；新会话历史去重不会吞掉上一会话相同的首句。
+- Web 使用有界读取和真实 ImageBitmap、FontFace、WebAudio 解码。`browser-image-observation.json` 记录教室背景原始分辨率像素的原始/热读/新 VM 摘要一致，坏资源不更换 owner/画面；额外缩放到160×90的 img/canvas 二次采样曾不一致，保留为独立失败，不称整屏截图相等。`browser-audio-font-observation.json` 记录实际浏览器 FontFace 字形原始/热读/新 VM 摘要一致；真实 OfflineAudioContext 在第4864帧保存，热读与新 VM 各4096帧双声道 PCM 与连续参考最大误差0。两项经真实 Lua 槽位链路，传输为内存存储及新 Lua VM，不是新浏览器进程或声卡输出；原生加密磁盘双进程证据仍为 `presentation-cold-attempt-5`。
+- Web 保存改为 Lua 先编码 JSON，再跨 Wasmoon 边界，保留合法 UTF-8 与 NUL。超出安全整数范围（包括 math.mininteger）、混合/稀疏表、非有限值及非法 UTF-8 明确失败且保留旧槽；这不是完整64位整数支持。图层 snapshot 保留稳定 id，普通颜色缓存与恢复独占纹理分离。播放查询使用实际 AudioEngine，不能由遥测查询次数结束循环 BGM；停止/销毁后的晚到 fetch/decode 被代次拒绝。字体并发选择由最新请求获胜，字体释放失败时先停止字形提交并保留释放重试责任。
+- 运行器接入后的完整 Web 诊断依次为 `web-u11-runner-full-1`（409通过/31失败）、`web-u11-full-2`（476/1）、`web-u11-full-3`（475/2，剩余为性能门槛）。已修正显式 ch/p 点击边界、资源夹具、状态同步等问题；未删除用例或放宽阈值。图层快照减少逐字段跨 Lua/JS 调用并缓存构造代码，仍每次生成独立值表。已读快照的64步容量保持不变，3000标记×64份从6268.9KB降到344.1KB；编码失败不会污染缓存。定向 `web-snapshot-constructor-green` 20/20包含原性能6/6。
+- `web-restore-coverage-1` 在不纳入性能基准的功能运行中468/468通过，测量指定JS文件行覆盖96.35%、分支88.43%、函数72.66%。V8对嵌入Lua字符串的行标记不等于Lua执行覆盖；不能将此数字称为整个引擎覆盖率。Skia测试依赖用于jsdom真实图片解码，和浏览器证据分开。
+- 原生音频空闲启动/非循环尾音修复通过13/13专项；预算重建又复现真实SIGSEGV，修复悬空resample指针、must-live分支映射和实际active名单判定后14/14通过。映射容量与公开1..1023预算统一后，`audio-budget-capacity-green` 为15/15、8640断言。额外首块渐变假设被8个idle×prefix组合80断言反证，未改生产gain或容差；独立音频增量审查全部闭环。
+- 完整 Windows run `434264e3-e2ac-477b-b303-ccde641a25e7` 的源码与夹具前后指纹一致：Debug构建、Cpp1270/1270（398578断言，0failed/0skipped）、Lua主套件147/147、验证器/耦合/注册和CTest通过（25通过+1允许的外部AI跳过，259.19秒）；Lua孤儿32/34，两个显字用例失败。因此整份receipt为FAIL。后来重建替换了该二进制，collector因原binary digest不再匹配而拒绝归一化，保留原始receipt/log，不重贴PASS。名字前缀改为即时显示后，正文显字与typewriter声音回归已恢复。
+- 已加入原生 transient 查询/停止绑定，覆盖视频、粒子、模型、后处理；坏计数拒绝，单组件/配额失败仍尝试其它清理，空粒子后端可重试残留配额而不重复重启。有效原6例RED为6/6失败；第一次构建失败后旧binary发现0例的 `transient-binding-red` 无效，禁止作为通过证据。后续8例在联合回归中通过。ParticleSystem shutdown现在清发射器/粒子/空槽/计数；CPU和D3D11重启满池回归通过。动画接口新增计数与clear，Null实际资源回归通过，SDK分支未声称真机验证。
+- `tests/audio/restore-video.mpg` 是本机FFmpeg8.1.1生成的2秒32×32 MPEG1/双声道MP2夹具，SHA256为 `29ac6d2f3c1c277de79bafd0cdf8966e7df83fed78e965de161c1c6da8ded952`。真实视频用例揭示声道布局错误重解释导致全部PCM被拒绝；改为正确深拷贝AVChannelLayout并保留校验后，`video-layout-green` 3/3通过，D3D11子进程64断言验证多视频PCM、批量逻辑停止、延迟释放前重开。音频是捕获替身、jobs同步执行，不称扬声器或并发worker证明。
+- 六个现有运行时菜单已补Operation/<close>，取消不提交设置或重放音源，焦点与自有资源清理；标题Endings子循环的迟到协程问题经真实RED→GREEN并独立复核关闭。七类旧VFX循环也接入Operation；天气与通用粒子清理索引同步，102/102定向检查及独立审查通过。此为运行时生命周期修复，Studio仍暂停。
+- 保存遇到尚无恢复契约的宏运行态、未完成选择/输入、菜单、VFX、粒子、模型、视频和后处理会明确拒绝；宏运行时改写标记在删除定义后仍保留。wait/delay现在保存剩余毫秒及所属场景/光标，读档后首次更新前重存也保留进度；完成/取消清记录，模块在lockdown前预加载。原生prepare-only不再复用可变编译缓存或写缓存。等待事务235/235、预加载/空参数/重存边界7/7，独立审查关闭四项发现。
+
+- 最后两处出口遗漏已通过真实回归闭环：Web `setLanguage` 复用 `TextScene.render` 发布文字，四项 opacity/strike/ruby/reveal 回归从4失败到4通过；原生 SandboxQuotaService 的 count/release 在实际主VM建立保护区，避免协程调用时错误越过清理，定向10项/226断言通过（RED为9通过/1失败、12失败断言）。
+- `web-u11-integrated-02` 的34文件/479项全部通过。加入最后4项语言回归后，`web-u11-final-01` 为35文件、482通过/1性能失败（1000行吞吐2.113低于2.5 frames/ms），功能全绿；保持源码与阈值不变，独立 `web-u11-final-perf-recheck` 6/6通过。保留整套失败及限定复跑，不称后两次为单次完整全绿。
+- 完整 `windows-debug-u11-final-01`（run `d674b42f-4bdc-4b05-95f7-2715b02e822a`）在源码和夹具指纹一致的快照上完成：构建退出0，Cpp1290/1290、398871断言、0失败/0跳过，Lua孤儿36/36，其它验证器/耦合/注册通过，CTest25通过+1允许的外部AI跳过（189.59秒），包括真实冷画面/PCM和冷存档检查。Lua主套件128通过/19失败，整份receipt已在二进制替换前按FAIL归一化。
+- Lua失败根因是新菜单mock测试在主套件沙箱锁定后清除模块缓存再require，首个异常又留下mock污染后续测试。将六组取消回归完整移到专用 `test_runtime_menu_cleanup.lua` 并注册现有孤儿隔离入口；每个fixture用 `<close>` 恢复module cache、KAG与输入键，运行时沙箱不变，原主147项保留。候选207条菜单断言通过，应用后完整主套件147/147通过。
+
+最终完整 `windows-debug-u11-final-02`（run `313c3a36-8401-414d-a28b-7326cffd05ea`）全部必需检查通过：Debug全量构建退出0，Cpp1290/1290、398871断言、0失败/0跳过，Lua147/147和37/37，验证器17/7/53/57项、耦合与185 Lua/85 C++注册检查通过，CTest25通过+1允许的外部AI跳过（220.20秒）。源码与夹具运行前后摘要一致；在重建前立即执行collector与diagnostic verifier，均PASS。证据目录为 `artifacts/validation/7430ca29a83fe844a7329be0b042832d5c1191e2/313c3a36-8401-414d-a28b-7326cffd05ea/windows-debug/`。
+
+U11本机适用验收完成，正在提交合并；本地dirty快照不代表未运行平台或发行批准。合并且master CI全绿后按用户要求暂停，U12–U29保持原范围并等待恢复。
 
 ## 本轮实际执行
 

@@ -35,6 +35,95 @@ local function deep_copy(orig, copies)
     return copy
 end
 
+-- Private, weakly keyed work buffers never become part of a snapshot and
+-- never change the live maps. Each capture still scans every live entry:
+-- existing-value edits and removals must be observed, not just appends.
+local seen_cache = setmetatable({}, { __mode = "k" })
+
+local function set_seen_bit(cache, index, present)
+    local block, mask = (index - 1) // 64, 1 << ((index - 1) % 64)
+    local old = cache.words[block] or 0
+    local bits = present and (old | mask) or (old & ~mask)
+    local slot = cache.slots[block]
+    cache.flags[index] = present or nil
+    if bits == 0 then
+        local last = #cache.chunks
+        if slot ~= last then
+            local moved = cache.blocks[last]
+            cache.chunks[slot], cache.blocks[slot] = cache.chunks[last], moved
+            cache.slots[moved] = slot
+        end
+        cache.chunks[last], cache.blocks[last] = nil, nil
+        cache.words[block], cache.slots[block] = nil, nil
+    else
+        slot = slot or (#cache.chunks + 1)
+        cache.words[block], cache.slots[block], cache.blocks[slot] = bits, slot, block
+        cache.chunks[slot] = string.pack("<I4I8", block, bits)
+    end
+end
+
+local function pack_seen_flags(flags)
+    local cache = seen_cache[flags]
+        or { flags = {}, count = 0, words = {}, slots = {}, blocks = {}, chunks = {}, packed = "" }
+    local cached_flags=cache.flags
+    local added, count = {}, 0
+    for index, value in next, flags do
+        if value ~= true then return nil end
+        count = count + 1
+        if not cached_flags[index] then
+            if type(index) ~= "number" or index % 1 ~= 0
+                or index < 1 or index > 2147483647 then return nil end
+            added[#added + 1] = index
+        end
+    end
+    local removed = count ~= cache.count + #added
+    -- Updates may allocate (pack/concat/table growth). A failed capture must
+    -- discard its work buffer; only a fully encoded version is cached again.
+    if removed or #added > 0 then seen_cache[flags] = nil end
+    if removed then
+        for index in next, cached_flags do
+            if rawget(flags, index) ~= true then set_seen_bit(cache, index, false) end
+        end
+    end
+    for _, index in ipairs(added) do set_seen_bit(cache, index, true) end
+    if removed or #added > 0 then cache.packed = table.concat(cache.chunks) end
+    cache.count = count
+    seen_cache[flags] = cache
+    return cache.packed
+end
+
+-- Standard maps use immutable sparse 64-bit block strings. Unchanged scenes
+-- share that immutable encoding across snapshots. Nonstandard graphs retain
+-- the original deep-copy behavior, including aliases and arbitrary values.
+local function pack_seen(seen)
+    if type(seen) ~= "table" then return nil end
+    local packed, visited = {}, {}
+    for scene, flags in next, seen do
+        if type(scene) ~= "string" or type(flags) ~= "table" or visited[flags] then return nil end
+        visited[flags] = true
+        local bytes = pack_seen_flags(flags)
+        if not bytes then return nil end
+        packed[scene] = bytes
+    end
+    return packed
+end
+
+local function unpack_seen(packed)
+    local seen = {}
+    for scene, bytes in next, packed do
+        local flags, offset = {}, 1
+        while offset <= #bytes do
+            local block, bits
+            block, bits, offset = string.unpack("<I4I8", bytes, offset)
+            for bit = 0, 63 do
+                if (bits & (1 << bit)) ~= 0 then flags[block * 64 + bit + 1] = true end
+            end
+        end
+        seen[scene] = flags
+    end
+    return seen
+end
+
 -- Shallow-copy the text_state: the draws array is APPEND-ONLY in normal
 -- play (each [ch]/[text] appends a draw; only remove_group replaces the
 -- array wholesale, which never mutates a previously snapshotted array).
@@ -71,7 +160,7 @@ function snapshot.capture(ctx)
         scene = ctx.current_scene or ctx.currentScene or "",
         token_index = ctx.token_index,
         call_stack = deep_copy(ctx.call_stack),
-        seen_scenes = deep_copy(ctx.seen_scenes),
+        _seen_blocks = pack_seen(ctx.seen_scenes),
         backlog_len = type(ctx.backlog) == "table" and #ctx.backlog or 0,
         text_speed = ctx.text_speed,
         skip_mode = ctx.skip_mode,
@@ -88,6 +177,7 @@ function snapshot.capture(ctx)
         } or nil,
         layers = require("layers").capture_snapshot(),
     }
+    if not snap._seen_blocks then snap.seen_scenes = deep_copy(ctx.seen_scenes) end
     for _, k in ipairs(DEEP_COPY_KEYS) do
         snap[k] = deep_copy(ctx[k])
     end
@@ -108,7 +198,8 @@ function snapshot.restore(ctx, snap)
     -- not reuse the callee's label index (stale cross-scene jump hazard)
     ctx.token_index = snap.token_index or 1
     ctx.call_stack = deep_copy(snap.call_stack)
-    ctx.seen_scenes = deep_copy(snap.seen_scenes) or {}
+    ctx.seen_scenes = snap._seen_blocks and unpack_seen(snap._seen_blocks)
+        or deep_copy(snap.seen_scenes) or {}
     if type(ctx.backlog) == "table" and type(snap.backlog_len) == "number" then
         -- Truncate replay duplicates: the replayed [ch] pushes again.
         for i = #ctx.backlog, snap.backlog_len + 1, -1 do

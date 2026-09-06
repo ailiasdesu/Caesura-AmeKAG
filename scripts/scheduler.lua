@@ -199,6 +199,25 @@ function scheduler.run(ctx, tokens, start_index)
     ctx._forStack = for_stack
     local WHILE_MAX_ITERS = 65536
 
+    local function control_frame()
+        return {
+            if_ = if_stack, switch = switch_stack,
+            while_ = while_stack, for_ = for_stack,
+            for_marks = ctx._forStackMarks or {},
+            for_rewound = ctx._forRewound or {},
+        }
+    end
+
+    local function use_control_frame(frame)
+        frame = frame or {}
+        if_stack, switch_stack = frame.if_ or {}, frame.switch or {}
+        while_stack, for_stack = frame.while_ or {}, frame.for_ or {}
+        ctx._ifStack, ctx._switchStack = if_stack, switch_stack
+        ctx._whileStack, ctx._forStack = while_stack, for_stack
+        ctx._forStackMarks = frame.for_marks or {}
+        ctx._forRewound = frame.for_rewound or {}
+    end
+
     -- [round 84 C2] Per-run backward-jump cycle memory (macro re-expansion
     -- guard -- keyed by "origin>target" for BACKWARD intra-scene jumps). A
     -- fresh scene pass starts clean; [jump]/[call] across scenes re-enter
@@ -247,7 +266,26 @@ function scheduler.run(ctx, tokens, start_index)
     end
 
     local i = start_index
+    -- A save taken by the callee's final command resumes just after its last
+    -- token. Perform the pending implicit return before entering the loop.
+    while i > #tokens and ctx.call_stack and #ctx.call_stack > 0 do
+        local frame = table.remove(ctx.call_stack)
+        ctx.label_index = frame.label_index
+        ctx.current_scene, ctx.currentScene = frame.scene, frame.scene
+        if frame.lf ~= nil then ctx.lf = frame.lf end
+        if frame.mp ~= nil then ctx.mp = frame.mp end
+        if frame.control then use_control_frame(frame.control) end
+        tokens, ctx.tokens = frame.tokens, frame.tokens
+        refresh_compiled()
+        ctx.labelMap = ctx.label_index or compiled.labels
+        i = frame.index or 1
+        ctx.token_index, ctx._resume_index = math.max(1,i-1), i
+        ctx._scene_changed = false
+        prune_dangling_pending_jump()
+    end
     while i <= #tokens do
+        ctx._executing_index = i
+        ctx._executing_command = tokens[i][1] or tokens[i].cmd
         local tok = tokens[i]
         local cmd = tok[1]
         -- KAG3 command-name aliases (elsif -> elseif): tokens produced by
@@ -323,11 +361,7 @@ function scheduler.run(ctx, tokens, start_index)
                         -- start instead of reusing the stale marker from
                         -- the jumped-away scene (observed: 11 iterations
                         -- instead of 2 across a scene boundary).
-                        ctx._forStack = {}
-                        ctx._whileStack = {}
-                        ctx._ifStack = {}
-                        ctx._switchStack = {}
-                        ctx._forStackMarks = {}
+                        use_control_frame()
                         operation.cancel_all(ctx)
                         return
                     else
@@ -418,8 +452,10 @@ function scheduler.run(ctx, tokens, start_index)
                         scene = ctx.current_scene,
                         lf = ctx.lf,
                         mp = ctx.mp,
+                        control = control_frame(),
                     })
                     ctx.lf = {}
+                    use_control_frame()
                     i = idx
                 else
                     print("[WARN] [call] label not found: " .. label)
@@ -440,8 +476,10 @@ function scheduler.run(ctx, tokens, start_index)
                     scene = ctx.current_scene,
                     lf = ctx.lf,          -- restore on [return] (KAG3 lf frame)
                     mp = ctx.mp,
+                    control = control_frame(),
                 })
                 ctx.lf = {}               -- fresh local frame for the callee
+                use_control_frame()
                 tokens = new_tokens
                 ctx.tokens = tokens
                 ctx.current_scene = path
@@ -468,6 +506,7 @@ function scheduler.run(ctx, tokens, start_index)
                 ctx.current_scene = frame.scene       -- caller scene NAME again
                 if frame.lf ~= nil then ctx.lf = frame.lf end  -- pop lf frame
                 if frame.mp ~= nil then ctx.mp = frame.mp end
+                if frame.control then use_control_frame(frame.control) end
             end
             if frame then
                 tokens = frame.tokens
@@ -564,7 +603,7 @@ function scheduler.run(ctx, tokens, start_index)
             else
                 ok, result = eval_expr(ctx, params.exp or "false")
             end
-            local taken = ok and result or false
+            local taken = ok and not not result or false
             if_stack[#if_stack + 1] = taken
             if not taken then
                 -- Skip to the next elseif/else/endif; the target is NOT
@@ -603,7 +642,7 @@ function scheduler.run(ctx, tokens, start_index)
                 else
                     ok, result = eval_expr(ctx, params.exp or "false")
                 end
-                taken = ok and result or false
+                taken = ok and not not result or false
                 if_stack[#if_stack] = taken
                 if not taken then
                     local f = compiled_flow[i]
@@ -1324,6 +1363,7 @@ function scheduler.run(ctx, tokens, start_index)
                 -- site) were OVERWRITTEN and lost. Shift the tail element
                 -- by element from the END backwards (no overwrite), then
                 -- clear the vacated slots (review: macro splice tail loss).
+                tokens._runtime_rewritten = true
                 local tailStart = i + 1
                 local old_len = #tokens
                 local bodyCount = #macro_body
@@ -1431,6 +1471,7 @@ function scheduler.run(ctx, tokens, start_index)
         end
 
         ctx.token_index = i
+        ctx._executing_index, ctx._executing_command = nil, nil
         i = i + 1
         -- Macro expansion depth: pop splices whose body execution has
         -- moved past the last body token (nested splices pop inner-first
@@ -1449,6 +1490,7 @@ function scheduler.run(ctx, tokens, start_index)
             ctx.current_scene = frame.scene
             if frame.lf ~= nil then ctx.lf = frame.lf end
             if frame.mp ~= nil then ctx.mp = frame.mp end
+            if frame.control then use_control_frame(frame.control) end
             tokens = frame.tokens
             ctx.tokens = tokens
             refresh_compiled()
@@ -1459,6 +1501,7 @@ function scheduler.run(ctx, tokens, start_index)
             -- t49: mirror of the explicit-return dangling-label guard.
             prune_dangling_pending_jump()
         end
+        ctx._resume_index = i
         coroutine.yield()
     end
 end

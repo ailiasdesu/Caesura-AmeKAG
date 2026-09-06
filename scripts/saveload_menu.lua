@@ -8,6 +8,7 @@
 local SaveLoad = {}
 local backend = require("backend")
 local layers = require("layers")
+local Operation = require("kag.operation")
 local i18n = require("i18n")
 
 local NUM_SLOTS = 10
@@ -19,11 +20,40 @@ end
 --- SaveLoad.show(ctx, mode) — mode "save" or "load"; returns {slot=, action=} or nil.
 function SaveLoad.show(ctx, mode)
     mode = mode or "save"
-    local bg = layers.ensure(ctx, "_saveload_bg", 192)
+    local scope <close> = Operation.start(ctx)
+    local previousFocus = ctx.input_focus or "kag"
+    local ok, focus = pcall(backend.get_input_focus)
+    local previousBackendFocus = ok and type(focus) == "string" and focus
+        or (previousFocus == "kag" and "KAG" or "GAME")
+    local bg, texture, cleaned
+    local function cleanup()
+        if cleaned then return end
+        cleaned = true
+        if bg then bg.visible, bg.texture = false, nil end
+        if texture then pcall(backend.destroy_texture, texture) end
+        if ctx.input_focus == "saveload" then
+            ctx.input_focus = previousFocus
+            for _, key in ipairs({"UP", "DOWN", "ENTER", "ESC"}) do
+                _G["_GAME_KEY_" .. key] = false
+            end
+            pcall(backend.set_input_focus, previousBackendFocus)
+        end
+    end
+    local function finish(result)
+        cleanup()
+        scope:complete()
+        return result
+    end
+    scope.token:register(cleanup)
+    ctx.input_focus = "saveload"
+    backend.set_input_focus("GAME")
+
+    bg = layers.ensure(ctx, "_saveload_bg", 192)
     bg.visible = true
     local vw, vh = require("viewport").wh()  -- viewported from 1280x720
     bg.x, bg.y, bg.w, bg.h = 0, 0, vw, vh
-    bg.texture = solid(0, 0, 0, 210)
+    texture = solid(0, 0, 0, 210)
+    bg.texture = texture
 
     local slots = require("kag.commands.save").listsaves(ctx, {})
     -- slots is a list of {slot, desc, has_data} or similar
@@ -50,6 +80,7 @@ function SaveLoad.show(ctx, mode)
         end
         backend.render_text("[Up/Down] Select  [Enter] Confirm  [Esc] Cancel", 20, vh - 30, 120, 120, 160, 255)
         coroutine.yield()
+        if scope.token.cancelled then return end
 
         if _G._GAME_KEY_UP == true then
             _G._GAME_KEY_UP = false
@@ -60,11 +91,11 @@ function SaveLoad.show(ctx, mode)
         elseif _G._GAME_KEY_ENTER == true then
             _G._GAME_KEY_ENTER = false
             bg.visible = false
-            return { slot = cursor, action = mode }
+            return finish({ slot = cursor, action = mode })
         elseif _G._GAME_KEY_ESC == true then
             _G._GAME_KEY_ESC = false
             bg.visible = false
-            return nil
+            return finish(nil)
         end
         if cursor <= scroll then scroll = cursor - 1
         elseif cursor >= scroll + ITEMS then scroll = cursor - ITEMS + 1 end

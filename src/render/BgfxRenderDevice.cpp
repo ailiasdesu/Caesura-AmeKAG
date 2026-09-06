@@ -367,6 +367,9 @@ bool BgfxRenderDevice::requestScreenshot(const std::string& path) {
 bool BgfxRenderDevice::recoverDevice(void* nativeWindowHandle, int width, int height) {
     if (!m_bgfxInitialized || !m_deviceCore) return false;
 
+    std::unique_ptr<IPreparedFontState> savedFont;
+    if (m_textRenderer) savedFont=m_textRenderer->takeFontForDeviceRecovery();
+
     destroyPostFxResources();
 
     if (m_textRenderer) {
@@ -401,8 +404,10 @@ bool BgfxRenderDevice::recoverDevice(void* nativeWindowHandle, int width, int he
     m_draw = std::make_unique<BgfxDraw>();
     m_draw->init(&m_drawState);
     m_textRenderer = std::make_unique<TextRenderer>();
-    if (!m_textRenderer->init(this)) {
+    if (!m_textRenderer->init(this,false)
+        || (savedFont && !m_textRenderer->applyFontState(std::move(savedFont)))) {
         m_textRenderer.reset();
+        return false;
     }
     return true;
 }

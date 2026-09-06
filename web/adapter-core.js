@@ -5,7 +5,7 @@
 
 export class AdapterCore {
   constructor() {
-    /** layer name -> node {id,name,x,y,w,h,visible,opacity,z,texture} */
+    /** stable layer id -> canonical node (ordinary ids default to the name) */
     this.layers = new Map()
     this.textures = new Map() // id -> {path, loaded, width, height}
     this.textBuffer = ''
@@ -17,6 +17,9 @@ export class AdapterCore {
     this.audioBus = { bgm: null, se: [], voice: null }
     this.events = [] // call log for tests/telemetry
     this._seq = 0
+    this._layerInstances = new WeakSet()
+    this._childArrays = new WeakSet()
+    this._root = this._makeLayer('_root', '_root', { w: 0, h: 0, z: -9999, layer_type: 1 })
     /** Active color-grading LUT state (round 77 web palette bridge).
      *  Mirrors the desktop s_lutTex/u_paletteParams binding: handle is the
      *  registered LUT texture id (nil = no LUT), intensity 0..1, size 16/64. */
@@ -29,33 +32,117 @@ export class AdapterCore {
   // engine overwrites z on a found node). tag defaults to the layer name
   // (so Layers.find(name) tag-matching and the DOM tag heuristics work).
   ensureLayer(name, opts = {}) {
-    let n = this.layers.get(name)
+    this.getRoot()
+    let n = this.getLayer(name)
     if (!n) {
-      n = {
-        id: ++this._seq,
-        name,
-        x: opts.x ?? 0, y: opts.y ?? 0,
-        w: opts.w ?? 1280, h: opts.h ?? 720,
-        visible: opts.visible ?? true,
-        opacity: opts.opacity ?? 255, // engine semantics: 0..255
-        z: opts.z ?? 0,
-        texture: null,
-        tag: opts.tag ?? null,
-        layerType: opts.layer_type ?? 0,
+      const id = opts.id ?? String(name)
+      if (typeof id !== 'string' || !id || id === '_root' || this.layers.has(id)) {
+        throw new Error('Invalid or duplicate layer identity')
       }
-      this.layers.set(name, n)
+      n = this._makeLayer(id, String(name), opts)
+      this.layers.set(id, n)
+      this._attachLayer(n, this._root)
+      ++this._seq
       this._log('layer.create', { name, z: n.z })
     } else {
-      if (opts.z !== undefined) n.z = opts.z
-      if (opts.tag !== undefined) n.tag = opts.tag
+      if (opts.z !== undefined) this.setLayerProperty(n, 'z', opts.z)
+      if (opts.tag !== undefined) this.setLayerProperty(n, 'tag', opts.tag)
     }
     return n
   }
 
-  getLayer(name) { return this.layers.get(name) ?? null }
+  _makeLayer(id, name, opts = {}) {
+    const node = {
+      id, name, parent: null, children: [],
+      x: opts.x ?? 0, y: opts.y ?? 0, w: opts.w ?? 1280, h: opts.h ?? 720,
+      visible: opts.visible ?? true, opacity: opts.opacity ?? 255, z: opts.z ?? 0,
+      texture: opts.texture ?? opts.tex ?? null, tag: opts.tag ?? null,
+      layerType: opts.layer_type ?? opts.layerType ?? 0,
+      scaleX: 1, scaleY: 1, rotation: 0, originX: 0, originY: 0,
+      alpha: (opts.opacity ?? 255) / 255, blend_mode: opts.blend_mode ?? 'alpha',
+      dirty: true, quake: {}, shake: {}, fade: {},
+    }
+    for (const key of ['scale', 'scaleX', 'scaleY', 'rotation', 'originX', 'originY', 'alpha',
+      'pos_x', 'pos_y', 'clipX', 'clipY', 'clipW', 'clipH', 'imgX', 'imgY', 'imgW', 'imgH']) {
+      if (opts[key] !== undefined) node[key] = opts[key]
+    }
+    this._layerInstances.add(node)
+    this._childArrays.add(node.children)
+    return node
+  }
+
+  getRoot() {
+    // A few existing hosts clear the public Map directly between scenes.
+    if (this.layers.size === 0 && this._root.children.length > 0) {
+      this._root = this._makeLayer('_root', '_root', { w: 0, h: 0, z: -9999, layer_type: 1 })
+    }
+    return this._root
+  }
+
+  getLayer(name) {
+    if (name == null) return null
+    if (name === '_root') return this.getRoot()
+    return this.layers.get(name) ?? [...this.layers.values()].find(node => node.name === name) ?? null
+  }
+
+  addLayer(parent, opts = {}) {
+    this.getRoot()
+    const target = parent == null ? this._root : this._canon(parent)
+    if (!target) throw new Error('Layer parent is no longer active')
+    let name = opts.name ?? opts.id
+    if (name == null) {
+      let candidate = this._seq + 1
+      do { name = 'layer' + candidate++ } while (this.getLayer(name))
+    }
+    const id = opts.id ?? String(name)
+    if (typeof id !== 'string' || !id || id === '_root' || this.layers.has(id)) {
+      throw new Error('Invalid or duplicate layer identity')
+    }
+    const node = this._makeLayer(id, String(name), opts)
+    this.layers.set(id, node)
+    this._attachLayer(node, target)
+    ++this._seq
+    this._log('layer.create', { name: node.name, z: node.z })
+    return node
+  }
+
+  _attachLayer(node, parent) {
+    node.parent = parent
+    parent.children.push(node)
+    parent.children.sort((a, b) => a.z - b.z)
+  }
+
+  reparentLayer(node, parent) {
+    const current = this._canon(node)
+    const target = parent == null ? this.getRoot() : this._canon(parent)
+    if (!current) return false
+    if (!target || current === this._root) throw new Error('Invalid layer parent')
+    for (let ancestor = target; ancestor; ancestor = ancestor.parent) {
+      if (ancestor === current) throw new Error('Cyclic layer parent')
+    }
+    if (current.parent === target) return true
+    const siblings = current.parent?.children
+    if (siblings) siblings.splice(siblings.indexOf(current), 1)
+    this._attachLayer(current, target)
+    return true
+  }
+
+  clearLayers() {
+    this.layers.clear()
+    this._root = this._makeLayer('_root', '_root', { w: 0, h: 0, z: -9999, layer_type: 1 })
+    this._log('layer.clear', {})
+    return true
+  }
 
   removeLayer(name) {
-    if (this.layers.delete(name)) this._log('layer.remove', { name })
+    const node = typeof name === 'object' ? this._canon(name) : this.getLayer(name)
+    if (!node || node === this._root) return false
+    for (const child of [...node.children]) this.removeLayer(child)
+    const siblings = node.parent?.children
+    if (siblings) siblings.splice(siblings.indexOf(node), 1)
+    this.layers.delete(node.id)
+    this._log('layer.remove', { name: node.name })
+    return true
   }
 
   /** Resolve the canonical node: Lua-side proxies may wrap the same layer
@@ -63,27 +150,83 @@ export class AdapterCore {
    *  stored in the Map (keyed by name). */
   _canon(node) {
     if (!node) return null
-    const hit = this.layers.get(node.name)
-    return hit ?? node
+    if (node === this._root) return node
+    if (this._layerInstances.has(node)) return this.layers.get(node.id) === node ? node : null
+    return this.getLayer(node.name ?? node.id)
+  }
+
+  isLayerNode(value) { return this._layerInstances.has(value) }
+  isLayerChildren(value) { return this._childArrays.has(value) }
+
+  setLayerProperty(node, field, value) {
+    const n = this._canon(node)
+    if (!n) return false
+    if (field === 'id') {
+      if (value !== n.id) throw new Error('Layer identity is immutable')
+      return true
+    }
+    if (field === 'children') throw new Error('Use layer APIs to change children')
+    if (field === 'parent') return this.reparentLayer(n, value)
+    const key = field === 'tex' ? 'texture' : field === 'layer_type' ? 'layerType' : field
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') throw new Error('Invalid layer field')
+    n[key] = value
+    if (key === 'z') n.parent?.children.sort((a, b) => a.z - b.z)
+    if (key === 'opacity') n.alpha = value / 255
+    n._lastMutateAt = this._frame ?? 0
+    return true
+  }
+
+  installPreparedLayers(records) {
+    if (!Array.isArray(records) || records.length === 0) throw new Error('Expected prepared layer records')
+    const next = new Map()
+    let root = null
+    for (const [index, record] of records.entries()) {
+      if (!record || typeof record.id !== 'string' || !record.id || next.has(record.id)) {
+        throw new Error('Invalid or duplicate prepared layer identity')
+      }
+      if ((index === 0 && (record.id !== '_root' || record.parent != null))
+          || (index > 0 && (record.id === '_root' || !next.has(record.parent)))) {
+        throw new Error('Invalid prepared layer parent/order')
+      }
+      const texture = record.image ? record.image.id : null
+      if (texture != null && (!Number.isInteger(texture) || texture <= 0)) throw new Error('Invalid materialized texture ID')
+      const node = this._makeLayer(record.id, record.name ?? record.id, {
+        ...record, texture, w: record.w ?? 0, h: record.h ?? 0,
+      })
+      if (index === 0) root = node
+      else this._attachLayer(node, next.get(record.parent))
+      next.set(record.id, node)
+    }
+    next.delete('_root')
+    this.layers = next
+    this._root = root
+    this._log('layer.install', { nodes: records.length })
+    return true
   }
 
   setLayerImage(node, texId) {
     const n = this._canon(node)
     if (!n) return
-    n.texture = texId ?? null
+    this.setLayerProperty(n, 'texture', texId ?? null)
     this._log('layer.image', { name: n.name, tex: texId })
   }
 
-  setLayerVisible(node, v) { const n = this._canon(node); if (n) { n.visible = !!v; this._log('layer.visible', { name: n.name, v: !!v }) } }
-  setLayerOpacity(node, v) { const n = this._canon(node); if (n) { n.opacity = Number(v) ?? 255; n._lastMutateAt = this._frame ?? 0; this._log('layer.opacity', { name: n.name, v: n.opacity }) } }
-  setLayerZ(node, z) { const n = this._canon(node); if (n) { n.z = Number(z) ?? 0; n._lastMutateAt = this._frame ?? 0; this._log('layer.z', { name: n.name, z: n.z }) } }
-  moveLayer(node, x, y) { const n = this._canon(node); if (n) { n.x = Number(x) ?? n.x; n.y = Number(y) ?? n.y; n._lastMutateAt = this._frame ?? 0; this._log('layer.move', { name: n.name, x: n.x, y: n.y }) } }
+  setLayerVisible(node, v) { const n = this._canon(node); if (n) { this.setLayerProperty(n, 'visible', !!v); this._log('layer.visible', { name: n.name, v: !!v }) } }
+  setLayerOpacity(node, v) { const n = this._canon(node); if (n) { this.setLayerProperty(n, 'opacity', Number(v)); this._log('layer.opacity', { name: n.name, v: n.opacity }) } }
+  setLayerZ(node, z) { const n = this._canon(node); if (n) { this.setLayerProperty(n, 'z', Number(z)); this._log('layer.z', { name: n.name, z: n.z }) } }
+  moveLayer(node, x, y) {
+    const n = this._canon(node)
+    if (!n) return
+    if (x != null) this.setLayerProperty(n, 'x', Number(x))
+    if (y != null) this.setLayerProperty(n, 'y', Number(y))
+    this._log('layer.move', { name: n.name, x: n.x, y: n.y })
+  }
 
   // -- textures ---------------------------------------------------------
   loadTexture(path) {
     if (!path) return 0
     let id = 0
-    for (const [k, v] of this.textures) if (v.path === path) { id = k; break }
+    for (const [k, v] of this.textures) if (!v.prepared && v.path === path) { id = k; break }
     if (!id) { id = ++this._seq; this.textures.set(id, { path, loaded: false, width: 0, height: 0 }) }
     this._log('texture.load', { path, id })
     return id
@@ -92,7 +235,25 @@ export class AdapterCore {
     const t = this.textures.get(id)
     if (t) { t.loaded = true; t.width = width ?? 0; t.height = height ?? 0; this._log('texture.ready', { id, w: t.width, h: t.height }) }
   }
-  destroyTexture(id) { this.textures.delete(id); this._log('texture.destroy', { id }) }
+  /** Adopt an already decoded image without adding it to the path cache. */
+  registerPreparedTexture(source, prepared) {
+    const id = this._seq + 1
+    const texture = {
+      path: source.kind === 'asset' ? source.path : '', source: { ...source }, prepared,
+      loaded: true, width: prepared.width, height: prepared.height,
+    }
+    this.textures.set(id, texture)
+    try { this._log('texture.restore', { id, width: texture.width, height: texture.height }) }
+    catch (error) { this.textures.delete(id); throw error }
+    this._seq = id
+    return id
+  }
+  destroyTexture(id) {
+    const texture = this.textures.get(id)
+    this.textures.delete(id)
+    texture?.prepared?.dispose()
+    this._log('texture.destroy', { id })
+  }
 
   // -- palette / LUT (round 77 web bridge) -----------------------------
   /** Apply the active color-grading LUT. handle is a texture id registered
@@ -164,9 +325,19 @@ export class AdapterCore {
 
   // -- z-sorted render list (canvas/DOM both consume this) --------------
   renderList() {
-    return [...this.layers.values()]
-      .filter((n) => n.visible && n.texture)
-      .sort((a, b) => a.z - b.z)
+    const result = []
+    const visit = (node, parentX, parentY) => {
+      if (!this._canon(node) || !node.visible) return
+      const x = parentX + (node.pos_x ?? node.x ?? 0)
+      const y = parentY + (node.pos_y ?? node.y ?? 0)
+      for (const child of node.children) visit(child, x, y)
+      if (node.texture) {
+        const { parent, children, ...fields } = node
+        result.push({ ...fields, x, y })
+      }
+    }
+    visit(this.getRoot(), 0, 0)
+    return result.sort((a, b) => a.z - b.z)
   }
 
   _log(kind, detail) { this.events.push({ kind, detail, t: this.events.length }) }

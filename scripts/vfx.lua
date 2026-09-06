@@ -9,6 +9,7 @@
 
 local backend = require("backend")
 local layers  = require("layers")
+local Operation = require("kag.operation")
 local VFX = {}
 
 local math_sin, math_abs, math_random = math.sin, math.abs, math.random
@@ -16,7 +17,7 @@ local DEFAULT_FRAME_MS = 16
 
 local function next_frame_ms(is_coroutine)
     if not is_coroutine then return DEFAULT_FRAME_MS end
-    return tonumber(coroutine.yield()) or DEFAULT_FRAME_MS
+    return tonumber((coroutine.yield())) or DEFAULT_FRAME_MS
 end
 
 -- ===========================================================================
@@ -26,6 +27,22 @@ end
 --             offset_y = random(-ampl_y, +ampl_y) * decay
 -- ===========================================================================
 function VFX.quake(ctx, params)
+    local operation <close> = Operation.start(ctx or {})
+    local ct = operation.token
+    local affected = {}
+    local function cleanup()
+        for _, entry in ipairs(affected) do
+            if entry.effect._operation == ct then
+                entry.effect._operation = nil
+                entry.effect.active = false
+                entry.effect.offset_x, entry.effect.offset_y = 0, 0
+                entry.node.dirty = true
+            end
+        end
+        if VFX._quakeToken == ct then VFX._quakeToken, VFX._quakeActive = nil, false end
+    end
+    ct:register(cleanup)
+    VFX._quakeToken = ct
     VFX._quakeActive = true
     local isCoroutine = coroutine.isyieldable()
     local dur_ms    = tonumber(params.time) or 500
@@ -37,6 +54,8 @@ function VFX.quake(ctx, params)
     -- Activate quake on all visible layers via the layers module
     layers.forEach(function(id, node)
         if node.visible then
+            affected[#affected + 1] = {node=node, effect=node.quake}
+            node.quake._operation = ct
             node.quake.active = true
             node.quake.amplitude_x = ampl_x
             node.quake.amplitude_y = ampl_y
@@ -45,6 +64,7 @@ function VFX.quake(ctx, params)
 
     while elapsed_ms < dur_ms do
         elapsed_ms = elapsed_ms + next_frame_ms(isCoroutine)
+        if ct.cancelled or VFX._quakeToken ~= ct then return end
         local t = elapsed_ms / dur_ms
         if t > 1 then t = 1 end
 
@@ -54,7 +74,7 @@ function VFX.quake(ctx, params)
         local oy = (math_random() * 2.0 - 1.0) * ampl_y * decay_factor
 
         layers.forEach(function(id, node)
-            if node.visible and node.quake.active then
+            if node.visible and node.quake.active and node.quake._operation == ct then
                 node.quake.offset_x = ox
                 node.quake.offset_y = oy
                 node.dirty = true
@@ -62,16 +82,8 @@ function VFX.quake(ctx, params)
         end)
     end
 
-    -- Deactivate quake on all layers
-    layers.forEach(function(id, node)
-        if node.quake.active then
-            node.quake.active = false
-            node.quake.offset_x = 0
-            node.quake.offset_y = 0
-            node.dirty = true
-        end
-    end)
-    VFX._quakeActive = false
+    cleanup()
+    operation:complete()
 end
 
 -- ===========================================================================
@@ -80,6 +92,22 @@ end
 -- params: { time=500, frequency=20, amplitude=6 }
 -- ===========================================================================
 function VFX.shake(ctx, params)
+    local operation <close> = Operation.start(ctx or {})
+    local ct = operation.token
+    local affected = {}
+    local function cleanup()
+        for _, entry in ipairs(affected) do
+            if entry.effect._operation == ct then
+                entry.effect._operation = nil
+                entry.effect.active = false
+                entry.effect.offset_x, entry.effect.offset_y = 0, 0
+                entry.node.dirty = true
+            end
+        end
+        if VFX._shakeToken == ct then VFX._shakeToken, VFX._shakeActive = nil, false end
+    end
+    ct:register(cleanup)
+    VFX._shakeToken = ct
     VFX._shakeActive = true
     local isCoroutine = coroutine.isyieldable()
     local dur_ms    = tonumber(params.time) or 500
@@ -90,12 +118,15 @@ function VFX.shake(ctx, params)
     -- Activate shake on all visible layers via the layers module
     layers.forEach(function(id, node)
         if node.visible then
+            affected[#affected + 1] = {node=node, effect=node.shake}
+            node.shake._operation = ct
             node.shake.active = true
         end
     end)
 
     while elapsed_ms < dur_ms do
         elapsed_ms = elapsed_ms + next_frame_ms(isCoroutine)
+        if ct.cancelled or VFX._shakeToken ~= ct then return end
         local t = elapsed_ms / dur_ms
         if t > 1 then t = 1 end
 
@@ -106,7 +137,7 @@ function VFX.shake(ctx, params)
         local oy = (math_random() * 2.0 - 1.0) * amplitude * math_sin(elapsed_s * freq * 1.3 + 1.0) * decay
 
         layers.forEach(function(id, node)
-            if node.visible and node.shake.active then
+            if node.visible and node.shake.active and node.shake._operation == ct then
                 node.shake.offset_x = ox
                 node.shake.offset_y = oy
                 node.dirty = true
@@ -114,16 +145,8 @@ function VFX.shake(ctx, params)
         end)
     end
 
-    -- Deactivate shake on all layers
-    layers.forEach(function(id, node)
-        if node.shake.active then
-            node.shake.active = false
-            node.shake.offset_x = 0
-            node.shake.offset_y = 0
-            node.dirty = true
-        end
-    end)
-    VFX._shakeActive = false
+    cleanup()
+    operation:complete()
 end
 
 -- ===========================================================================
@@ -131,6 +154,8 @@ end
 -- params: { time=1000, direction="out", r=0, g=0, b=0 }
 -- ===========================================================================
 function VFX.fade(ctx, params)
+    local operation <close> = Operation.start(ctx)
+    local ct = operation.token
     local isCoroutine = coroutine.isyieldable()
     local dur_ms    = tonumber(params.time) or 1000
     local direction = params.direction or params.dir or "out"
@@ -142,6 +167,7 @@ function VFX.fade(ctx, params)
     local texId = ctx._bgTexture or 0
     while elapsed_ms < dur_ms do
         elapsed_ms = elapsed_ms + next_frame_ms(isCoroutine)
+        if ct.cancelled then return end
         local t = elapsed_ms / dur_ms
         if t > 1 then t = 1 end
 
@@ -150,6 +176,7 @@ function VFX.fade(ctx, params)
             backend.submit_vfx(texId, 1, alpha, r/255, g/255, b/255, 0, 0, 0)
         end
     end
+    operation:complete()
 end
 
 -- ===========================================================================
@@ -157,6 +184,13 @@ end
 -- params: { time=1000, direction="in" }
 -- ===========================================================================
 function VFX.fade_layer(ctx, layer, params)
+    local operation <close> = Operation.start(ctx or {})
+    local ct = operation.token
+    layer._fadeOperation = ct
+    local function cleanup()
+        if layer._fadeOperation == ct then layer._fadeOperation = nil end
+    end
+    ct:register(cleanup)
     local isCoroutine = coroutine.isyieldable()
     local dur_ms    = tonumber(params.time) or 1000
     local direction = params.direction or params.dir or "in"
@@ -165,6 +199,7 @@ function VFX.fade_layer(ctx, layer, params)
     local origAlpha = layer.alpha or 1.0
     while elapsed_ms < dur_ms do
         elapsed_ms = elapsed_ms + next_frame_ms(isCoroutine)
+        if ct.cancelled or layer._fadeOperation ~= ct then return end
         local t = elapsed_ms / dur_ms
         if t > 1 then t = 1 end
 
@@ -173,6 +208,8 @@ function VFX.fade_layer(ctx, layer, params)
     end
     layer.alpha = (direction == "in") and origAlpha or 0
     layer.dirty = true
+    cleanup()
+    operation:complete()
 end
 
 -- ===========================================================================
@@ -181,6 +218,8 @@ end
 -- params: { time=500, strength=4, layer="" }
 -- ===========================================================================
 function VFX.blur(ctx, params)
+    local operation <close> = Operation.start(ctx)
+    local ct = operation.token
     local isCoroutine = coroutine.isyieldable()
     local dur_ms   = tonumber(params.time) or 500
     local strength = tonumber(params.strength or params.intensity or params.blurlevel) or 4
@@ -204,11 +243,22 @@ function VFX.blur(ctx, params)
         print("[VFX] blur: RTT alloc unavailable (headless) — skipping")
         return
     end
-    local tmpA = rtt.alloc(ctx._width or 1280, ctx._height or 720)
-    local tmpB = rtt.alloc(ctx._width or 1280, ctx._height or 720)
+    local tmpA, tmpB = 0, 0
+    local function free_a()
+        local id = tmpA; tmpA = 0
+        if id and id > 0 then rtt.free(id) end
+    end
+    local function free_b()
+        local id = tmpB; tmpB = 0
+        if id and id > 0 then rtt.free(id) end
+    end
+    ct:register(free_a); ct:register(free_b)
+    tmpA = rtt.alloc(ctx._width or 1280, ctx._height or 720)
+    tmpB = rtt.alloc(ctx._width or 1280, ctx._height or 720)
 
     while elapsed_ms < dur_ms do
         elapsed_ms = elapsed_ms + next_frame_ms(isCoroutine)
+        if ct.cancelled then return end
         local t = elapsed_ms / dur_ms
         if t > 1 then t = 1 end
 
@@ -219,10 +269,8 @@ function VFX.blur(ctx, params)
     end
 
     -- Clean up temp textures
-    if rtt then
-        if tmpA > 0 then rtt.free(tmpA) end
-        if tmpB > 0 then rtt.free(tmpB) end
-    end
+    free_a(); free_b()
+    operation:complete()
 end
 
 -- ===========================================================================
@@ -231,21 +279,35 @@ end
 -- ===========================================================================
 function VFX.blur_layer(layer, params, co)
     if not layer or type(layer) ~= "table" then return end
+    -- This legacy helper has no ctx argument; use the published session when
+    -- driven by the engine, and retain scoped cleanup in standalone hosts.
+    local operation <close> = Operation.start(rawget(_G, "_CAESURA_CTX") or {})
+    local ct = operation.token
     local dur_ms   = tonumber(params.time) or 500
     local strength = tonumber(params.strength or params.blurlevel) or 4
     local elapsed_ms = 0
     local rtt = require("rtt")
 
-    local origTexture = layer.texture
-    local tmpA = rtt and rtt.alloc(1280, 720) or 0
-    local tmpB = rtt and rtt.alloc(1280, 720) or 0
+    local tmpA, tmpB = 0, 0
+    local function free_a()
+        local id = tmpA; tmpA = 0
+        if id and id > 0 then rtt.free(id) end
+    end
+    local function free_b()
+        local id = tmpB; tmpB = 0
+        if id and id > 0 then rtt.free(id) end
+    end
+    ct:register(free_a); ct:register(free_b)
+    tmpA = rtt and rtt.alloc(1280, 720) or 0
+    tmpB = rtt and rtt.alloc(1280, 720) or 0
 
     while elapsed_ms < dur_ms do
         if co and coroutine.isyieldable() then
-            elapsed_ms = elapsed_ms + (tonumber(co.yield()) or DEFAULT_FRAME_MS)
+            elapsed_ms = elapsed_ms + (tonumber((co.yield())) or DEFAULT_FRAME_MS)
         else
             elapsed_ms = elapsed_ms + DEFAULT_FRAME_MS
         end
+        if ct.cancelled then return end
         local t = elapsed_ms / dur_ms
         if t > 1 then t = 1 end
 
@@ -256,10 +318,8 @@ function VFX.blur_layer(layer, params, co)
         layer.dirty = true
     end
 
-    if rtt then
-        if tmpA > 0 then rtt.free(tmpA) end
-        if tmpB > 0 then rtt.free(tmpB) end
-    end
+    free_a(); free_b()
+    operation:complete()
 end
 
 -- ===========================================================================
@@ -275,6 +335,8 @@ local function clamp_byte(v)
 end
 
 function VFX.flash(ctx, params)
+    local operation <close> = Operation.start(ctx)
+    local ct = operation.token
     local isCoroutine = coroutine.isyieldable()
     local dur_ms = tonumber(params.time) or 200
     local r = clamp_byte(params.r or params.red or 255)
@@ -291,11 +353,21 @@ function VFX.flash(ctx, params)
         ctx.layers = ctx.layers or {}
         ctx.layers["__flash"] = flashLayer
     end
+    flashLayer._operation = ct
+    local function cleanup()
+        if flashLayer._operation == ct then
+            flashLayer._operation = nil
+            flashLayer.alpha = 0
+            flashLayer.dirty = true
+        end
+    end
+    ct:register(cleanup)
 
     local midPoint_ms = dur_ms / 2
 
     while elapsed_ms < dur_ms do
         elapsed_ms = elapsed_ms + next_frame_ms(isCoroutine)
+        if ct.cancelled or flashLayer._operation ~= ct then return end
 
         local alpha_val
         if elapsed_ms < midPoint_ms then
@@ -316,14 +388,15 @@ function VFX.flash(ctx, params)
         end
     end
 
-    flashLayer.alpha = 0
-    flashLayer.dirty = true
+    cleanup()
+    operation:complete()
 end
 
 -- ===========================================================================
 -- VFX.stop_quake() -- immediately terminate quake and restore positions
 -- ===========================================================================
 function VFX.stop_quake()
+    if VFX._quakeToken then VFX._quakeToken:cancel() end
     VFX._quakeActive = false
     layers.forEach(function(id, node)
         if node.quake.active then
@@ -339,6 +412,7 @@ end
 -- VFX.stop_shake() -- immediately terminate sinusoidal shake
 -- ===========================================================================
 function VFX.stop_shake()
+    if VFX._shakeToken then VFX._shakeToken:cancel() end
     VFX._shakeActive = false
     layers.forEach(function(id, node)
         if node.shake.active then

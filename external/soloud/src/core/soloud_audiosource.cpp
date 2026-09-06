@@ -80,6 +80,9 @@ namespace SoLoud
 		mSetRelativePlaySpeed = 1.0f;
 		mStreamTime = 0.0f;
 		mStreamPosition = 0.0f;
+		mSourceFrameFixed = 0;
+		mRestoreClockValid = true;
+		mParentClockDelayFrames = 0;
 		mAudioSourceID = 0;
 		mActiveFader = 0;
 		mChannels = 1;
@@ -121,6 +124,9 @@ namespace SoLoud
 		mChannels = aSource.mChannels;
 		mStreamTime = 0.0f;
 		mStreamPosition = 0.0f;
+		mSourceFrameFixed = 0;
+		mRestoreClockValid = true;
+		mParentClockDelayFrames = 0;
 		mLoopPoint = aSource.mLoopPoint;
 
 		if (aSource.mFlags & AudioSource::SHOULD_LOOP)
@@ -147,6 +153,11 @@ namespace SoLoud
 		{
 			mFlags |= AudioSourceInstance::DISABLE_AUTOSTOP;
 		}
+	}
+
+	result AudioSourceInstance::seekFrame(uint64_t)
+	{
+		return NOT_IMPLEMENTED;
 	}
 
 	result AudioSourceInstance::rewind()
@@ -350,4 +361,3 @@ namespace SoLoud
 
 
 };
-

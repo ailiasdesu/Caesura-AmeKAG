@@ -9,13 +9,13 @@ end
 local MusicRoom = require("music_room")
 local plays, favs = {}, {}
 local real_scan = MusicRoom.scan
+local real_play, real_favorite = MusicRoom.play, MusicRoom.favorite
 MusicRoom.scan = function()
     return { { id = "t1", name = "Track One", path = "a.ogg" },
              { id = "t2", name = "Track Two", path = "b.ogg" } }
 end
 MusicRoom.play = function(id) plays[#plays + 1] = id return true end
 MusicRoom.favorite = function(id) favs[#favs + 1] = id end
-MusicRoom.hide = function() end
 local real_backend = _G._CAESURA_BACKEND
 _G._CAESURA_BACKEND = { render = function() return true end,
     platform = function(cmd)
@@ -179,6 +179,10 @@ do
         stopGot and math.abs(stopGot[2] - 0.3) < 1e-9)
   _G._CAESURA_BACKEND = realBackend
 end
+
+MusicRoom.scan, MusicRoom.play, MusicRoom.favorite = real_scan, real_play, real_favorite
+package.loaded["layers"] = layers_backup
+_G._CAESURA_BACKEND = real_backend
 
 if failed > 0 then os.exit(1) end
 print("MUSIC ROOM TESTS DONE")

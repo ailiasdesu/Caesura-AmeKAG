@@ -8,6 +8,9 @@ end
 
 local KAG = require("kag")
 local SaveCommands = KAG
+-- This contract fixture starts with no live visual operation. The main suite
+-- also runs VFX tests in this VM; their layer tree is not part of this save.
+require("layers").init()
 
 -- save/load schemas clamp slot to 0..99
 local schema = require("kag.schema")
@@ -39,7 +42,7 @@ check("saveload no-choice guard",
 -- visual/text state round-trip (audit: capture + restore font/style)
 local Save = package.loaded["kag.commands.save"] or require("kag.commands.save")
 local ctxV = { f = { hero = 1 }, sf = {}, tf = {}, mp = {}, variables = {},
-    token_index = 5, current_scene = "s.ks", backlog = {},
+    token_index = 3, current_scene = "tests/projects/u11_restore/base.ks", backlog = {},
     seen_scenes = {}, seen_endings = {}, saveDescription = "v",
     text_state = { font_face = "serif", font_size = 30, font_color = "255,0,0" },
     textbox_style = { x = 0, y = 520, w = 1280, h = 200,
@@ -121,22 +124,26 @@ package.loaded["saveload_menu"] = sl_b
 
 -- capture_state table-completeness matrix: which ctx tables travel into a
 -- save slot. f (global flags) and sf (system flags) are captured; the
--- extension scopes tf / mp / lf are NOT serialized (tf = temp/UI flags,
--- lf = local-frame flags, both documented as non-persistent). Only string
--- keys survive (a crafted non-string key in f cannot leak through JSON).
+-- tf is temporary; mp and lf are persistent call-frame values. Mixed keys
+-- reject the save instead of silently losing part of the original state.
 do
     local st = Save.capture_state({
-        f = { hp = 40, chip = true, [123] = "leak" },
+        f = { hp = 40, chip = true },
         sf = { sys_bgm = true }, tf = { save_ui_open = true },
         mp = { name = "Aoi" }, lf = { frame = "sub" },
         current_scene = "s.ks", token_index = 3,
     })
     check("capture includes f (global flags)", st.f and st.f.hp == 40 and st.f.chip == true)
     check("capture includes sf (system flags)", st.sf and st.sf.sys_bgm == true)
-    check("capture drops non-string f key", st.f[123] == nil)
+    check("capture rejects mixed f keys", not pcall(Save.capture_state,
+        {f={hp=40,[123]="must not disappear"}}))
+    check("capture rejects mixed sf keys", not pcall(Save.capture_state,
+        {sf={owner="saved",[123]="must not disappear"}}))
+    local array=Save.capture_state({f={"a","b"}})
+    check("capture preserves dense f arrays",array.f[1]=="a" and array.f[2]=="b")
     check("capture excludes tf (temp flags)", st.tf == nil)
-    check("capture excludes mp (message params)", st.mp == nil)
-    check("capture excludes lf (local-frame flags)", st.lf == nil)
+    check("capture includes mp (message params)", st.mp.name == "Aoi")
+    check("capture includes lf (local-frame flags)", st.lf.frame == "sub")
     -- iteration/marker scratch state is scheduler-internal: it must never
     -- ride into the serialized slot (a [for] counter lives in ctx.f, but
     -- for_stack / while_stack are scheduler.run locals -- see saveflow).

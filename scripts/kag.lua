@@ -26,7 +26,7 @@ local layer_cmds = require("kag.commands.layer")
 -- loop registers [particles] as a command -- no filter needed.
 local vfx_cmds = require("kag.commands.vfx")
 for name, handler in pairs(vfx_cmds) do
-    KAG[name] = handler
+    if name:sub(1,1)~='_' then KAG[name] = handler end
 end
 
 for name, handler in pairs(layer_cmds) do

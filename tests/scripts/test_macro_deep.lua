@@ -288,6 +288,18 @@ do
           #dispatched == 1002, "dispatched=" .. #dispatched)
 end
 
+do
+    local ctx,ok,err=run_tokens({
+        {"if",{exp="true"}},
+        {"macro",{name="temporary"}},{"ch",{text="runtime body"}},{"endmacro"},
+        {"endif"},{"temporary"},{"erasemacro",{name="temporary"}},{"end"},
+    },100)
+    check("erased dynamic macro finishes",ok,err)
+    check("macro splice keeps provenance after erasure",ctx.tokens._runtime_rewritten==true)
+    check("rewritten stream cannot silently save an original-source cursor",
+        not pcall(require('kag.transient_state').assert_saveable,ctx))
+end
+
 package.loaded["kag"] = kag_orig
 
 print(string.format("\nMACRO DEEP: %d passed, %d failed", passed, failed))

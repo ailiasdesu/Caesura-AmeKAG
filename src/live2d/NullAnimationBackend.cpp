@@ -33,13 +33,7 @@ bool NullAnimationBackend::init() {
 void NullAnimationBackend::shutdown() {
     if (!m_initialized) return;
 
-    for (const auto& [handle, sprite] : m_sprites) {
-        (void)handle;
-        if (sprite.textureId != 0 && m_textureManager) {
-            m_textureManager->destroyTexture(sprite.textureId);
-        }
-    }
-    m_sprites.clear();
+    clearModels();
     m_textureManager = nullptr;
     m_renderDevice = nullptr;
     m_nextHandle = 1;
@@ -88,6 +82,16 @@ void NullAnimationBackend::unloadModel(int handle) {
 
 bool NullAnimationBackend::isLoaded(int handle) const {
     return m_sprites.find(handle) != m_sprites.end();
+}
+
+std::size_t NullAnimationBackend::loadedModelCount() const {
+    return m_sprites.size();
+}
+
+void NullAnimationBackend::clearModels() {
+    while (!m_sprites.empty()) {
+        unloadModel(m_sprites.begin()->first);
+    }
 }
 
 void NullAnimationBackend::showModel(int handle, float x, float y, float scale) {

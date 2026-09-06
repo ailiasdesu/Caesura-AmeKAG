@@ -92,6 +92,11 @@ public:
                     uint8_t, uint8_t, uint8_t, uint8_t) override {}
     void setFont(int) override {}
     bool loadTTF(const char*, float) override { return false; }
+    FontRestoreState captureFontState() const override { return {}; }
+    FontRestoreState defaultFontState() const override { return {}; }
+    std::unique_ptr<IPreparedFontState> prepareFontState(const FontRestoreState&, const uint8_t*, size_t) override { return {}; }
+    bool applyFontState(std::unique_ptr<IPreparedFontState>) override { return false; }
+    void clearFontState() override {}
     float textLineHeight() const override { return 0.0f; }
 
     // -- blend / transition / vfx --

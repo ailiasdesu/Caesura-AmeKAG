@@ -1,5 +1,6 @@
 #pragma once
 #include "../audio/api/IAudioBackend.h"
+#include "api/IAudioRestore.h"
 
 namespace Caesura {
 
@@ -9,7 +10,7 @@ namespace Caesura {
 // All 24 pure virtual methods return safe defaults: false, 0, or no-ops.
 // Used when no actual audio device is available.
 
-class NullAudioBackend : public IAudioBackend {
+class NullAudioBackend : public IAudioBackend, public IAudioRestore {
 public:
     NullAudioBackend();
     ~NullAudioBackend() override = default;
@@ -72,6 +73,11 @@ public:
 
     // -- Backend identification --------------------------------------------
     const char* getBackendName() const override;
+    AudioRestoreState captureAudioState() override;
+    std::unique_ptr<IPreparedAudioState> prepareAudioState(
+        const AudioRestoreState& state, const uint8_t* bytes, size_t size) override;
+    bool applyAudioState(std::unique_ptr<IPreparedAudioState> prepared) override;
+    void stopSessionAudio() override;
 };
 
 } // namespace Caesura

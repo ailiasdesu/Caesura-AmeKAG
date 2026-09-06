@@ -55,6 +55,7 @@ end
 local kag_co = nil
 local ctx = nil
 local changing_session = false
+local session_revision = 0
 
 local function publish_context(value)
     local engine = rawget(_G, "Engine")
@@ -62,7 +63,10 @@ local function publish_context(value)
         assert(engine.bind_active_context(value))
     end
     ctx = value
+    session_revision = session_revision + 1
     rawset(_G, "_CAESURA_CTX", value)
+    local presentation = package.loaded["kag.presentation"]
+    if presentation then presentation.adopt(value) end
 end
 
 local function scheduler_running()
@@ -73,12 +77,14 @@ end
 
 local function has_continuation(c)
     return c and (c._pendingSceneReload or c._pendingRollback
-        or c._scene_changed or c._pendingJump or c._pendingLoadScene)
+        or c._scene_changed or c._pendingJump or c._pendingLoadScene or c._pendingRestore)
 end
 
 local function spawn_scheduler(index)
     local owner = ctx
     owner._session_active = true
+    owner._resume_index = index
+    owner._executing_index, owner._executing_command = nil, nil
     kag_co = coroutine.create(function()
         scheduler.run(owner, owner.tokens, index)
     end)
@@ -179,14 +185,27 @@ local function finish_session(retain_context)
     owner.stop_flag = true
     local closed, close_error = close_scheduler_coroutine()
     local cancelled, cancel_error = pcall(cancel_session_work, owner)
+    local presentation = package.loaded["kag.presentation"]
+    local cleaned, cleanup_error = true, nil
+    if presentation then
+        if owner._pendingRestore then
+            cleaned, cleanup_error = presentation.discard(owner._pendingRestore._presentation)
+        end
+        if not retain_context then
+            local stopped, stop_error = presentation.stop(owner)
+            if not stopped then cleaned, cleanup_error = false, stop_error end
+        end
+    end
     owner._pendingSceneReload, owner._pendingRollback = nil, nil
     owner._scene_changed, owner._pendingJump = false, nil
     owner._pendingLoadScene, owner._pendingLoadToken = nil, nil
+    owner._pendingRestore = nil
     owner.waiting_input = false
     if not retain_context then publish_context(nil) end
     changing_session = false
     if not closed then return false, close_error end
     if not cancelled then return false, cancel_error end
+    if not cleaned then return false, cleanup_error end
     return true
 end
 
@@ -416,35 +435,9 @@ local function resume_from_save()
     ctx.labelMap = scene.labels
     ctx.tokens = scene.tokens
     ctx.label_index = nil  -- scene swap bypasses the scheduler: rebuild
-    -- Coerce the restored token index: crafted saves may carry a string or
-    -- table; scheduler.run compares `i <= #tokens` numerically.
-    -- t62 (round-94 guard; web/bridge.js keeps TWO mirrored copies of this
-    -- exact discriminator -- search "atLoadTag9" (t69) -- change all three
-    -- sites together): a self-referential load -- [save] then [load] back-to-back
-    -- in the SAME scene -- recorded a resume point at/before the consumed
-    -- [load] token, so a plain restore re-executes the [save]/[load] block
-    -- forever. When the reloaded scene is the current one AND the resume was
-    -- triggered BY a [load] tag sitting exactly at the current cursor AND the
-    -- saved resume point is at/before it, advance past the [load] so
-    -- execution continues forward. (The cursor-at-load-tag check keeps a
-    -- direct SaveCommands.load() issued from a pause point -- the Golden VN
-    -- roundtrip driver -- on the exact saved token: there is no load tag to
-    -- skip there.) Cross-scene loads (a genuine [load] into a different
-    -- scene) are unchanged: the scene differs, so the saved token is used
-    -- exactly.
-    local cur = tonumber(ctx.token_index) or 1
-    local curTok = ctx.tokens and ctx.tokens[cur]
-    -- Shape-agnostic: flow.load_scene tokens carry the command at [1];
-    -- the web bridge's raw tokenizer.parse tokens carry it in .cmd (t69:
-    -- the [1]-only check never fired on web, so a self-referential
-    -- [save]->[load] re-spawned forever).
-    local atLoadTag = type(curTok) == "table" and (curTok[1] == "load" or curTok.cmd == "load")
-    if ctx._pendingLoadOriginScene == path and atLoadTag
-        and (tonumber(ctx._pendingLoadToken) or 1) <= cur then
-        ctx.token_index = cur + 1
-    else
-        ctx.token_index = math.max(1, tonumber(ctx._pendingLoadToken) or 1)
-    end
+    -- Loading never skips commands based on where the request originated.
+    -- A script that unconditionally loads an earlier point is a script loop.
+    ctx.token_index = math.max(1, tonumber(ctx._pendingLoadToken) or 1)
     ctx.currentScene = path
     -- The saved [load] set stop_flag to end the running script; clear it so
     -- the resumed coroutine actually executes tokens (scheduler returns
@@ -464,28 +457,10 @@ end
 -- ── kag_runner.start(scene_path) → boolean ───────────────────────────────────
 -- Load a .ks scene and begin executing it. Returns true on success.
 
-function kag_runner.start(scene_path)
-    if changing_session then return false, "session-changing" end
-    local allowed, reason = can_resume()
-    if not allowed then
-        print("[KAG Runner] Start blocked: " .. reason)
-        return false, reason
-    end
-
-    if kag_co then
-        if coroutine.status(kag_co) ~= "dead" then
-            return false, "already-running"
-        end
-    end
-
-    local loaded, scene = pcall(flow.load_scene, scene_path)
-    if not loaded or type(scene) ~= "table" or type(scene.tokens) ~= "table" then
-        print("[KAG Runner] Failed to load scene: " .. tostring(scene_path))
-        return false, loaded and "scene-load-failed" or scene
-    end
-
+local function make_context()
     -- Prepare a candidate before changing the published session reference.
     local candidate = {
+        _native_runner_owner = true,
         f = {}, sf = {}, tf = {},
         tokens = {}, token_index = 1,
         call_stack = {}, layers = {}, backlog = {},
@@ -513,9 +488,60 @@ function kag_runner.start(scene_path)
         _undoLimit = 64,
     }
     candidate.load_tokens = function(path) return load_tokens(candidate, path) end
+    return candidate
+end
+
+function kag_runner.start(scene_path, options)
+    if changing_session then return false, "session-changing" end
+    local allowed, reason = can_resume()
+    if not allowed then
+        print("[KAG Runner] Start blocked: " .. reason)
+        return false, reason
+    end
+
+    if kag_co then
+        if coroutine.status(kag_co) ~= "dead" then
+            if type(options) ~= "table" or options.replace ~= true then
+                return false, "already-running"
+            end
+            if scheduler_running() then return false, "scheduler-running" end
+        end
+    end
+
+    local expected_revision, expected_co = session_revision, kag_co
+    local loaded, scene = pcall(flow.load_scene, scene_path)
+    if not loaded or type(scene) ~= "table" or type(scene.tokens) ~= "table" then
+        print("[KAG Runner] Failed to load scene: " .. tostring(scene_path))
+        return false, loaded and "scene-load-failed" or scene
+    end
+
+    local candidate = make_context()
+    local presentation = require("kag.presentation")
+    local ready, start_font = pcall(presentation.prepare_start)
+    if not ready then return false, start_font end
+    -- Web providers may suspend while fetching assets. Also reject a nil ->
+    -- other owner -> nil change, where comparing only ctx would miss expiry.
+    if changing_session or session_revision ~= expected_revision or kag_co ~= expected_co then
+        presentation.discard_start(start_font)
+        return false, "start-owner-expired"
+    end
     local stopped, stop_error = finish_session(false)
-    if not stopped then return false, stop_error end
-    publish_context(candidate)
+    if not stopped then
+        presentation.discard_start(start_font)
+        return false, stop_error
+    end
+    changing_session = true
+    local published, publish_error = pcall(function()
+        publish_context(candidate)
+        presentation.apply_start(start_font)
+    end)
+    changing_session = false
+    if not published then
+        presentation.discard_start(start_font)
+        presentation.stop(candidate,true)
+        finish_session(false)
+        return false, publish_error
+    end
 
     -- t212: first-definition-wins runtime-error handler (gesture-hook
     -- precedent). A pre-set ctx.handle_error (custom recovery policy) is
@@ -565,8 +591,64 @@ end
 
 local auto_advance_ms = 0  -- accumulated ms before auto-mode advances
 
+local function discard_failed_restore(prepared, reason)
+    local called, discarded, discard_error = pcall(
+        require("kag.presentation").discard, prepared._presentation)
+    if not called then discarded, discard_error = false, discarded end
+    return false, tostring(reason) .. (discarded and "" or "; discard: " .. tostring(discard_error))
+end
+
+local function commit_restore(owner, prepared)
+    if owner ~= ctx then return false, "restore-owner-expired" end
+    local candidate = make_context()
+    require("kag.save_state").apply_values(candidate, prepared)
+    if owner and owner.handle_error then candidate.handle_error = owner.handle_error end
+    -- Everything above is preparation. Closing the old scopes starts commit;
+    -- after this point an application error leaves the new session stopped.
+    if owner then owner._pendingRestore = nil end -- candidate transfers into commit below
+    local stopped, reason = finish_session(false)
+    if not stopped then return discard_failed_restore(prepared, reason) end
+    changing_session = true
+    local applied, apply_error = pcall(function()
+        publish_context(candidate)
+        require("kag.presentation").apply(prepared._presentation, candidate)
+        if prepared.language then
+            candidate.settingsValues = { language = prepared.language }
+            require("i18n").commit(prepared._locale)
+        end
+        kag_runner.install_error_handler(candidate)
+        spawn_scheduler(candidate._resume_index)
+    end)
+    changing_session = false
+    if not applied then
+        local cleaned, cleanup_error = require("kag.presentation").stop(candidate,true)
+        finish_session(false)
+        return discard_failed_restore(prepared, tostring(apply_error)
+            ..(cleaned and "" or "; cleanup: "..tostring(cleanup_error)))
+    end
+    auto_advance_ms = 0
+    return true, "restored"
+end
+
+function kag_runner.restore_candidate(owner, prepared)
+    if changing_session or owner ~= ctx then return false, "restore-owner-expired" end
+    local overlay = owner and owner._gesture_history_co
+    local overlay_busy = overlay and (coroutine.status(overlay) == "running"
+        or coroutine.status(overlay) == "normal")
+    if scheduler_running() or overlay_busy then
+        if owner._pendingRestore then require("kag.presentation").discard(owner._pendingRestore._presentation) end
+        owner._pendingRestore = prepared
+        owner.stop_flag = true
+        return true, "restore-pending"
+    end
+    return commit_restore(owner, prepared)
+end
+
 function kag_runner.update(dt)
     if changing_session then return false, "session-changing" end
+    if ctx and ctx._pendingRestore then
+        return commit_restore(ctx, ctx._pendingRestore)
+    end
     if not kag_co and ctx and ctx._gesture_history_co then
         kag_runner.pump_gesture_overlay(ctx)
     end
@@ -787,7 +869,9 @@ function kag_runner.update(dt)
                 finish_session(true)
                 return false, "label-not-found"
             end
-            if type(path) ~= "string" or not require("kag.commands.save")._safeScenePath(path) then
+            local safe_scene = type(flow.is_restore_scene) == "function"
+                and flow.is_restore_scene or require("kag.commands.save")._safeScenePath
+            if type(path) ~= "string" or not safe_scene(path) then
                 print("[KAG Runner] Rejected unsafe jump target: " .. tostring(path))
                 finish_session(true)
                 return false, "unsafe-jump-target"
@@ -961,7 +1045,9 @@ function kag_runner.on_click()
         end
         count = count + 1
     end
-    print("[Click] resumed " .. count .. " tokens, waiting=" .. tostring(ctx.waiting_input))
+    if rawget(_G,"_CAESURA_TRACE_CLICKS")==true then
+        print("[Click] resumed " .. count .. " tokens, waiting=" .. tostring(ctx.waiting_input))
+    end
     return true, count
 end
 

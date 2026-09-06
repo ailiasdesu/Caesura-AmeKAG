@@ -1,10 +1,15 @@
 // test_render_integration.cpp - render pipeline integration tests
 #include "doctest.h"
+#include "HiddenGpuContext.h"
 #include "render/BgfxRenderDevice.h"
 #include "render/ParticleSystem.h"
 #include "render/TextRenderer.h"
 #include "render/SmaMeshRenderer.h"
 #include "minigame/BgfxMiniGameBackend.h"
+#include "render/TextureManager.h"
+#include "di/BackendRegistry.h"
+#include "di/api/ISandboxQuota.h"
+#include <stdexcept>
 
 #if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
@@ -35,6 +40,39 @@ constexpr wchar_t kFontGpuChildEnv[] = L"CAESURA_FONT_GPU_SMOKE_CHILD";
 constexpr wchar_t kFontGpuTestCase[] =
     L"Render: D3D11 CJK TTF load and render smoke";
 
+constexpr wchar_t kRestoreGpuChildEnv[] = L"CAESURA_RESTORE_GPU_CHILD";
+constexpr wchar_t kRestoreGpuTestCase[] = L"U11 Render: texture registration failure releases GPU ownership";
+
+constexpr wchar_t kParticleResetGpuChildEnv[] = L"CAESURA_PARTICLE_RESET_GPU_CHILD";
+constexpr wchar_t kParticleResetGpuTestCase[] =
+    L"U11 Render: particle shutdown restarts an empty GPU-backed pool";
+
+class RestoreQuota final : public ISandboxQuota {
+public:
+    void setLuaState(lua_State*) override {}
+    bool tryAlloc(const char*) override { ++live; return true; }
+    void release(const char*) override { --live; }
+    int count(const char*) override { return live; }
+    int maxLimit(const char*) override { return 100; }
+    int live = 0;
+};
+
+class ThrowingRestoreTextures final : public TextureManager {
+public:
+    ~ThrowingRestoreTextures() override { shutdown(); }
+    bool checkBudget(uint32_t id, uint16_t width, uint16_t height) override {
+        attemptedId = id;
+        TextureSourceInfo source;
+        wasRegistered = isValid(id) && describeTexture(id, source);
+        trackTexture(id, uint64_t(width) * height * 4);
+        if (throwBudget) throw std::runtime_error("injected registered-budget failure");
+        return true;
+    }
+    uint32_t attemptedId = 0;
+    bool wasRegistered = false;
+    bool throwBudget = true;
+};
+
 constexpr wchar_t kMiniGameGpuChildEnv[] = L"CAESURA_MINIGAME_GPU_SMOKE_CHILD";
 constexpr wchar_t kMiniGameGpuTestCase[] =
     L"Render: D3D11 mini-game scene enter/render/leave smoke";
@@ -43,103 +81,9 @@ constexpr wchar_t kSmaGpuChildEnv[] = L"CAESURA_SMA_GPU_SMOKE_CHILD";
 constexpr wchar_t kSmaGpuTestCase[] =
     L"Render: D3D11 SMA GPU skinning matches CPU skinning";
 
-bool isGpuChildProcess(const wchar_t* envName) {
-    wchar_t value[2] = {};
-    return GetEnvironmentVariableW(envName, value, 2) > 0;
-}
-
-DWORD runGpuChildProcess(const wchar_t* envName, const wchar_t* testCaseName) {
-    wchar_t executable[MAX_PATH] = {};
-    const DWORD length = GetModuleFileNameW(nullptr, executable, MAX_PATH);
-    if (length == 0 || length >= MAX_PATH) return ERROR_INSUFFICIENT_BUFFER;
-
-    const DWORD previousSize = GetEnvironmentVariableW(envName, nullptr, 0);
-    std::wstring previousValue;
-    if (previousSize > 0) {
-        previousValue.resize(previousSize);
-        GetEnvironmentVariableW(
-            envName, previousValue.data(), previousSize);
-        previousValue.resize(previousSize - 1);
-    }
-
-    if (!SetEnvironmentVariableW(envName, L"1")) return GetLastError();
-
-    std::wstring command =
-        L"\"" + std::wstring(executable) + L"\" --test-case=\"" +
-        testCaseName + L"\" --no-version";
-    STARTUPINFOW startup{};
-    startup.cb = sizeof(startup);
-    PROCESS_INFORMATION process{};
-    const BOOL created = CreateProcessW(
-        nullptr,
-        command.data(),
-        nullptr,
-        nullptr,
-        TRUE,
-        0,
-        nullptr,
-        nullptr,
-        &startup,
-        &process);
-    const DWORD createError = created ? ERROR_SUCCESS : GetLastError();
-
-    SetEnvironmentVariableW(
-        envName,
-        previousSize > 0 ? previousValue.c_str() : nullptr);
-    if (!created) return createError;
-
-    const DWORD waitResult = WaitForSingleObject(process.hProcess, 60000);
-    DWORD exitCode = ERROR_TIMEOUT;
-    if (waitResult == WAIT_OBJECT_0) {
-        GetExitCodeProcess(process.hProcess, &exitCode);
-    } else {
-        TerminateProcess(process.hProcess, ERROR_TIMEOUT);
-    }
-
-    CloseHandle(process.hThread);
-    CloseHandle(process.hProcess);
-    return exitCode;
-}
-
-class HiddenSdlWindow {
-public:
-    HiddenSdlWindow(int width, int height) {
-        if (!SDL_Init(SDL_INIT_VIDEO)) return;
-        m_sdlInitialized = true;
-
-        const SDL_PropertiesID props = SDL_CreateProperties();
-        if (props == 0) return;
-        SDL_SetStringProperty(props, SDL_PROP_WINDOW_CREATE_TITLE_STRING,
-                              "Caesura VFX GPU smoke");
-        SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_WIDTH_NUMBER, width);
-        SDL_SetNumberProperty(props, SDL_PROP_WINDOW_CREATE_HEIGHT_NUMBER, height);
-        SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_HIDDEN_BOOLEAN, true);
-        m_window = SDL_CreateWindowWithProperties(props);
-        SDL_DestroyProperties(props);
-    }
-
-    ~HiddenSdlWindow() {
-        if (m_window) SDL_DestroyWindow(m_window);
-        if (m_sdlInitialized) SDL_Quit();
-    }
-
-    HiddenSdlWindow(const HiddenSdlWindow&) = delete;
-    HiddenSdlWindow& operator=(const HiddenSdlWindow&) = delete;
-
-    explicit operator bool() const { return m_window != nullptr; }
-
-    void* nativeHandle() const {
-        if (!m_window) return nullptr;
-        return SDL_GetPointerProperty(
-            SDL_GetWindowProperties(m_window),
-            SDL_PROP_WINDOW_WIN32_HWND_POINTER,
-            nullptr);
-    }
-
-private:
-    SDL_Window* m_window = nullptr;
-    bool m_sdlInitialized = false;
-};
+using CaesuraTest::isGpuChildProcess;
+using CaesuraTest::runGpuChildProcess;
+using CaesuraTest::HiddenSdlWindow;
 
 class BgfxTexture {
 public:
@@ -371,6 +315,110 @@ TEST_CASE("Render: D3D11 CJK TTF load and render smoke") {
     // TextRenderer must release its bgfx resources while the GPU context is
     // still alive: bgfx::destroy after bgfx::shutdown is undefined behaviour.
     text.shutdown();
+    device.shutdown();
+}
+
+TEST_CASE("U11 Render: texture registration failure releases GPU ownership") {
+    if (!isGpuChildProcess(kRestoreGpuChildEnv)) {
+        CHECK(runGpuChildProcess(kRestoreGpuChildEnv, kRestoreGpuTestCase) == ERROR_SUCCESS);
+        return;
+    }
+    HiddenSdlWindow window(64, 64);
+    REQUIRE(window);
+    BgfxRenderDevice device;
+    REQUIRE(device.setPreferredBackend("dx11"));
+    REQUIRE(device.init(window.nativeHandle(), 64, 64));
+    RestoreQuota quota;
+    auto& registry = BackendRegistry::instance();
+    auto* previousQuota = registry.getSandboxQuota();
+    registry.setSandboxQuota(&quota);
+    {
+        ThrowingRestoreTextures textures;
+        REQUIRE(textures.initialize());
+        const uint8_t pixel[] = {1,2,3,255};
+        uint32_t id = 0;
+        CHECK_NOTHROW(id = textures.loadTextureFromRGBA(pixel, 1, 1, "assets/a.bmp"));
+        CHECK(id == 0);
+        CHECK(textures.wasRegistered);
+        CHECK_FALSE(textures.isValid(textures.attemptedId));
+        TextureSourceInfo source;
+        CHECK_FALSE(textures.describeTexture(textures.attemptedId, source));
+        CHECK(textures.totalTextureBytes() == 0);
+        CHECK(quota.live == 0);
+        textures.throwBudget = false;
+        id = textures.loadTextureFromRGBA(pixel, 1, 1, "assets/a.bmp");
+        CHECK(id != 0);
+        CHECK(textures.describeTexture(id, source));
+        CHECK(source.kind == TextureSourceKind::Asset);
+        CHECK(source.path == "assets/a.bmp");
+        textures.destroyTexture(id);
+        id = textures.createSolidTexture(1,2,3,255);
+        CHECK(id != 0);
+        CHECK(textures.describeTexture(id, source));
+        CHECK(source.kind == TextureSourceKind::Color);
+        CHECK(source.color == std::array<uint8_t,4>{1,2,3,255});
+        textures.destroyTexture(id);
+        CHECK(quota.live == 0);
+        CHECK(textures.totalTextureBytes() == 0);
+    }
+    registry.setSandboxQuota(previousQuota);
+    bgfx::frame();
+    device.shutdown();
+}
+
+TEST_CASE("U11 Render: particle shutdown restarts an empty GPU-backed pool") {
+    if (!isGpuChildProcess(kParticleResetGpuChildEnv)) {
+        CHECK(runGpuChildProcess(kParticleResetGpuChildEnv, kParticleResetGpuTestCase) == ERROR_SUCCESS);
+        return;
+    }
+
+    constexpr uint16_t kWidth = 64;
+    constexpr uint16_t kHeight = 64;
+    HiddenSdlWindow window(kWidth, kHeight);
+    REQUIRE(window);
+    REQUIRE(window.nativeHandle() != nullptr);
+    BgfxRenderDevice device;
+    REQUIRE(device.setPreferredBackend("dx11"));
+    REQUIRE(device.init(window.nativeHandle(), kWidth, kHeight));
+    {
+        auto& registry = BackendRegistry::instance();
+        struct RestoreRenderDevice {
+            IRenderDevice* previous;
+            ~RestoreRenderDevice() { BackendRegistry::instance().setRenderDevice(previous); }
+        } restore{registry.getRenderDevice()};
+        registry.setRenderDevice(&device);
+        ParticleSystem particles;
+        REQUIRE(particles.init());
+        ParticleEmitterConfig config;
+        config.rate = 1.0f;
+        config.lifeMin = config.lifeMax = 10.0f;
+        const int oldEmitter = particles.createEmitter(config);
+        particles.emit(oldEmitter, ParticleSystem::MAX_PARTICLES);
+        REQUIRE(particles.aliveCount() == ParticleSystem::MAX_PARTICLES);
+
+        particles.shutdown();
+        CHECK_FALSE(particles.isInitialized());
+        CHECK(particles.aliveCount() == 0);
+        CHECK_FALSE(particles.destroyEmitter(oldEmitter));
+        REQUIRE(particles.init());
+        particles.update(1.0f, kWidth, kHeight);
+        CHECK(particles.aliveCount() == 0);
+        // Old live particles must not survive re-init and later underflow the count.
+        particles.update(11.0f, kWidth, kHeight);
+        CHECK(particles.aliveCount() == 0);
+        CHECK_FALSE(particles.destroyEmitter(oldEmitter));
+
+        const int freshEmitter = particles.createEmitter(config);
+        particles.emit(freshEmitter, ParticleSystem::MAX_PARTICLES);
+        REQUIRE(particles.aliveCount() == ParticleSystem::MAX_PARTICLES);
+        particles.emit(freshEmitter, 1);
+        CHECK(particles.aliveCount() == ParticleSystem::MAX_PARTICLES);
+        REQUIRE(particles.destroyEmitter(freshEmitter));
+        particles.update(11.0f, kWidth, kHeight);
+        CHECK(particles.aliveCount() == 0);
+    }
+    // Particle GPU resources and the registry binding are released before the device.
+    bgfx::frame();
     device.shutdown();
 }
 

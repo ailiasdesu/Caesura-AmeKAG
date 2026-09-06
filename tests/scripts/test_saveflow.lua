@@ -37,14 +37,26 @@ end
 _G.KAG = {}
 local savedSlots = {}          -- slot -> {state=..., scene=..., token=...}
 local lastSaved                 -- last save_game payload
+local active_source, source_to_prepare, scene_to_prepare
+-- This unit suite supplies scene bytes as well as storage bytes in memory;
+-- the production tokenizer/compiler still build the executable candidate.
+require('flow').prepare_scene = function(path)
+    if path ~= scene_to_prepare or not source_to_prepare then return nil, 'no fixture scene' end
+    local tokens = tokenizer.parse(source_to_prepare)
+    compiler.compile(tokens)
+    return { tokens = tokens, labels = tokens._compiled.labels }
+end
 _G.KAG.save_game = function(slot, state, scene, token, thumb)
-    lastSaved = { slot=slot, state=state, scene=scene, token=token }
+    lastSaved = { slot=slot, state=state, scene=scene, token=token, source=active_source }
     savedSlots[slot] = lastSaved
     return true
 end
 _G.KAG.load_game = function(slot)
     local hit = savedSlots[slot]
-    if hit then return hit.state, { slot = slot } end
+    if hit then
+        source_to_prepare, scene_to_prepare = hit.source, hit.scene
+        return hit.state, { slot = slot }
+    end
     return nil, 'no-save-' .. tostring(slot)
 end
 _G.KAG.list_saves = function()
@@ -58,6 +70,7 @@ end
 -- pattern from test_contracts_runtime.lua). Withdraws waiting_input each
 -- frame so a blocking tag never hangs the loop.
 local function run_scene(src, init)
+    active_source = src
     local tokens = tokenizer.parse(src)
     compiler.compile(tokens)
     local ctx = { f = {}, sf = {}, tf = {}, mp = {}, lf = {}, variables = {},
@@ -227,14 +240,14 @@ do
 end
 
 -- ----------------------------------------------------------------
--- 10. save inside a sub-call frame succeeds; lf is a documented reset
---      (capture_state does not serialize lf, so [load] cannot resurrect
---      local-frame flags).
+-- 10. save inside a real sub-call preserves callee and caller local values.
 -- ----------------------------------------------------------------
 do
     local src = table.concat({
+        '[jump target="*main"]',
         '*sub',
         '[set f.inner = 9]',
+        '[set lf.frame = "inner"]',
         '[save slot=3]',
         '[return]',
         '*main',
@@ -248,8 +261,10 @@ do
         'got ' .. tostring(ctx and ctx.tf and ctx.tf.save_result))
     check('sub-call save captures f from the inner frame',
         lastSaved and lastSaved.state.f.inner == 9, 'got ' .. tostring(lastSaved and lastSaved.state.f.inner))
-    check('lf is NOT serialized (documented reset via capture_state)',
-        lastSaved and lastSaved.state.lf == nil)
+    check('lf is serialized for the active callee',
+        lastSaved and lastSaved.state.lf.frame == 'inner')
+    check('caller local frame is serialized independently',
+        lastSaved and lastSaved.state.call_stack[1].lf.frame == 'outer')
 end
 
 -- ----------------------------------------------------------------

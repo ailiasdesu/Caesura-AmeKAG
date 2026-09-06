@@ -13,6 +13,9 @@
 *.txt text eol=lf
 *.md text eol=lf
 *.json text eol=lf
+# Preserve historical producer inputs and captured bytes exactly on every host.
+tests/golden_saves/release-v1.0.1-*.json -text whitespace=cr-at-eol
+tests/projects/u11_legacy_release/story.ks -text whitespace=cr-at-eol
 *.bat text eol=crlf
 *.sh text eol=lf
 

@@ -23,6 +23,9 @@ public:
 
     virtual VideoHandle open(const char* path) = 0;
     virtual void close(VideoHandle handle) = 0;
+    // Stop every video immediately, retaining the backend for subsequent open().
+    // Physical decoder/GPU release follows close() at the updateAll() boundary.
+    virtual void closeAll() = 0;
     // Loop mode (pl_mpeg: plm_set_loop; FFmpeg: rewind on end).
     virtual void setLoop(VideoHandle handle, bool loop) = 0;
     // Playback volume [0..1] applied to the video audio handles.

@@ -38,4 +38,25 @@ bool AssetManager::exists(const std::string& path) {
     return m_chain.exists(path);
 }
 
+std::vector<uint8_t> AssetManager::readAsset(const std::string& path, size_t maxBytes) {
+    if (!m_initialized || maxBytes == 0 || path.empty() || path.front() == '/'
+        || path.find('\0') != std::string::npos || path.find('\\') != std::string::npos
+        || path.find(':') != std::string::npos || path.find("..") != std::string::npos) {
+        return {};
+    }
+    for (const auto& provider : m_chain.providers()) {
+        try {
+            if (!provider->exists(path)) continue;
+            auto bytes = provider->read(path);
+            if (bytes.size() > maxBytes) return {};
+            return bytes;
+        } catch (...) {
+            // An uncertain or failed selected source cannot authorize a read
+            // from a different layer during transaction preparation.
+            return {};
+        }
+    }
+    return {};
+}
+
 } // namespace Caesura

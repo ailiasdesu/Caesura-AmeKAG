@@ -1,11 +1,6 @@
 // @vitest-environment jsdom
-// t69: same-scene direct-load guard must NOT skip the saved token (atLoadTag
-// discriminator, native t62 mirror). A pause-point direct SaveCommands.load
-// of the CURRENT scene resumes EXACTLY at the saved cursor; the round-94
-// +1 skip applies only when the token at the saved cursor IS a [load] tag
-// (a self-referential [save]->[load] sequence). Without the discriminator
-// the guard blindly cursor+1s every same-scene load, dropping the saved
-// token's replay (native diverge, t64 note 2).
+// Every load entry resumes the saved continuation. Script conditions control
+// whether a load repeats; the host must not skip forward to fabricate an end.
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest'
 import { readFileSync, existsSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -74,7 +69,7 @@ beforeAll(async () => {
   if (typeof globalThis.requestAnimationFrame !== 'function') {
     globalThis.requestAnimationFrame = (cb) => setTimeout(() => cb(Date.now()), 16)
   }
-  player = await createPlayer({ scriptsBase: 'http://localhost/scripts/', wasmFile: join(here, 'node_modules', 'wasmoon', 'dist', 'glue.wasm') })
+  player = await createPlayer({ scriptsBase: 'http://localhost/scripts/', storageBackend, wasmFile: join(here, 'node_modules', 'wasmoon', 'dist', 'glue.wasm') })
 })
 beforeEach(() => { clearSlots(); player.core.draws = []; player.core.backlog.length = 0 })
 const backlogOf = () => (player.core.backlog || []).map((b) => b.text).join(' | ')
@@ -126,7 +121,7 @@ const SCENE = [
   '[end]',
 ].join(NL)
 
-describe('web same-scene direct load (atLoadTag discriminator, t69)', () => {
+describe('web same-scene saved continuation', () => {
   it('pause-point direct load of the same scene replays the saved token (no skip)', async () => {
     // 1) park at the first [ch] (the pause point) and save there.
     let out = await player.runScene(SCENE, 'demo/sr_rt.ks', { maxFrames: 60000, autoClick: false, sceneSources: { 'demo/sr_rt.ks': SCENE } })
@@ -134,49 +129,70 @@ describe('web same-scene direct load (atLoadTag discriminator, t69)', () => {
     expect(await player.saveCurrent(9)).toBe(true)
     const s = player.listSlots().find((x) => x.slot === 9)
     expect(s).toBeTruthy()
-    // The saved cursor is the [ch] ANCHOR token (a NON-load token); the
-    // demo/-prefixed scene name makes ctx.current_scene == the stored
-    // scene_path, so the guard's same-scene branch genuinely fires.
-    expect(s.token).toBe(1)
+    // The first ch has completed and its page is displayed. Its text is saved;
+    // the continuation is the next command, without appending ANCHOR twice.
+    expect(await player.lua.doString('return __CTXREF._executing_index == nil and __CTXREF._resume_index == 2')).toBe(true)
+    expect(s.token).toBe(2)
     // 2) mutate state: click through ANCHOR to the [p] park.
     await player.click()
     out = await player.runScene(SCENE, 'demo/sr_rt.ks', { maxFrames: 60000, advance: true, advanceScene: 'demo/sr_rt.ks', autoClick: false, sceneSources: { 'demo/sr_rt.ks': SCENE } })
     expect(out.startsWith('WAIT:')).toBe(true)
     // 3) direct same-scene load from the pause point (golden-driver path:
     //    SaveCommands.load — the exact [load] tag handler).
+    await player.lua.doString("__CTXREF.seen_endings = {future_only={name='Future ending'}}")
+    player.core.recordEndings([{ id: 'future_only', name: 'Future ending' }])
     const lr = await player.lua.doString(
       "local S=require('kag.commands.save'); local c=_G.__CTXREF; local ok,err=pcall(function() S.load(c,{slot=9}) end); return tostring(ok)..'|'..tostring(err)")
     expect(lr).toBe('true|nil')
     // 4) drive the restored scene to the end.
     out = await player.runScene(SCENE, 'demo/sr_rt.ks', { maxFrames: 60000, advance: true, advanceScene: 'demo/sr_rt.ks', autoClick: true, sceneSources: { 'demo/sr_rt.ks': SCENE } })
     expect(out.startsWith('DONE:')).toBe(true)
-    // 5) native-mirror semantics: the resume is EXACT (no load tag at the
-    //    saved cursor), so the saved token itself replays. [load] also
-    //    restores the saved backlog (empty at the save point), so the fixed
-    //    guard yields exactly ONE ANCHOR (the replay), while the pre-fix
-    //    cursor+1 guard resumed AFTER ANCHOR and yielded ZERO. The 1-vs-0
-    //    gap is what this assertion discriminates.
+    // Restoring the displayed page and continuing after it must preserve one
+    // ANCHOR, then execute the later IN-BETWEEN text.
     const texts = backlogOf()
     const anchors = texts.split('ANCHOR').length - 1
-    // Saved backlog was empty -> the ONLY ANCHOR must come from the replay
-    // (the exact-restore of the saved token; the pre-fix guard skipped it).
     expect(anchors).toBe(1)
     expect(texts).toContain('IN-BETWEEN')
+    expect(player.core.endings.some((entry) => entry.id === 'future_only')).toBe(false)
+    expect(await player.lua.doString('return __CTXREF.seen_endings.future_only == nil')).toBe(true)
   }, 120000)
 
-  it('self-referential [save]->[load] still advances past the load (no loop)', async () => {
+  it('an explicit load-result branch terminates after replaying the saved continuation', async () => {
     const SELF = [
       '[ch name="N" text="SELF"]',
       '[save slot=9]',
+      '[set var="f.after_save" value=1]',
+      '[if exp="tf.load_result != \'ok\'"]',
       '[load slot=9]',
+      '[endif]',
       '[ch name="N" text="SELF-END"]',
       '[p]',
       '[end]',
     ].join(NL)
-    // Bounded loop guard: the run must END (not exhaust) even if the guard
-    // regresses to an exact restore that re-executes the [load] forever.
     let out = await player.runScene(SELF, 'demo/sr_self.ks', { maxFrames: 4000, autoClick: true, sceneSources: { 'demo/sr_self.ks': SELF } })
     expect(out.startsWith('DONE:')).toBe(true)
+    expect(await player.lua.doString('return __CTXREF.f.after_save')).toBe(1)
     expect(backlogOf()).toContain('SELF-END')
   }, 120000)
+
+  it.each(['source', 'bundle'])('bounds an unconditional load loop in the %s driver without running its tail', async (mode) => {
+    const source = '[save slot=9]\n[load slot=9]\n[set var="f.unreachable" value=1]\n[end]'
+    player.core.events.length = 0
+    let out
+    if (mode === 'source') {
+      out = await player.runScene(source, 'demo/sr_repeat.ks', { maxFrames: 20 })
+    } else {
+      const bundle = await player.lua.doString(`
+        local c=require('kag.compiler')
+        local tokens=require('tokenizer').parse(${JSON.stringify(source)})
+        c.compile(tokens)
+        return {version=1,scenes={['sr_repeat.ks']=c.serialize(tokens)},assets={}}
+      `)
+      out = await player.runFromBundle(bundle, 'sr_repeat.ks', { maxFrames: 20 })
+    }
+    expect(out.startsWith('ERR:frame-limit'), out).toBe(true)
+    expect(await player.lua.doString('return __CTXREF.f.unreachable == nil')).toBe(true)
+    expect(player.core.events.filter((e) => e.kind === 'save.read').length).toBeGreaterThan(1)
+    expect(player.core.events.filter((e) => e.kind === 'save.write').length).toBe(1)
+  })
 })

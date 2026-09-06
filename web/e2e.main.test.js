@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 // End-to-end smoke test for the Caesura web player main.mjs UI layer.
 // Drives the REAL main.mjs against a real jsdom DOM with a real wasmoon
-// engine, mocking only the network (fetch) and pinning the local wasm so
-// the fake browser can boot the engine offline. Each case interacts with
+// engine, local file-backed fetch and a real Skia image/canvas host for jsdom.
+// Audio and browser FontFace are not available in this host. Each case interacts with
 // the actual DOM controls (Run / Advance / Auto / save panel / backlog) and
 // asserts on the visible status + DOM output — not on bridge calls.
 //
 // One page load per file (a single browser session), with ordered cases so
 // later cases build on the parked scene, exactly like a user would.
 import { describe, it, expect, beforeAll } from 'vitest'
+import { installCanvasHost } from './test-support/canvas-host.js'
 import { readFileSync, existsSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -36,18 +37,15 @@ function makeFetch() {
     const url = typeof input === 'string' ? input : String(input?.url ?? '')
     const p = resolvePathFromUrl(url)
     if (p && existsSync(p) && statSync(p).isFile()) {
-      const text = () => readFileSync(p, 'utf8')
-      return {
-        ok: true,
-        status: 200,
-        text,
-        json: async () => JSON.parse(text()),
-        arrayBuffer: async () => readFileSync(p).buffer,
-      }
+      return new Response(readFileSync(p))
     }
-    return { ok: false, status: 404, text: async () => '', json: async () => ({}), arrayBuffer: async () => new ArrayBuffer(0) }
+    return new Response('',{status:404})
   }
 }
+
+// Keep the canvas host for this jsdom environment's full lifetime, including
+// its final animation-frame callbacks; Vitest tears down the isolated window.
+beforeAll(()=>{installCanvasHost()})
 
 // ---- DOM fixture: mirrors web/index.html body (minus the module <script>) ----
 function setupDom() {
@@ -101,6 +99,14 @@ async function waitStatus(fragment, label, timeout = 60000) {
   return waitFor(() => statusText().includes(fragment), label, timeout)
 }
 
+const advanceCount = () => $('log').textContent.split('\n').filter(line => line.startsWith('advance: ')).length
+async function advanceOnce() {
+  const before = advanceCount()
+  $('advance').click()
+  await waitFor(() => advanceCount() > before, 'advance finishes its input boundary', 60000)
+  expect(statusText()).toMatch(/^advance: (WAIT:|DONE:)/)
+}
+
 beforeAll(async () => {
   // Pin the local wasm so main.mjs boots offline (when unset, the global is
   // ignored and the production browser path keeps wasmoon's CDN default).
@@ -146,12 +152,7 @@ describe('main.mjs E2E (real DOM + real wasmoon)', () => {
   }, 90000)
 
   it('Advance advances the parked scene by one page and updates status', async () => {
-    const before = statusText()
-    $('advance').click()
-    await waitFor(() => {
-      const s = statusText()
-      return s.startsWith('advance:') && s !== before
-    }, 'advance updates status', 60000)
+    await advanceOnce()
     expect(statusText()).toMatch(/^advance: (WAIT:|DONE:)/)
   }, 90000)
 
@@ -159,9 +160,9 @@ describe('main.mjs E2E (real DOM + real wasmoon)', () => {
     const autoBtn = $('auto')
     autoBtn.click() // on
     expect(autoBtn.textContent).toContain('⏸')
-    const before = statusText()
+    const before = advanceCount()
     // auto schedule advances every ~1200ms; wait for one automatic advance
-    await waitFor(() => statusText() !== before && statusText().startsWith('advance:'), 'auto-advance fires', 10000)
+    await waitFor(() => advanceCount() > before && statusText().startsWith('advance:'), 'auto-advance fires', 10000)
     autoBtn.click() // off
     expect(autoBtn.textContent).toContain('⏩')
   }, 30000)
@@ -188,14 +189,16 @@ describe('main.mjs E2E (real DOM + real wasmoon)', () => {
     await waitStatus('parked: ', 'run parks')
     const countEl = $('backlog-count')
     const n0 = Number(countEl.textContent)
-    // Drive real Advance clicks: each committed page pushes a backlog entry
-    // (min 2 clicks) and the count must visibly grow.
-    $('advance').click()
+    // [ch] and the explicit [p] each own one click; the page is committed
+    // after both waits finish. Observe completion even if the status repeats.
+    await advanceOnce()
+    await advanceOnce()
     await waitFor(() => Number(countEl.textContent) > n0, 'backlog grows on first advance', 60000)
     const n1 = Number(countEl.textContent)
     expect(n1).toBeGreaterThan(n0)
-    $('advance').click()
-    await waitFor(() => Number(countEl.textContent) >= n1, 'backlog keeps growing on next advance', 60000)
+    await advanceOnce()
+    await advanceOnce()
+    await waitFor(() => Number(countEl.textContent) > n1, 'backlog keeps growing on next advance', 60000)
     // The sync clears + refills the container, so every DOM row maps to a
     // current core backlog entry — no stale/orphan rows remain.
     const nFinal = Number(countEl.textContent)
@@ -203,4 +206,3 @@ describe('main.mjs E2E (real DOM + real wasmoon)', () => {
     expect(document.querySelectorAll('#backlog .backlog-entry').length).toBe(nFinal)
   }, 90000)
 })
-

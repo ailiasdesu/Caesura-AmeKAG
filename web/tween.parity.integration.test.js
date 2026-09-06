@@ -9,10 +9,8 @@
 //     shared: zero bridge support needed.
 //   * wait=false (fire-and-forget)    — the handler pushes the tween into
 //     ctx.tweens and returns; desktop advances it from kag_runner.update
-//     (-> TweenCommands.update(ctx, dt_ms)). The web runner has no such
-//     kag_runner hook, so bridge.js gained a per-frame driver call in both
-//     runScene and runFromBundle that mirrors it (no-op until the module is
-//     present). These tests lock that parity for BOTH modes, plus easing-
+//     (-> TweenCommands.update(ctx, dt_ms)). Both Web entry points now use
+//     that same runner hook. These tests lock parity for BOTH modes, plus easing-
 //     function numeric correctness at a mid-tween sample.
 //
 // Because R106-A has not yet registered tween in kag.lua / regenerated
@@ -61,15 +59,6 @@ async function mountTween(player) {
   return await player.lua.global.get('__TWEEN_MOUNTED') === true
 }
 
-// Create a named layer (a tween target) directly via the layers binding.
-async function ensureLayer(name) {
-  await player.lua.doString([
-    "local b = require('layers')",
-    "b.ensure({}, " + JSON.stringify(name) + ", 1)",
-  ].join(String.fromCharCode(10)))
-  return player.core.layers.get(name)
-}
-
 beforeAll(async () => {
   player = await createPlayer({
     scriptsBase: 'http://local/scripts/',
@@ -82,10 +71,9 @@ beforeAll(async () => {
 
 describe('web [tween] parity (wasmoon + real tween.lua)', () => {
   it('blocking [tween wait=true] runs to completion and snaps the endpoint (R106)', async () => {
-    const layer = await ensureLayer('mover')
-    layer.x = 0; layer.y = 0
     player.core.events.length = 0
     const ks = [
+      '[image layer="mover" storage="assets/bg/classroom.png" x=0 y=0]',
       '[tween target="mover" attr=x from=0 to=100 dur=1000]',
       '[ch name="N" text="after-tween"]',
       '[p]',
@@ -111,18 +99,16 @@ describe('web [tween] parity (wasmoon + real tween.lua)', () => {
     // BEHIND linear(t)=t, and linear must be near the range midpoint while
     // ease_in stays far below it. Using the SAME scene/params for both makes
     const scene = (ease) => [
+      '[image layer="mid" storage="assets/bg/classroom.png" x=0 y=0]',
       '[tween target="mid" attr=x from=0 to=100 dur=1000 ease=' + ease + ' wait=false]',
       '[wait ms=500]',
       '[p]',
       '[end]',
     ].join('\n')
-    const layer = await ensureLayer('mid')
-    layer.x = 0; layer.y = 0
     const outIn = await player.runScene(scene('ease_in'), 'tw_mid_in.ks', { maxFrames: 200000, autoClick: false })
     expect(outIn.startsWith('WAIT:'), outIn).toBe(true)
     const xIn = player.core.layers.get('mid').x
 
-    layer.x = 0; layer.y = 0
     const outLin = await player.runScene(scene('linear'), 'tw_mid_lin.ks', { maxFrames: 200000, autoClick: false })
     expect(outLin.startsWith('WAIT:'), outLin).toBe(true)
     const xLin = player.core.layers.get('mid').x
@@ -137,10 +123,9 @@ describe('web [tween] parity (wasmoon + real tween.lua)', () => {
     expect(xIn).toBeLessThan(45)
   }, 60000)
   it('fire-and-forget [tween wait=false] advances to the exact endpoint (R106 driver)', async () => {
-    const layer = await ensureLayer('ff')
-    layer.x = 0; layer.y = 0
     const NL = String.fromCharCode(10)
     const ks = [
+      '[image layer="ff" storage="assets/bg/classroom.png" x=0 y=0]',
       '[tween target="ff" attr=x from=0 to=100 dur=400 wait=false]',
       '[wait ms=700]',
       '[ch name="N" text="after-framedrive"]',

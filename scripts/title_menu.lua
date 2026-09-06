@@ -9,6 +9,7 @@
 local TitleMenu = {}
 local backend = require("backend")
 local layers = require("layers")
+local Operation = require("kag.operation")
 local i18n = require("i18n")
 
 local function solid(r, g, b, a)
@@ -23,11 +24,11 @@ for i = #MENU_ITEMS, 1, -1 do
     if MENU_ITEMS[i] == nil then table.remove(MENU_ITEMS, i) end
 end
 
---- TitleMenu.showEndings(ctx) — inline sub-screen (no separate coroutine:
+--- TitleMenu.showEndings(ctx, token) — inline sub-screen (no separate coroutine:
 -- keeps the same yield-loop pattern as the title itself, so no orphan
 -- coroutine soft-lock like the gallery/music experiment). Lists unlocked
 -- endings from ctx.seen_endings ([ending id=] records them).
-local function showEndings(ctx)
+local function showEndings(ctx, token)
     local endings = ctx.seen_endings
     if type(endings) ~= "table" then endings = {} end
     local names = {}
@@ -56,6 +57,7 @@ local function showEndings(ctx)
         end
         backend.render_text("[Up/Down] Select  [Enter] Replay  [Esc] Back", 20, vh - 30, 120, 120, 160, 255)
         coroutine.yield()
+        if token.cancelled then return end
         if _G._GAME_KEY_UP == true then
             _G._GAME_KEY_UP = false
             cursor = cursor - 1
@@ -82,12 +84,41 @@ end
 
 --- TitleMenu.show(ctx) → "new"|"load"|"settings"|"exit"|nil
 function TitleMenu.show(ctx)
-    local bg = layers.ensure(ctx, "_title_bg", 90)
+    local scope <close> = Operation.start(ctx)
+    local previousFocus = ctx.input_focus or "kag"
+    local ok, focus = pcall(backend.get_input_focus)
+    local previousBackendFocus = ok and type(focus) == "string" and focus
+        or (previousFocus == "kag" and "KAG" or "GAME")
+    local bg, texture, cleaned
+    local function cleanup()
+        if cleaned then return end
+        cleaned = true
+        if bg then bg.visible, bg.texture = false, nil end
+        if texture then pcall(backend.destroy_texture, texture) end
+        if ctx.input_focus == "title" then
+            ctx.input_focus = previousFocus
+            for _, key in ipairs({"UP", "DOWN", "ENTER", "ESC"}) do
+                _G["_GAME_KEY_" .. key] = false
+            end
+            pcall(backend.set_input_focus, previousBackendFocus)
+        end
+    end
+    local function finish(result)
+        cleanup()
+        scope:complete()
+        return result
+    end
+    scope.token:register(cleanup)
+    ctx.input_focus = "title"
+    backend.set_input_focus("GAME")
+
+    bg = layers.ensure(ctx, "_title_bg", 90)
     bg.visible = true
     bg.x, bg.y = 0, 0
     local vw, vh = require("viewport").wh()  -- viewported from 1280x720
     bg.w, bg.h = vw, vh
-    bg.texture = solid(8, 8, 20, 255)
+    texture = solid(8, 8, 20, 255)
+    bg.texture = texture
 
     local cursor = 1
     while true do
@@ -108,6 +139,7 @@ function TitleMenu.show(ctx)
         backend.render_text("[Up/Down] Select  [Enter] Confirm  [Esc] Exit", 20, vh - 30, 120, 120, 160, 255)
 
         coroutine.yield()
+        if scope.token.cancelled then return end
 
         -- Input (polled one-shot globals)
         if _G._GAME_KEY_UP == true then
@@ -122,16 +154,18 @@ function TitleMenu.show(ctx)
             _G._GAME_KEY_ENTER = false
             bg.visible = false
             local key = MENU_ITEMS[cursor]
-            if key == "new_game" then return "new"
-            elseif key == "continue" then return "continue"
-            elseif key == "load_game" then return "load"
-            elseif key == "settings" then return "settings"
-            elseif key == "endings" then showEndings(ctx)
-            else return "exit" end
+            if key == "new_game" then return finish("new")
+            elseif key == "continue" then return finish("continue")
+            elseif key == "load_game" then return finish("load")
+            elseif key == "settings" then return finish("settings")
+            elseif key == "endings" then
+                showEndings(ctx, scope.token)
+                if scope.token.cancelled then return end
+            else return finish("exit") end
         elseif _G._GAME_KEY_ESC == true then
             _G._GAME_KEY_ESC = false
             bg.visible = false
-            return nil
+            return finish(nil)
         end
     end
 end
