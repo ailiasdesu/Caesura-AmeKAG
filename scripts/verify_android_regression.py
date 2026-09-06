@@ -65,19 +65,55 @@ class AndroidVerifier:
 
     def verify_cjk_font_atlas(self):
         print("\n[Category 2] Rendering: FreeType CJK RGBA8 2048x2048 Atlas")
-        text_renderer_path = ROOT / "src" / "render" / "TextRenderer.cpp"
-        self.check("TextRenderer.cpp exists", text_renderer_path.exists())
-        if text_renderer_path.exists():
-            content = text_renderer_path.read_text(encoding="utf-8")
-            self.check("2048x2048 Atlas Dimensions", "m_ttf->atlasW = 2048" in content and "m_ttf->atlasH = 2048" in content)
-            self.check("TextureFormat::RGBA8 for GLES sampling", "bgfx::TextureFormat::RGBA8" in content)
-            self.check("Preloads ASCII 32..126", "cp = 32; cp <= 126" in content)
-            self.check("Preloads General Punctuation (0x2000..0x206F)", "0x2000" in content and "0x206F" in content)
-            self.check("Preloads CJK Symbols & Punctuation (0x3000..0x303F)", "0x3000" in content and "0x303F" in content)
-            self.check("Preloads Hiragana & Katakana (0x3040..0x30FF)", "0x3040" in content and "0x30FF" in content)
-            self.check("Preloads Fullwidth Forms (0xFF00..0xFFEF)", "0xFF00" in content and "0xFFEF" in content)
-            self.check("Preloads CJK Unified Ideographs (0x4E00..0x9FFF)", "0x4E00" in content and "0x9FFF" in content)
-            self.check("Preloaded glyph count ~8074 log/trace", "8074" in content or "glyphs rasterized" in content)
+        render_dir = ROOT / "src" / "render"
+        paths = [render_dir / name for name in
+                 ("TextRenderer.cpp", "TextRendererFont.cpp", "TextRenderer.h")]
+        self.check("TextRenderer font implementation and header exist", all(path.exists() for path in paths))
+        # U11 moved TTF preparation into its own translation unit. Check its
+        # executable declarations/calls, not unrelated bitmap fallback ranges
+        # or comments remaining in TextRenderer.cpp.
+        def source(path):
+            content = path.read_text(encoding="utf-8") if path.exists() else ""
+            return re.sub(r"//[^\n]*|/\*.*?\*/", "", content, flags=re.DOTALL)
+
+        font_source, header = source(paths[1]), source(paths[2])
+        ttf = re.search(r"struct\s+TTFState\s*\{(.*?)\n\s*\};", header, re.DOTALL)
+        prepare = re.search(r"TextRenderer::prepareFontState\s*\(.*?\n\}", font_source, re.DOTALL)
+        activate = re.search(r"TextRenderer::activateFont\s*\(.*?\n\}", font_source, re.DOTALL)
+        prepared = prepare.group(0) if prepare else ""
+        atlas_defaults = ttf.group(1) if ttf else ""
+        self.check("2048x2048 Atlas Dimensions", bool(
+            re.search(r"\batlasW\s*=\s*2048\b", atlas_defaults)
+            and re.search(r"\batlasH\s*=\s*2048\b", atlas_defaults)
+            and re.search(r"make_unique\s*<\s*TTFState\s*>\s*\(", prepared)
+            and re.search(r"font\.atlasPixels\.assign\(\s*size_t\(font\.atlasW\)\s*\*\s*font\.atlasH\s*\*\s*4\s*,\s*0\s*\)", prepared)))
+        self.check("TextureFormat::RGBA8 for GLES sampling", bool(activate and re.search(
+            r"bgfx::createTexture2D\([^;]*bgfx::TextureFormat::RGBA8", activate.group(0))))
+        range_table = re.search(r"\branges\s*\[\]\s*\[2\]\s*=\s*\{(.*?)\};", prepared, re.DOTALL)
+        ranges = [(int(low, 0), int(high, 0)) for low, high in re.findall(
+            r"\{\s*(0x[0-9a-f]+|\d+)\s*,\s*(0x[0-9a-f]+|\d+)\s*\}",
+            range_table.group(1) if range_table else "", re.IGNORECASE)]
+        rasterizes_ranges = bool(re.search(
+            r"for\s*\(\s*const\s+auto\s*&\s*range\s*:\s*ranges\s*\)\s*\{\s*"
+            r"for\s*\(\s*uint32_t\s+cp\s*=\s*range\[0\]\s*;\s*cp\s*<=\s*range\[1\]\s*;\s*\+\+cp\s*\)\s*\{"
+            r"[^{}]*rasterizeTTFGlyph\(\s*font\s*,\s*cp\s*,\s*font\.atlasPixels\s*\)", prepared))
+
+        def preloads(first, last):
+            cursor = first
+            for low, high in sorted(ranges):
+                if low <= cursor <= high:
+                    cursor = high + 1
+            return rasterizes_ranges and cursor > last
+
+        self.check("Preloads ASCII 32..126", preloads(32, 126))
+        self.check("Preloads General Punctuation (0x2000..0x206F)", preloads(0x2000, 0x206F))
+        self.check("Preloads CJK Symbols & Punctuation (0x3000..0x303F)", preloads(0x3000, 0x303F))
+        self.check("Preloads Hiragana & Katakana (0x3040..0x30FF)", preloads(0x3040, 0x30FF))
+        self.check("Preloads Fullwidth Forms (0xFF00..0xFFEF)", preloads(0xFF00, 0xFFEF))
+        self.check("Preloads CJK Unified Ideographs (0x4E00..0x9FFF)", preloads(0x4E00, 0x9FFF))
+        self.check("Preloaded actual glyph count log/trace", bool(re.search(
+            r"\b(?:std::printf|printf|DEBUG_INFO|DEBUG_TRACE)\s*\([^;]*"
+            r"\bfont\.glyphs\.size\s*\(\s*\)[^;]*\);", prepared)))
 
     def verify_quad_batching(self):
         print("\n[Category 3] Rendering: Multi-Texture Quad Batching & Transient Buffer Safety")

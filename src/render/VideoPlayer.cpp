@@ -38,10 +38,9 @@ static std::shared_ptr<AVChannelLayout> copyChannelLayout(const AVChannelLayout&
 #endif
 
 // pl_mpeg audio callback: appends decoded interleaved float PCM to the
-// owning VideoState queue (the callback runs on the thread that calls
-// plm_decode_video/audio -- our worker -- so the queue is protected by
-// the VideoPlayer mutex only where shared with the main thread; here the
-// queue is only touched from the worker via this callback).
+// owning VideoState queue. High-level plm_decode (also used by seek) invokes
+// this callback; the worker's direct plm_decode_audio call forwards its
+// returned samples explicitly. Both paths copy PCM before decoding again.
 static void onPlmAudio(plm_t* plm, plm_samples_t* samples, void* user) {
     auto* self = static_cast<VideoPlayer*>(user);
     self->onAudioDecoded(plm, samples);
@@ -714,10 +713,12 @@ bool VideoPlayer::update(VideoHandle handle, double dt) {
         frame->height = vs->height;
 
         m_jobSystem->submit(
-            [frame, plm, vs]() {
+            [this, frame, plm, vs]() {
                 for (int n = 0; n < maxFrames; ++n) {
                     plm_frame_t* f = plm_decode_video(plm);
-                    plm_decode_audio(plm);
+                    if (auto* samples = plm_decode_audio(plm)) {
+                        onAudioDecoded(plm, samples);
+                    }
                     if (f) {
                         frame->rgba.resize(frame->width * frame->height * 4);
                         plm_frame_to_rgba(f, frame->rgba.data(), frame->width * 4);

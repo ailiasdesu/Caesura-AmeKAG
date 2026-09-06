@@ -171,8 +171,9 @@ TEST_CASE("U11 audio restore: preparation rejects decoder channels beyond the mi
 
 TEST_CASE("U11 audio restore: real mixer resumes BGM and hard-stops old session voices") {
     RestoreAudioQuota quota;
-    SoLoudAudioEngine audio;
+    SoLoudAudioEngine audio{SoLoudAudioEngine::OutputMode::ManualMix};
     REQUIRE(audio.init());
+    REQUIRE(audio.soloud().getBackendId() == SoLoud::Soloud::NULLDRIVER);
     audio.setGlobalVolume(0.7f);
     audio.setBusVolume("bgm", 0.6f);
     REQUIRE(audio.playBGM("tests/audio/silence.wav", 0) != 0);
@@ -280,13 +281,14 @@ TEST_CASE("U11 audio restore: Ogg seek emits the same PCM samples as continuous 
 }
 
 TEST_CASE("U11 audio restore: Lua binding transfers prepared ownership into the real backend") {
-    auto* audio = new SoLoudAudioEngine;
+    auto* audio = new SoLoudAudioEngine{SoLoudAudioEngine::OutputMode::ManualMix};
     EngineConfig config;
     config.headless = true;
     config.audio = audio;
     Engine engine{std::move(config)};
     REQUIRE(engine.init());
     REQUIRE(BackendRegistry::instance().getAudioBackend() == audio);
+    REQUIRE(audio->soloud().getBackendId() == SoLoud::Soloud::NULLDRIVER);
     audio->suspend();
     AudioAssetFixture assets;
     auto* vm = BackendRegistry::instance().getLuaManager();
