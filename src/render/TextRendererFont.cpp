@@ -2,6 +2,7 @@
 #include "BgfxRenderDevice.h"
 #include "NullRenderDevice.h"
 #include <cmath>
+#include <cstdio>
 #include <fstream>
 #include <limits>
 #include <utility>
@@ -54,6 +55,8 @@ std::unique_ptr<IPreparedFontState> TextRenderer::prepareFontState(
         prepared->lineHeight=font.ftFace->size->metrics.height/64.0f;
         prepared->rememberedTtfPath=state.assetPath;
         prepared->rememberedTtfSize=state.pixelSize;
+        std::printf("[TextRenderer] TTF prepared: %zu glyphs rasterized (%dx%d atlas).\n",
+            font.glyphs.size(), font.atlasW, font.atlasH);
         return prepared;
     } catch (...) { return {}; }
 }
