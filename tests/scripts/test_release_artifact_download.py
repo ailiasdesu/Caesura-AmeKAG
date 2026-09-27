@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import hashlib
-from http.client import HTTPConnection, IncompleteRead
+from http.client import HTTPConnection, HTTPResponse, IncompleteRead
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import io
 import json
@@ -285,33 +285,94 @@ class DownloadTests(unittest.TestCase):
         self.assertEqual(report["errors"], ["Artifact download exceeded time limit"])
         self.assertTrue(report["deadline_exceeded"])
 
+    def stalled_header_transport(self, stage, socket_seconds=None):
+        release = threading.Event()
+        sent = threading.Event()
+        read_started = threading.Event()
+        def hold(handler):
+            if stage == "chunk-header":
+                prefix = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n9"
+            else:
+                prefix = b"HTTP/1.1 200 OK\r\nX-Incomplete: "
+            handler.wfile.write(prefix)
+            handler.wfile.flush()
+            sent.set()
+            release.wait(.8)
+        server = self.wire_server(hold, api_handle=hold if stage == "api-headers" else None)
+        self.addCleanup(release.set)
+
+        class ObservedResponse(HTTPResponse):
+            def _read_status(response):
+                status = super()._read_status()
+                if stage != "chunk-header" and status[1] == 200:
+                    read_started.set()
+                return status
+
+            def _read_next_chunk_size(response):
+                # Observe the real chunk-header entry, not merely its server
+                # flush: getresponse() still has deadline checks before read1.
+                read_started.set()
+                return super()._read_next_chunk_size()
+
+        class ObservedConnection(HTTPConnection):
+            response_class = ObservedResponse
+
+        # Keep HTTPResponse.read1 unchanged, including its partial-framing
+        # identity in the production downloader.
+        self.assertIs(ObservedResponse.read1, HTTPResponse.read1)
+        def connection(host, timeout):
+            budget = timeout if socket_seconds is None else min(timeout, socket_seconds)
+            return ObservedConnection("127.0.0.1", server.server_port, timeout=budget)
+        return connection, release, sent, read_started
+
     def test_production_connection_path_bounds_api_headers_blob_headers_and_chunk_headers(self):
         for stage in ("api-headers", "blob-headers", "chunk-header"):
             with self.subTest(stage=stage):
-                release = threading.Event()
-                reached = threading.Event()
-                def hold(handler):
-                    if stage == "chunk-header":
-                        prefix = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n9"
-                    else:
-                        prefix = b"HTTP/1.1 200 OK\r\nX-Incomplete: "
-                    handler.wfile.write(prefix)
-                    handler.wfile.flush()
-                    reached.set()
-                    release.wait(.8)
-                server = self.wire_server(hold, api_handle=hold if stage == "api-headers" else None)
+                connection, release, sent, read_started = self.stalled_header_transport(stage)
+                # Make total-deadline expiry explicit only after reaching the
+                # target read. Real sockets retain their requested budget.
+                # This checks classification and bounded return, not whether
+                # Windows cross-thread shutdown alone can wake a blocked read.
+                def clock():
+                    return time.perf_counter() + (1 if read_started.is_set() else 0)
                 started = time.monotonic()
                 try:
-                    with mock.patch.object(product, "MAX_SECONDS", .1), self.assertRaises(ValueError):
-                        self.download(opener=None, connection_factory=self.wire_connection(server))
+                    with mock.patch.object(product, "MAX_SECONDS", .1), \
+                            mock.patch.object(product, "time", SimpleNamespace(perf_counter=clock)), \
+                            self.assertRaises(ValueError):
+                        self.download(opener=None, connection_factory=connection)
                 finally:
                     elapsed = time.monotonic() - started
                     release.set()
-                self.assertTrue(reached.is_set())
+                self.assertTrue(sent.is_set())
+                self.assertTrue(read_started.is_set())
                 self.assertLess(elapsed, .5, "An owned header read outlived the total deadline")
                 report = json.loads((self.root / str(self.counter) / "download.json").read_text())
                 self.assertEqual(report["status"], "FAIL")
                 self.assertTrue(report["deadline_exceeded"])
+                self.assertEqual(report["transport"], "fixture")
+                self.assertFalse(report["release_ready"])
+                self.assertFalse(any(t.name == "artifact-download-deadline" for t in threading.enumerate()))
+
+    def test_earlier_header_socket_timeouts_are_not_total_deadline_expiry(self):
+        for stage in ("api-headers", "blob-headers", "chunk-header"):
+            with self.subTest(stage=stage):
+                connection, release, sent, read_started = self.stalled_header_transport(stage, .02)
+                started = time.monotonic()
+                try:
+                    with mock.patch.object(product, "MAX_SECONDS", 1), self.assertRaisesRegex(
+                            ValueError, "HTTP transport failed: TimeoutError"):
+                        self.download(opener=None, connection_factory=connection)
+                finally:
+                    elapsed = time.monotonic() - started
+                    release.set()
+                self.assertTrue(sent.is_set())
+                self.assertTrue(read_started.is_set())
+                self.assertLess(elapsed, .5, "An owned header read ignored its socket timeout")
+                report = json.loads((self.root / str(self.counter) / "download.json").read_text())
+                self.assertEqual(report["status"], "FAIL")
+                self.assertEqual(report["errors"], ["HTTP transport failed: TimeoutError"])
+                self.assertFalse(report["deadline_exceeded"])
                 self.assertEqual(report["transport"], "fixture")
                 self.assertFalse(report["release_ready"])
                 self.assertFalse(any(t.name == "artifact-download-deadline" for t in threading.enumerate()))

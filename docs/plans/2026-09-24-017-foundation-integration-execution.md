@@ -427,3 +427,15 @@ Linux完整sanitizer门禁仍未执行：外部停止入口02已用真实多层s
 Linux full03仍REJECTED：原C++1508零失败零跳过，CTest仅完成26项，在27期间du瞬态ENOENT触guard停止；同时存在5份各240B/3alloc真实LSan，4份对应HTTP RPC用例，第5份未精确映射。不能把LSan归为监控误报，也没有降低门槛/抑制诊断。C卷不足16GiB启动门槛，full04未启动。U26三场模型失败证据只覆盖实际阶段；P6未执行、自动口型接线缺失。U24设备、U25配额/账号、AE3完整恢复等价、当前性能与剩余交付继续未完成。
 
 误删恢复仍保留30工作树、17705幸存原件、4071 Linux/临时文件及5托管归档的核验证据；原eda Windows完整根、最近Python完整根与U23原mutation回执缺口保持。最新清理进程检查无匹配，没有虚称本任务kill；后续写入在E盘恢复目录。已批准GitHub最小保护的新只读回执仍确认唯一context/App15368、strict=false及其余限制不变；本轮没有再次变更设置。平台矩阵只同步代码锚，历史能力保持NOT_REVERIFIED，全部旧失败和授权边界不变。
+
+## 2026-09-27 候选门禁失败与下载时序前提修正
+
+本节更新前述“待执行”状态，完整U1–U29仍未完成。候选 `7e3070fa426648a4a1066969ecde848afe32478f` 的本机Debug原session18408已消失，无对应执行进程；outer仍为RUNNING，execute实际退出码未知。C++1524/451302断言零失败零跳过，CTest完成59项后记录Start60，但没有完整终态；34份原始文件只读封存至 `u29-click-load-interruption-snapshot-01`。这是中断记录，不算完整门禁通过。
+
+同候选托管CI `36295388396/attempt1` 已终态失败：12作业6成功、3失败、3跳过。Linux实际Web638项/52文件全过，失败于自动能力矩阵未随Lua测试变化重新生成。Windows唯一失败是下载测试的api-headers子场景：目标到达、FAIL和墙钟返回小于0.5秒均通过，随后无条件要求 `deadline_exceeded=true` 失败。原临时download.json未上传，因此原异常类型与精确时序未知。三个失败job原日志及Windows失败、Web音频、聚合gate三份小artifact已核对托管大小、SHA256、ZIP CRC并保存。聚合gate因上游失败缺失产物ID而拒绝，不接受为最终交付。
+
+`u29-click-load-ci-fix-01/header-premise-red-01` 保留单次真实HTTP反例：总预算0.1秒、socket上限0.03秒，三个头部阶段均因较早TimeoutError失败且deadline=false，证明旧测试前提不成立。另一个 `header-watchdog-separation-01` 将socket放大到1秒后，三个场景约0.8秒才返回，均违反原0.5秒上限；该候选被放弃，原失败保留，未声称Windows跨线程shutdown能独立唤醒读取。此诊断刻意忽略产品请求的socket预算，不等于默认生产参数下复现相同失守。
+
+新分支 `codex/u29-click-load-ci-fix` 只调整测试夹具和生成矩阵，不改生产下载器。正控仍总预算0.1秒、真实墙钟返回小于0.5秒；API/blob实际读到目标200状态行后、chunk实际进入 `_read_next_chunk_size` 后，测试才推进host perf_counter。原HTTPResponse.read1及真实socket预算保持。另新增三个阶段的早socket负控（总预算1秒/socket0.02秒/返回小于0.5秒），明确要求TimeoutError和deadline=false；既有body负控保留。完整下载套件单次16发现、16通过、零失败零跳过，原始逐测试报告及日志位于 `download-suite-01`，汇总SHA256 `5536da2dfa01a65a019528f680d02cb05a6332f49ab449e63b192e8e9568f5a9`。正控报告seconds含注入的1秒，不能当作真实墙钟；墙钟上限使用未注入的monotonic断言。此结果不替代新候选完整CI。能力矩阵由原生成器更新，只有时间、指纹和五项测试引用数变化，没有运行能力状态升级。
+
+P6真实SDK探针原session65254编译与链接均实际0，输入、x64产物和终态根复核通过；`u26-sdk-lifecycle-real-probe-01/build-terminal-review-01.json` SHA256 `01421c949620c55f43e38eb65f96daf3d21bc2157b4863f552f0c02c9908e309`。四个原生场景均未运行，原LNK4098警告保留，不证明自动口型接线或整个SDK/GPU分配覆盖。Web入口03独审通过，但本机bake/build/test尚未运行，完整Debug先决门未放宽。新候选完整门禁、最终加密矩阵、AE3与其余U24–U29验收继续保留；本节没有合并、发布、标签或额外保护变更。

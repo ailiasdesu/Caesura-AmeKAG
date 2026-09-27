@@ -1,9 +1,9 @@
 # Capability Closure Matrix (auto-generated)
 
 > 由 python scripts/capability_closure.py 生成；勿手动编辑。
-> 生成时间（输入源最新 mtime）：2026-09-24T06:50:17Z
+> 生成时间（输入源最新 mtime）：2026-09-27T07:20:43Z
 > 生成命令：python scripts/capability_closure.py
-> 源指纹（输入内容 sha256 前 16 hex）：54564d50946c4426
+> 源指纹（输入内容 sha256 前 16 hex）：2cb697780f399151
 > 输出确定性：同源指纹同字节（generated_at 为输入源最新 mtime；跨机 checkout 的 mtime 差异属 by-design，确定性以指纹为准）
 
 ## 概述
@@ -126,7 +126,7 @@
 | div | Y | Y | n | CLOSED ⚠ | 15 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/math.lua:124 |
 | edit | Y | Y | Y | CLOSED | 1 | - | - | ? | scripts/kag/commands/text.lua:1985 |
 | emb | Y | Y | n | CLOSED | 16 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:103 |
-| end | n | Y | n | EXTRA | 301 | - | - | ? | scripts/kag.lua:86 |
+| end | n | Y | n | EXTRA | 303 | - | - | ? | scripts/kag.lua:86 |
 | endbutton | Y | Y | Y | CLOSED | 32 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:1426 |
 | endform | n | Y | n | EXTRA | 1 | - | - | ? | scripts/kag.lua:362 |
 | ending | Y | Y | n | CLOSED ⚠ | 25 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:339 |
@@ -168,7 +168,7 @@
 | live2d_expression | Y | Y | n | EXPERIMENTAL ⚠ | 1 | - ⚠ | - ⚠ | ? ⚠ | scripts/kag/commands/character.lua:189 |
 | live2d_lip_sync | Y | Y | n | EXPERIMENTAL ⚠ | 1 | - ⚠ | - ⚠ | ? ⚠ | scripts/kag/commands/character.lua:200 |
 | live2d_motion | Y | Y | n | EXPERIMENTAL ⚠ | 3 | - ⚠ | - ⚠ | ? ⚠ | scripts/kag/commands/character.lua:177 |
-| load | Y | Y | Y | CLOSED | 63 | - | - | ? | scripts/kag/commands/save.lua:395 |
+| load | Y | Y | Y | CLOSED | 64 | - | - | ? | scripts/kag/commands/save.lua:395 |
 | loadplace | Y | Y | Y | CLOSED | 6 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/save.lua:519 |
 | macro | n | Y | n | EXTRA | 67 | - | - | ? | scripts/kag.lua:243 |
 | mod | Y | Y | n | CLOSED ⚠ | 13 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/math.lua:125 |
@@ -179,7 +179,7 @@
 | nameplate | Y | Y | n | CLOSED | 9 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:419 |
 | notify | Y | Y | n | CLOSED | 38 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:605 |
 | nvl | Y | Y | Y | CLOSED | 28 | - | - | ? | scripts/kag/commands/text.lua:1025 |
-| p | Y | Y | Y | CLOSED | 321 | - | - | ? | scripts/kag/commands/text.lua:991 |
+| p | Y | Y | Y | CLOSED | 325 | - | - | ? | scripts/kag/commands/text.lua:991 |
 | palette | Y | Y | n | CLOSED ⚠ | 28 | win ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/vfx.lua:467 |
 | particle_weather | Y | Y | Y | CLOSED | 3 | - | - | ? | scripts/kag/commands/vfx.lua:610 |
 | particles | Y | Y | Y | CLOSED | 2 | - | - | ? | scripts/kag/commands/vfx.lua:398 |
@@ -209,14 +209,14 @@
 | rollback | Y | Y | n | CLOSED | 9 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:363 |
 | ruby | Y | Y | Y | CLOSED | 8 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:1084 |
 | s | Y | Y | n | CLOSED | 7 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag.lua:305 |
-| save | Y | Y | Y | CLOSED | 103 | - | - | ? | scripts/kag/commands/save.lua:266 |
+| save | Y | Y | Y | CLOSED | 105 | - | - | ? | scripts/kag/commands/save.lua:266 |
 | saveload | Y | Y | n | CLOSED | 12 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/save.lua:460 |
 | saveplace | Y | Y | n | CLOSED ⚠ | 7 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/save.lua:515 |
 | scroll | Y | Y | Y | CLOSED | 5 | - | - | ? | scripts/kag/commands/transition.lua:215 |
 | se | n | Y | Y | EXTRA | 6 | - | - | ? | scripts/kag.lua:445 |
 | sel | n | Y | n | EXTRA | 71 | - | - | ? | scripts/kag/commands/text.lua:1564 |
 | select | Y | Y | n | CLOSED ⚠ | 36 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:1560 |
-| set | Y | Y | n | CLOSED | 212 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:427 |
+| set | Y | Y | n | CLOSED | 218 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:427 |
 | setbgmvolume | Y | Y | Y | CLOSED | 6 | - | - | ? | scripts/kag/commands/audio.lua:375 |
 | setsevolume | Y | Y | Y | CLOSED | 6 | - | - | ? | scripts/kag/commands/audio.lua:380 |
 | setvoicevolume | Y | Y | Y | CLOSED | 5 | - | - | ? | scripts/kag/commands/audio.lua:385 |
