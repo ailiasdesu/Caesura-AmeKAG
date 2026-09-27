@@ -406,3 +406,24 @@ a5 的托管run `36011879411` attempt1终态为failure：11项producer/lock成�
 原Web artifact10814077091恢复完成：复核七个已完整段后只补缺失5107367字节，原session86432实际0、cleanup COMPLETE。整包40858929字节、GitHub SHA256 `1abadc324ef5c0bb693e69c5b0f8ad6711d4b81613032e853fd8590a1d79fcc0`、ZIP CRC、安全解包、内部bundle清单及独立producer/context全部通过；根报告 `ownership-ci-01/web-artifact-03/root-package-review-01.json` SHA256 `b43eab0df025a39ea02a9a24e8c8fdfd909942fd51ff1f545c426671a0d2d859`。旧900秒超时、宿主中断及detached supervisor仍在宿主Job内而拒绝的记录保持。恢复成功不使原CI变绿，不证明本地浏览器重放或发布。
 
 Linux完整sanitizer门禁仍未执行：外部停止入口02已用真实多层setsid写入者验证控制器死亡后的同cgroup清理，独审确认原同boot静默窗口；但正常返回可能隐藏强制清场的P2尚在修正。后一次readback的boot-id变化不算同启动周期第二次验证。U23唯一required context/App15368及strict=false等保护保持；误删脚本最新精确进程检查无匹配，未声称已终止原进程。缺失的原mutation和本机原日志继续标缺失。平台仅同步代码审查锚，不升级历史能力字段或NOT_REVERIFIED声明。U24设备、U25配额、U26剩余边界、U27正式性能/长跑、U28与U29新候选完整包/AE1–AE8/跨候选加密及回退仍待完成，完整目标保持未完成。
+
+
+## 2026-09-27 回放加载事务修复与已恢复终态
+
+当前代码 `a4fdaab98181aad3acaf0ab470d9208ef29c1dfd`（`codex/u29-click-load-owner`）修复回放点击执行 `[load]` 后待提交恢复被同帧脚本结束清理丢弃的问题。真实 Lua 回归先失败后通过，主套件147、隔离套件56通过，独立审查无剩余可行动问题；单文件 Lua 替换的真实原生正确/错误密钥对照通过，但不是重建候选或最终包验收。新候选完整 Debug、跨平台 CI 和完整加密矩阵仍待执行。 以下路径均相对于 `E:/CaesuraRecovery/20260924-1446/`。不同候选及诊断副本的证据分别保留；本节不宣布完整U1–U29完成、合并、发布或标签操作。
+
+前候选a6aca441的CI `36025985926/attempt1` 已读回12/12成功，Windows Release完整11项和托管Windows Debug根/独审通过；分别C++1524/451291、1524/451169断言，零失败零跳过，Lua147/56、CTest71通过及唯一预准AI exit77。Windows/Web最终包严格核验与源码/producer身份已绑定。当前U27长跑原wrapper/native0、cleanup COMPLETE，3625.4801689秒测量、4700周期、47contexts/46重建、16920PNG；根复核187383项零错误。正式CPU三个指标仍INCONCLUSIVE，物理发声NOT_MEASURED。这些已恢复终态不替代新a4f候选验证。
+
+普通存档四个全新a6进程冷读旧f87 A/B两个模板原始存档通过；真实一字节坏包被摘要门拒绝后，另四个全新旧f87进程冷读同样原件通过。根410项/619文件引用复核、静态游戏与存档字节前后相同。坏包从未启动。原basic CLI观察器漏列生成ledger与坏包checker状态名假设失败分别保留，修正只读观察器后未重跑原CLI或再改坏包。实际帧数、精确退出原因、all9事件消费与画面/音频等价仍未知。详见 `continuation-after-plain-cross-candidate-and-fallback-29.json`，SHA256 `5c51e84535d5fdacfb698ff075e231dbbb626015659c6025594605ffbaa7299c`。
+
+加密矩阵在 `u29-encrypted-final-package-run-01` 实际完成7次CLI：旧basic的check/build/package、旧kag3 check、新basic的check/build/package，均child/outer0；其余CLI未执行。旧f87 basic-A真实生产者产生6813字节CAES存档，SHA256 `1aefb9984e8c0569d90ffdb00254a0c7501fdd17b3f8870bd50fa1c7f4878aa0`。新a6错误密钥被原生拒绝，实际ctx/co身份与f/sf/lf/current_scene及排除tf.load_result、tf.load_error后的tf快照前后不变；两项加载反馈另行核验为预期错误，但其正式配对正控失败，不能宣布完整加密验收。
+
+原 `correct-basic-A-01` 的native child0、cleanup COMPLETE，outer1：日志确有Loaded slot11且无解密错误，但RESTORED/DONE均0，随即Script ended。原失败报告SHA256 `def1fd9e3e270d52aa847220b657566ad0feb9c0c02331f3321183a3938eb2c8` 保持。根因是replay在update内部点击执行load时，只排队pendingRestore而ctx/co引用不变；点击循环继续使旧协程结束，同帧update普通结束路径丢弃候选。该源码链由独立诊断确认，原日志没有内部pending插桩，不将源码推导冒充插桩观测。与加密格式无关的同形明文路径也适用；普通帧外点击下一帧能提交，不声称全部加载入口失效。
+
+新代码仅修改kag_runner的pending事务边界和现有replay测试。回放剩余同帧点击不能再进入待替换owner，tick返回后让下一帧既有commit路径提交；on_click入口和循环同时保护pendingRestore。RED-01为23/3、RED-02为25/3，GREEN为28/0；RED-02与GREEN-01测试字节完全相同，仅生产runner变化。GREEN-02只收窄两处测试标签，不宣称幂等赋值证明严格一次执行。最终主147/0、隔离56/0，独审421项核验无剩余问题，报告SHA256 `a58aa7b0766e9edb8ffde29b4867655490ed50fb14655966dc8dacf1aac33c70`。最初主套件绝对入口139/8失败保留；按既有profile相对入口调用后通过，源码未变；三条Windows rm不可用提示保持，不声称这些清理命令成功。
+
+真实原生单文件对照位于 `u29-click-load-native-diagnostic-01`：完整复制原basic游戏，只替换scripts/kag_runner.lua，真实a6 EXE和同一原始CAES存档、入口/replay/作者场景不变。correct与wrong分别全新进程实际0且COMPLETE。正控出现一次RESTORED和DONE并清洁关闭；反控实际拒绝且ctx/co/状态保持。正控报告SHA256 `01cd971b3c1d3cdbea66eada0fd98ed6be03f9ffb5c7783bab8ebdf6b90ee758`，反控SHA256 `083b7d250185317d82d4afa73910fffe22b428309c5b1ff47c7b4a1521ae8b8c`。这是单文件delta诊断，没有重写原包清单、没有回填原Q正控，也不是重建候选/最终包通过；原完整矩阵暂停，待新候选验证后用新目录执行。
+
+Linux full03仍REJECTED：原C++1508零失败零跳过，CTest仅完成26项，在27期间du瞬态ENOENT触guard停止；同时存在5份各240B/3alloc真实LSan，4份对应HTTP RPC用例，第5份未精确映射。不能把LSan归为监控误报，也没有降低门槛/抑制诊断。C卷不足16GiB启动门槛，full04未启动。U26三场模型失败证据只覆盖实际阶段；P6未执行、自动口型接线缺失。U24设备、U25配额/账号、AE3完整恢复等价、当前性能与剩余交付继续未完成。
+
+误删恢复仍保留30工作树、17705幸存原件、4071 Linux/临时文件及5托管归档的核验证据；原eda Windows完整根、最近Python完整根与U23原mutation回执缺口保持。最新清理进程检查无匹配，没有虚称本任务kill；后续写入在E盘恢复目录。已批准GitHub最小保护的新只读回执仍确认唯一context/App15368、strict=false及其余限制不变；本轮没有再次变更设置。平台矩阵只同步代码锚，历史能力保持NOT_REVERIFIED，全部旧失败和授权边界不变。
