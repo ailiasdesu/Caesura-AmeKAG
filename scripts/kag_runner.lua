@@ -83,6 +83,11 @@ local function has_continuation(c)
         or c._scene_changed or c._pendingJump or c._pendingLoadScene or c._pendingRestore)
 end
 
+local function pending_transaction(c)
+    if c and c._pendingRestore then return "restore-pending" end
+    if c and c._pendingRollback then return "rollback-pending" end
+end
+
 local function spawn_scheduler(index)
     local owner = ctx
     retained_save_owner = nil
@@ -826,7 +831,8 @@ function kag_runner.update(dt)
         elseif replay_mode == "playback" then
             local replay_owner, replay_co = ctx, kag_co
             replay.tick(delta_ms, function(x, y)
-                if ctx ~= replay_owner or kag_co ~= replay_co then return end
+                if ctx ~= replay_owner or kag_co ~= replay_co
+                    or pending_transaction(ctx) then return end
                 if x ~= nil then _G._GAME_MOUSE_X = x end
                 if y ~= nil then _G._GAME_MOUSE_Y = y end
                 -- Match the native click dispatch. A choice owns this hook;
@@ -838,6 +844,11 @@ function kag_runner.update(dt)
             if ctx ~= replay_owner or kag_co ~= replay_co then
                 return ctx ~= nil, ctx and "replay-owner-changed" or "ended"
             end
+            -- A click may queue replacement while ctx/co still name the old
+            -- owner. Commit on the next frame, before any further old work or
+            -- normal script-end cleanup can discard that prepared candidate.
+            local pending = pending_transaction(ctx)
+            if pending then return false, pending end
         end
     end
     -- Engine frame delta is seconds; KAG command durations are milliseconds.
@@ -1153,7 +1164,8 @@ end
 
 function kag_runner.on_click()
     if changing_session then return false, "session-changing" end
-    if ctx and ctx._pendingRollback then return false, "rollback-pending" end
+    local pending = pending_transaction(ctx)
+    if pending then return false, pending end
     if ctx and ctx._choiceMode then return false, "choice-open" end
     -- History/backlog overlay owns the pointer while open: ignore clicks so
     -- the overlay coroutine is not batch-resumed underneath. (Checked first:
@@ -1241,7 +1253,7 @@ function kag_runner.on_click()
     local count = 0
     while kag_co and coroutine.status(kag_co) ~= "dead" and not ctx.waiting_input
         and (not ctx._audio_wait or (count == 0 and ctx._voice_wait_poll))
-        and not ctx._pendingRollback and count < 200 do
+        and not pending_transaction(ctx) and count < 200 do
         local resumed, resume_reason = resume_scheduler("click")
         if not resumed then
             return false, resume_reason
