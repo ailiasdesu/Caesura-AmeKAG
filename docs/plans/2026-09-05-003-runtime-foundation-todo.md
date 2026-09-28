@@ -2,7 +2,9 @@
 
 ## 2026-09-28 当前接续
 
-最新运行时代码为 `908e661c91d4e2eae5bdce22a45c601760d97284`，包含已提交的 U26 原生语音口型及 U27 GC 观测顺序修复。[U27 续记](2026-09-28-002-u27-memory-observation-validation.md)记录该提交完整 Foundation Windows Debug 严格通过（C++1549、Lua147/57、CTest71通过及1个既定可选AI跳过）及原一小时长跑 FAIL。托管 CI36415081654 已因确定的文档过期取消；随后仅文档同步锚点和自动事实，下一候选的托管/Release/包/长跑继续验收。e51 四条加密冷恢复配对已独审，可供新候选选择为旧包；新回退、AE3、CPU原INCONCLUSIVE、设备/账号及U28/U29剩余范围继续开放。以下未提交指纹及日期段落保留各自历史证据范围，不覆盖本段。
+2026-09-28 最新接续：[U27 语音接纳观测修复与 8d3 候选终态](2026-09-28-003-u27-voice-admission-validation.md)。8d3 的完整 Windows Release 和 12 项托管 CI 通过；本地长跑因短语音接纳后的播放状态断言而失败。7b565767 探针修复已取得真实 C++ 红绿（GREEN 4 用例/108 断言）及 trace49项通过；c6cf2e10 修正 Android slices 上传路径。新候选完整门禁、实际上传与一小时长跑待验，原失败和完整 U1–U29 目标保留。
+
+前次接续记录的代码为 `908e661c91d4e2eae5bdce22a45c601760d97284`，包含已提交的 U26 原生语音口型及 U27 GC 观测顺序修复。[U27 续记](2026-09-28-002-u27-memory-observation-validation.md)记录该提交完整 Foundation Windows Debug 严格通过（C++1549、Lua147/57、CTest71通过及1个既定可选AI跳过）及原一小时长跑 FAIL。托管 CI36415081654 已因确定的文档过期取消；随后仅文档同步锚点和自动事实，下一候选的托管/Release/包/长跑继续验收。e51 四条加密冷恢复配对已独审，可供新候选选择为旧包；新回退、AE3、CPU原INCONCLUSIVE、设备/账号及U28/U29剩余范围继续开放。以下未提交指纹及日期段落保留各自历史证据范围，不覆盖本段。
 
 完整目标仍为 U1–U29，底层优先、Studio 暂停。[U26 当前诊断记录](2026-09-28-001-u26-voice-lipsync-validation.md)绑定未提交运行时代码指纹 `ca1fd6ead64e27b09cd1c2629fb53748c9bbdc3d9318d53536cc300efc372e05`：Windows SDK-ON Haru/KAG 七场景和 WinMM Device 场景通过；同指纹完整 Debug 诊断、Web 638/638 通过。文档/生成器随后更新，需最终补丁审查与候选 SHA 重新绑定；U26 的 Steam 账号、非 Windows SDK、扬声器声压仍未验，U27 长跑与 U29 最终包/发布门禁仍继续。本机 GitHub master 规则只读读回符合已批准的唯一必需检查和原保护选项，未在本轮重写。
 
