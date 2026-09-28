@@ -3,6 +3,7 @@
 #include <cstring>
 #include "audio/SoLoudAudioEngine.h"
 #include "audio/NullAudioBackend.h"
+#include "audio/VoiceMeter.h"
 #include "audio/AudioFocusService.h"
 #include "audio/api/IAudioFocusService.h"
 #include "di/BackendRegistry.h"
@@ -148,6 +149,18 @@ public:
         return path("corrupt.wav");
     }
 
+    std::string writeWave(const std::vector<uint8_t>& bytes,
+                          const std::string& name = "voice-level.wav") {
+        const auto destination = m_root / name;
+        m_files.push_back(destination);
+        std::ofstream output(destination, std::ios::binary);
+        output.exceptions(std::ios::badbit | std::ios::failbit);
+        output.write(reinterpret_cast<const char*>(bytes.data()),
+                     static_cast<std::streamsize>(bytes.size()));
+        output.close();
+        return path(name);
+    }
+
     AudioPathFiles(const AudioPathFiles&) = delete;
     AudioPathFiles& operator=(const AudioPathFiles&) = delete;
 
@@ -158,6 +171,132 @@ private:
 };
 
 } // namespace
+
+namespace {
+
+// Real PCM16 WAV, not playRawPCM (which is an SE input). Four 0.5-second
+// plateaus at 48 kHz: silence, approximately 0.1, approximately 0.3, silence.
+// The oracle below uses these encoded integers, including quantization.
+constexpr std::array<int16_t, 4> u26VoicePlateaus{0, 3277, 9830, 0};
+
+std::vector<uint8_t> u26VoiceWave(bool oppositeChannels) {
+    constexpr unsigned framesPerPlateau = 24000;
+    constexpr unsigned frames = framesPerPlateau * 4;
+    std::vector<uint8_t> bytes(44 + frames * 4, 0);
+    const auto word = [&](size_t offset, uint32_t value, size_t count) {
+        for (size_t i = 0; i < count; ++i)
+            bytes[offset + i] = static_cast<uint8_t>(value >> (8 * i));
+    };
+    std::memcpy(bytes.data(), "RIFF", 4);
+    std::memcpy(bytes.data() + 8, "WAVEfmt ", 8);
+    std::memcpy(bytes.data() + 36, "data", 4);
+    word(4, static_cast<uint32_t>(bytes.size() - 8), 4);
+    word(16, 16, 4); word(20, 1, 2); word(22, 2, 2);
+    word(24, 48000, 4); word(28, 48000 * 4, 4);
+    word(32, 4, 2); word(34, 16, 2); word(40, frames * 4, 4);
+    for (unsigned frame = 0; frame < frames; ++frame) {
+        const auto left = u26VoicePlateaus[frame / framesPerPlateau];
+        const auto right = oppositeChannels ? -left : left;
+        word(44 + frame * 4, static_cast<uint16_t>(left), 2);
+        word(46 + frame * 4, static_cast<uint16_t>(right), 2);
+    }
+    return bytes;
+}
+
+} // namespace
+
+TEST_CASE("Audio U26 voice level: decoded VOICE PCM drives RMS and excludes SE") {
+    bool oppositeChannels = false;
+    bool voiceInput = true;
+    SUBCASE("in-phase VOICE") {}
+    SUBCASE("opposite-phase VOICE must not cancel") { oppositeChannels = true; }
+    SUBCASE("the same decoded WAV on SE cannot drive VOICE") { voiceInput = false; }
+
+    AudioPathFiles files;
+    const auto file = files.writeWave(u26VoiceWave(oppositeChannels));
+    AudioQuota quota(4);
+    ScopedAudioQuota scopedQuota(quota);
+    SoLoudAudioEngine audio{SoLoudAudioEngine::OutputMode::ManualMix};
+    IAudioBackend& api = audio;
+    REQUIRE(api.init());
+    REQUIRE(audio.soloud().getBackendId() == SoLoud::Soloud::NULLDRIVER);
+    REQUIRE(audio.soloud().getBackendSamplerate() == 48000);
+    REQUIRE(audio.soloud().getBackendChannels() == 2);
+    constexpr float busGain = 0.5f;
+    constexpr float masterGain = 0.75f;
+    api.setBusVolume(voiceInput ? "voice" : "se", busGain);
+    api.setGlobalVolume(masterGain);
+    const auto handle = voiceInput ? api.playVoice(file) : api.playSE(file);
+    REQUIRE(handle != 0);
+
+    // Predetermined observations near each plateau's midpoint. This first RED
+    // does not claim edge latency, a device callback, or Cubism rendering.
+    constexpr std::array<unsigned, 4> sampleBlocks{24, 71, 118, 165};
+    std::array<VoiceLevelSnapshot, 4> levels{};
+    std::array<double, 4> outputRms{};
+    std::array<bool, 4> liveAtObservation{};
+    std::array<float, 512 * 2> pcm{};
+    bool finiteOutput = true;
+    size_t observation = 0;
+    for (unsigned block = 1; block <= sampleBlocks.back(); ++block) {
+        audio.soloud().mix(pcm.data(), 512);
+        double squares = 0;
+        for (const auto sample : pcm) {
+            finiteOutput = finiteOutput && std::isfinite(sample);
+            squares += double(sample) * sample;
+        }
+        if (block == sampleBlocks[observation]) {
+            outputRms[observation] = std::sqrt(squares / pcm.size());
+            liveAtObservation[observation] = audio.soloud().isValidVoiceHandle(handle);
+            levels[observation] = api.getVoiceLevel();
+            ++observation;
+        }
+    }
+    // Establish real playback before reporting the missing API behavior. A
+    // fixture/decoder/mixer failure is not the intended NOT_IMPLEMENTED RED.
+    REQUIRE(observation == sampleBlocks.size());
+    REQUIRE(finiteOutput);
+    REQUIRE(std::all_of(liveAtObservation.begin(), liveAtObservation.end(),
+                        [](bool live) { return live; }));
+    REQUIRE(outputRms[0] < 0.000001);
+    REQUIRE(outputRms[1] > 0.001);
+    REQUIRE(outputRms[2] > 2.5 * outputRms[1]);
+    REQUIRE(outputRms[2] < 3.5 * outputRms[1]);
+    REQUIRE(outputRms[3] < 0.000001);
+
+    for (size_t i = 0; i < levels.size(); ++i) {
+        // Actual SoLoud centered stereo pan contributes 1/sqrt(2) while
+        // mixing each child into its bus. The VOICE meter is before the bus's
+        // own pan and final 0.95 post-clip scaler; it is not output PCM RMS.
+        const double rawExpected = double(u26VoicePlateaus[i]) / 32768.0 / std::sqrt(2.0);
+        const double expected = voiceInput ? rawExpected * busGain * masterGain : 0.0;
+        INFO("plateau=" << i << " voice=" << voiceInput << " opposite=" << oppositeChannels
+             << " actual_output_rms=" << outputRms[i] << " expected_voice_rms=" << expected);
+        CHECK(levels[i].supported);
+        CHECK(levels[i].playing == voiceInput);
+        CHECK(levels[i].generation != 0);
+        CHECK(std::isfinite(levels[i].rms));
+        CHECK(levels[i].rms == doctest::Approx(expected).epsilon(0.0001).scale(0.0001));
+        if (voiceInput) CHECK(levels[i].sampled);
+    }
+    api.shutdown();
+    CHECK(quota.activeCount == 0);
+    CHECK(quota.releaseUnderflows == 0);
+}
+
+TEST_CASE("Audio U26 voice level: Null backend never claims PCM support") {
+    NullAudioBackend audio;
+    IAudioBackend& api = audio;
+    REQUIRE(api.init());
+    CHECK(api.playVoice("tests/audio/silence.wav") == 0);
+    const auto level = api.getVoiceLevel();
+    CHECK_FALSE(level.supported);
+    CHECK_FALSE(level.playing);
+    CHECK_FALSE(level.sampled);
+    CHECK(level.rms == 0.0f);
+    CHECK(level.generation == 0);
+    api.shutdown();
+}
 
 TEST_CASE("U22 software audio: update mixes real stereo PCM against the manual mixer") {
     AudioQuota quota(4);
@@ -1999,4 +2138,571 @@ TEST_CASE("Audio U27 snapshot: retiring BGM and voice owners remain visible unti
     audio.flushWaveCache();
     audio.shutdown();
     u27CheckAudioIdle(audio.getSnapshot(), false, 0, 0, AudioOutputMode::ManualMix);
+}
+
+namespace Caesura {
+struct SoLoudAudioEngineTestAccess {
+    struct Observation {
+        VoiceMeter::State meter;
+        const void* factory = nullptr;
+        bool joined = false;
+    };
+    static Observation observe(SoLoudAudioEngine& audio) {
+        if (audio.m_initialized) {
+            AudioMutexLock lock(audio.m_soloud);
+            return {audio.m_voiceMeter->state, audio.m_voiceMeter.get(), false};
+        }
+        return {audio.m_voiceMeter->state, audio.m_voiceMeter.get(),
+                audio.m_soloud.mAudioThreadMutex == nullptr &&
+                audio.m_soloud.mBackendCleanupFunc == nullptr};
+    }
+    inline static SoLoudAudioEngine* failingOwner = nullptr;
+    inline static bool throwOnSE = false;
+    inline static bool sawRealVoiceBeforeFailure = false;
+    static SoLoud::AudioSourceInstance* createBus(SoLoud::Bus& bus) {
+        auto& audio = *failingOwner;
+        if (&bus == &audio.m_seBus) {
+            // We are at the actual source allocation boundary, outside the
+            // mixer mutex. The two preceding buses really used playPrepared.
+            AudioMutexLock lock(audio.m_soloud);
+            const int index = audio.m_soloud.getVoiceFromHandle_internal(audio.m_voiceBusHandle);
+            sawRealVoiceBeforeFailure = index >= 0 &&
+                audio.m_soloud.mVoice[index]->mFilter[0] != nullptr &&
+                audio.m_voiceMeter->state.instancesCreated == 1 &&
+                audio.m_voiceMeter->state.instancesDestroyed == 0;
+        } else {
+            return bus.createInstance();
+        }
+        if (throwOnSE) throw std::bad_alloc(); // lock scope has ended
+        return nullptr; // actual playPrepared null admission failure
+    }
+    static void failSE(SoLoudAudioEngine& audio, bool throwing) {
+        failingOwner = &audio;
+        throwOnSE = throwing;
+        sawRealVoiceBeforeFailure = false;
+        audio.m_createBusInstance = &createBus;
+    }
+    static void clearFailure(SoLoudAudioEngine& audio) {
+        audio.m_createBusInstance = nullptr;
+        failingOwner = nullptr;
+    }
+    static unsigned setVoiceBusInaudible(SoLoudAudioEngine& audio, bool inaudible) {
+        AudioMutexLock lock(audio.m_soloud);
+        const int index = audio.m_soloud.getVoiceFromHandle_internal(audio.m_voiceBusHandle);
+        if (index < 0) return 0;
+        auto* voice = audio.m_soloud.mVoice[index];
+        // Exercise the vendor's real inaudible-tick branch. Normal 2D gain
+        // setters do not set this flag (the 3D attenuation path does).
+        if (inaudible) voice->mFlags |= SoLoud::AudioSourceInstance::INAUDIBLE;
+        else voice->mFlags &= ~SoLoud::AudioSourceInstance::INAUDIBLE;
+        audio.m_soloud.mActiveVoiceDirty = true;
+        return voice->mFlags;
+    }
+};
+}
+
+namespace {
+std::vector<uint8_t> u26ConstantWave(int16_t amplitude, unsigned rate = 48000,
+                                   unsigned channels = 2, unsigned frames = 144000) {
+    std::vector<uint8_t> bytes(44 + size_t(frames) * channels * 2, 0);
+    const auto word = [&](size_t offset, uint32_t value, size_t count) {
+        for (size_t i = 0; i < count; ++i)
+            bytes[offset + i] = static_cast<uint8_t>(value >> (8 * i));
+    };
+    std::memcpy(bytes.data(), "RIFF", 4);
+    std::memcpy(bytes.data() + 8, "WAVEfmt ", 8);
+    std::memcpy(bytes.data() + 36, "data", 4);
+    word(4, static_cast<uint32_t>(bytes.size() - 8), 4);
+    word(16, 16, 4); word(20, 1, 2); word(22, channels, 2);
+    word(24, rate, 4); word(28, rate * channels * 2, 4);
+    word(32, channels * 2, 2); word(34, 16, 2);
+    word(40, frames * channels * 2, 4);
+    for (unsigned frame = 0; frame < frames; ++frame)
+        for (unsigned channel = 0; channel < channels; ++channel)
+            word(44 + (size_t(frame) * channels + channel) * 2,
+                 static_cast<uint16_t>(amplitude), 2);
+    return bytes;
+}
+
+void u26SameLevel(const VoiceLevelSnapshot& a, const VoiceLevelSnapshot& b) {
+    CHECK(a.supported == b.supported);
+    CHECK(a.playing == b.playing);
+    CHECK(a.sampled == b.sampled);
+    CHECK(a.rms == b.rms);
+    CHECK(a.generation == b.generation);
+}
+
+void u26Zero(const VoiceLevelSnapshot& level) {
+    CHECK_FALSE(level.sampled);
+    CHECK(level.rms == 0.0f);
+}
+}
+
+TEST_CASE("Audio U26 voice level: mono resampling and varying host blocks keep the PCM oracle") {
+    unsigned rate = 48000, channels = 2, block = 127;
+    SUBCASE("stereo short blocks") {}
+    SUBCASE("mono source") { channels = 1; block = 333; }
+    SUBCASE("44100 mono resampled to 48000") { channels = 1; rate = 44100; block = 1023; }
+    SUBCASE("44100 stereo one-frame host blocks") { rate = 44100; block = 1; }
+    AudioPathFiles files;
+    const auto file = files.writeWave(u26ConstantWave(6554, rate, channels));
+    SoLoudAudioEngine audio{SoLoudAudioEngine::OutputMode::ManualMix};
+    REQUIRE(audio.init());
+    REQUIRE(audio.playVoice(file) != 0);
+    std::vector<float> pcm(block * 2);
+    for (unsigned frames = 0; frames < 12000; frames += block)
+        audio.soloud().mix(pcm.data(), block);
+    const auto level = audio.getVoiceLevel();
+    CHECK(level.supported);
+    CHECK(level.playing);
+    CHECK(level.sampled);
+    CHECK(level.rms == doctest::Approx(6554.0 / 32768.0 / std::sqrt(2.0)).epsilon(0.0001));
+}
+
+TEST_CASE("Audio U26 voice level: BGM and raw SE never enter the VOICE meter") {
+    AudioPathFiles files;
+    const auto file = files.writeWave(u26ConstantWave(6554));
+    SoLoudAudioEngine audio{SoLoudAudioEngine::OutputMode::ManualMix};
+    REQUIRE(audio.init());
+    SUBCASE("BGM same decoded WAV") { REQUIRE(audio.playBGM(file, 0) != 0); }
+    SUBCASE("raw PCM explicitly belongs to SE") {
+        std::vector<float> pcm(48000 * 2, 0.2f);
+        REQUIRE(audio.playRawPCM(pcm.data(), 48000, 48000, 2) != 0);
+    }
+    REQUIRE(u27MixAudioFrames(audio, 8192) > 1.0);
+    const auto before = audio.getVoiceLevel();
+    CHECK(before.supported);
+    CHECK_FALSE(before.playing);
+    u26Zero(before);
+    REQUIRE(audio.playVoice(file) != 0);
+    REQUIRE(u27MixAudioFrames(audio, 8192) > 1.0);
+    CHECK(audio.getVoiceLevel().rms > 0.1f);
+}
+
+TEST_CASE("Audio U26 voice level: getters preserve PCM clock quota and natural completion") {
+    AudioPathFiles files;
+    const auto file = files.writeWave(u26ConstantWave(6554, 48000, 2, 16000));
+    AudioQuota quota(8);
+    ScopedAudioQuota quotaScope(quota);
+    SoLoudAudioEngine audio{SoLoudAudioEngine::OutputMode::ManualMix};
+    REQUIRE(audio.init());
+    const auto handle = audio.playVoice(file);
+    REQUIRE(handle != 0);
+    u26Zero(audio.getVoiceLevel());
+    u27MixAudioFrames(audio, 4096);
+    const auto level = audio.getVoiceLevel();
+    REQUIRE(level.sampled);
+    const auto before = audio.getSnapshot();
+    const auto meter = SoLoudAudioEngineTestAccess::observe(audio).meter;
+    const double clock = audio.soloud().getStreamTime(handle);
+    const auto allocations = quota.tryCalls, releases = quota.releaseCalls;
+    for (int i = 0; i < 3; ++i) {
+        u26SameLevel(level, audio.getVoiceLevel());
+        u27CheckSameAudioSnapshot(before, audio.getSnapshot());
+        CHECK(audio.soloud().getStreamTime(handle) == clock);
+        CHECK(SoLoudAudioEngineTestAccess::observe(audio).meter.blockSerial == meter.blockSerial);
+        CHECK(quota.tryCalls == allocations);
+        CHECK(quota.releaseCalls == releases);
+    }
+    u27MixAudioFrames(audio, 24000);
+    const auto debt = audio.getSnapshot();
+    CHECK(debt.sessionHandles == 1);
+    for (int i = 0; i < 3; ++i) {
+        CHECK_FALSE(audio.getVoiceLevel().playing);
+        u26Zero(audio.getVoiceLevel());
+        u27CheckSameAudioSnapshot(debt, audio.getSnapshot());
+    }
+    CHECK(quota.activeCount == 1);
+    CHECK(audio.consumeVoiceCompletions() == 0); // owner has not culled yet
+    audio.update(0);
+    CHECK(audio.consumeVoiceCompletions() == 1);
+    CHECK(audio.consumeVoiceCompletions() == 0);
+    CHECK(quota.activeCount == 0);
+    CHECK(quota.releaseUnderflows == 0);
+    REQUIRE(audio.playVoice(file) != 0);
+    CHECK(audio.getVoiceLevel().generation != level.generation);
+    u26Zero(audio.getVoiceLevel());
+    u27MixAudioFrames(audio, 4096);
+    CHECK(audio.getVoiceLevel().sampled);
+}
+
+TEST_CASE("Audio U26 voice level: four currents and fifth retirement share one bus epoch") {
+    AudioPathFiles files;
+    AudioQuota quota(8);
+    ScopedAudioQuota quotaScope(quota);
+    SoLoudAudioEngine audio{SoLoudAudioEngine::OutputMode::ManualMix};
+    REQUIRE(audio.init());
+    uint64_t session = 0;
+    for (unsigned i = 0; i < 5; ++i) {
+        const auto file = files.writeWave(u26ConstantWave(3277), "overlap-" + std::to_string(i) + ".wav");
+        REQUIRE(audio.playVoice(file) != 0);
+        if (i == 0) session = audio.getVoiceLevel().generation;
+        CHECK(audio.getVoiceLevel().generation == session);
+    }
+    CHECK(audio.getSnapshot().sessionHandles == 5);
+    CHECK(audio.getSnapshot().retiringVoice == 1);
+    CHECK(quota.activeCount == 5);
+    u27MixAudioFrames(audio, 512);
+    // The displaced fifth source really contributes its retiring PCM here.
+    CHECK(audio.getVoiceLevel().rms > 4 * 3277.0 / 32768.0 / std::sqrt(2.0));
+    u27MixAudioFrames(audio, 4096);
+    CHECK(audio.getVoiceLevel().rms == doctest::Approx(4 * 3277.0 / 32768.0 / std::sqrt(2.0)).epsilon(0.0001));
+    const auto retiredDebt = audio.getSnapshot();
+    CHECK(retiredDebt.retiringVoice == 1);
+    CHECK(quota.activeCount == 5);
+    for (int i = 0; i < 3; ++i) {
+        CHECK(audio.getVoiceLevel().generation == session);
+        u27CheckSameAudioSnapshot(retiredDebt, audio.getSnapshot());
+    }
+    audio.update(0);
+    CHECK(audio.consumeVoiceCompletions() == 0);
+    CHECK(quota.activeCount == 4);
+    audio.stopVoice();
+    CHECK(audio.getVoiceLevel().generation != session);
+    CHECK_FALSE(audio.getVoiceLevel().playing);
+    u26Zero(audio.getVoiceLevel());
+    CHECK(audio.getSnapshot().retiringVoice == 4);
+    // The audio tail is intentionally audible while logical VOICE is stopped.
+    CHECK(u27MixAudioFrames(audio, 512) > 0);
+    CHECK_FALSE(audio.getVoiceLevel().playing);
+    u26Zero(audio.getVoiceLevel());
+    u27MixAudioFrames(audio, 4096);
+    const auto stoppedDebt = audio.getSnapshot();
+    CHECK(stoppedDebt.retiringVoice == 4);
+    CHECK(quota.activeCount == 4);
+    for (int i = 0; i < 3; ++i) {
+        u26Zero(audio.getVoiceLevel());
+        u27CheckSameAudioSnapshot(stoppedDebt, audio.getSnapshot());
+    }
+    audio.update(0);
+    CHECK(audio.consumeVoiceCompletions() == 0);
+    CHECK(quota.activeCount == 0);
+}
+
+TEST_CASE("Audio U26 voice level: failed file quota and mixer admission preserve sampled session") {
+    unsigned failure = 0;
+    SUBCASE("missing file") {}
+    SUBCASE("corrupt WAV") { failure = 1; }
+    SUBCASE("quota rejection") { failure = 2; }
+    SUBCASE("mixer full of protected voices") { failure = 3; }
+    AudioPathFiles files;
+    const auto file = files.writeWave(u26ConstantWave(6554));
+    AudioQuota quota(failure == 2 ? 1 : 8);
+    ScopedAudioQuota quotaScope(quota);
+    SoLoud::Wav filler;
+    REQUIRE(filler.load("tests/audio/silence.wav") == SoLoud::SO_NO_ERROR);
+    SoLoudAudioEngine audio{SoLoudAudioEngine::OutputMode::ManualMix};
+    REQUIRE(audio.init());
+    const auto handle = audio.playVoice(file);
+    REQUIRE(handle != 0);
+    u27MixAudioFrames(audio, 8192);
+    const auto before = audio.getVoiceLevel();
+    REQUIRE(before.sampled);
+    if (failure == 3) {
+        audio.soloud().setProtectVoice(handle, true);
+        for (unsigned i = audio.soloud().getVoiceCount(); i < VOICE_COUNT; ++i) {
+            const auto extra = audio.soloud().play(filler, 1, 0, true);
+            REQUIRE(audio.soloud().isValidVoiceHandle(extra));
+            audio.soloud().setProtectVoice(extra, true);
+        }
+        REQUIRE(audio.soloud().getVoiceCount() == VOICE_COUNT);
+    }
+    const auto failedFile = failure == 0 ? files.path("absent.wav") :
+                            failure == 1 ? files.corruptWave() : file;
+    const auto beforeRejection = audio.getSnapshot();
+    const auto allocations = quota.tryCalls, releases = quota.releaseCalls;
+    CHECK(audio.playVoice(failedFile) == 0);
+    u26SameLevel(before, audio.getVoiceLevel());
+    if (failure == 3) {
+        u27CheckSameAudioSnapshot(beforeRejection, audio.getSnapshot());
+        CHECK(audio.soloud().getVoiceCount() == VOICE_COUNT);
+        CHECK(quota.tryCalls == allocations);
+        CHECK(quota.releaseCalls == releases);
+    }
+    CHECK(audio.soloud().isValidVoiceHandle(handle));
+    CHECK(quota.activeCount == 1);
+    CHECK(audio.getSnapshot().retiringVoice == 0);
+    CHECK(audio.consumeVoiceCompletions() == 0);
+    audio.shutdown();
+    CHECK(quota.activeCount == 0);
+}
+
+TEST_CASE("Audio U26 voice level: suspend resume and mute cycles invalidate before fresh silence") {
+    unsigned boundary = 0;
+    SUBCASE("suspend resume") {}
+    SUBCASE("VOICE mute unmute") { boundary = 1; }
+    SUBCASE("master mute unmute") { boundary = 2; }
+    AudioPathFiles files;
+    const auto file = files.writeWave(u26VoiceWave(false));
+    SoLoudAudioEngine audio{SoLoudAudioEngine::OutputMode::ManualMix};
+    REQUIRE(audio.init());
+    REQUIRE(audio.playVoice(file) != 0);
+    u27MixAudioFrames(audio, 64000);
+    const auto high = audio.getVoiceLevel();
+    REQUIRE(high.sampled);
+    REQUIRE(high.rms > 0.2f);
+    if (boundary == 0) audio.suspend();
+    if (boundary == 1) audio.setBusVolume("voice", 0);
+    if (boundary == 2) audio.setGlobalVolume(0);
+    const auto invalid = audio.getVoiceLevel();
+    CHECK(invalid.generation != high.generation);
+    CHECK(invalid.playing);
+    u26Zero(invalid);
+    if (boundary == 0) audio.suspend();
+    if (boundary == 1) audio.setBusVolume("voice", 0);
+    if (boundary == 2) audio.setGlobalVolume(0);
+    CHECK(audio.getVoiceLevel().generation == invalid.generation);
+    const auto serial = SoLoudAudioEngineTestAccess::observe(audio).meter.blockSerial;
+    u27MixAudioFrames(audio, 2048);
+    const auto afterMutedMix = SoLoudAudioEngineTestAccess::observe(audio).meter.blockSerial;
+    if (boundary == 0) CHECK(afterMutedMix == serial); // paused: no PCM callback
+    else CHECK(afterMutedMix > serial); // 2D gain mute does not set INAUDIBLE
+    u26Zero(audio.getVoiceLevel());
+    if (boundary == 0) audio.resume();
+    if (boundary == 1) audio.setBusVolume("voice", 1);
+    if (boundary == 2) audio.setGlobalVolume(1);
+    const auto resumed = audio.getVoiceLevel();
+    CHECK(resumed.generation != invalid.generation);
+    u26Zero(resumed); // unmuted, but no new block may reuse the old PCM
+    if (boundary == 0) audio.resume();
+    if (boundary == 1) audio.setBusVolume("voice", 1);
+    if (boundary == 2) audio.setGlobalVolume(1);
+    CHECK(audio.getVoiceLevel().generation == resumed.generation);
+    u27MixAudioFrames(audio, 20000); // silence arrives before any model frame
+    const auto silence = audio.getVoiceLevel();
+    CHECK(silence.playing);
+    CHECK(silence.sampled);
+    CHECK(silence.rms == 0);
+    CHECK(silence.generation == resumed.generation);
+    CHECK(silence.generation != high.generation);
+    const auto state = SoLoudAudioEngineTestAccess::observe(audio).meter;
+    CHECK(state.sampledGeneration == silence.generation);
+}
+
+TEST_CASE("Audio U26 voice level: fades scale by live gain and zero recovery waits for new PCM") {
+    AudioPathFiles files;
+    const auto file = files.writeWave(u26ConstantWave(6554));
+    SoLoudAudioEngine audio{SoLoudAudioEngine::OutputMode::ManualMix};
+    REQUIRE(audio.init());
+    REQUIRE(audio.playVoice(file) != 0);
+    u27MixAudioFrames(audio, 8192);
+    const auto initial = audio.getVoiceLevel();
+    REQUIRE(initial.sampled);
+    audio.fadeVolume("voice", 0, 0.2f);
+    CHECK(audio.getBusVolume("voice") == 0); // target has already changed
+    u26SameLevel(initial, audio.getVoiceLevel()); // live gain has not
+    u27MixAudioFrames(audio, 4800);
+    const auto mid = audio.getVoiceLevel();
+    CHECK(mid.generation == initial.generation);
+    CHECK(mid.sampled);
+    CHECK(mid.rms == doctest::Approx(initial.rms * 0.5f).epsilon(0.002));
+    u27MixAudioFrames(audio, 6000);
+    u26Zero(audio.getVoiceLevel());
+    // No update/getter may hide the mute between scheduling two fades.
+    audio.fadeVolume("voice", 1, 0.2f);
+    const auto recovering = audio.getVoiceLevel();
+    CHECK(recovering.generation != initial.generation);
+    u26Zero(recovering);
+    u27MixAudioFrames(audio, 4800);
+    const auto up = audio.getVoiceLevel();
+    CHECK(up.sampled);
+    CHECK(up.generation == recovering.generation);
+    CHECK(up.rms == doctest::Approx(initial.rms * 0.5f).epsilon(0.002));
+    audio.update(0);
+    CHECK(audio.getVoiceLevel().generation == up.generation);
+    audio.fadeVolume("voice", 0, 0.02f);
+    u27MixAudioFrames(audio, 2048);
+    const auto beforeUpdate = audio.getVoiceLevel().generation;
+    audio.update(0); // owner records the actual fade-to-zero transition
+    CHECK(audio.getVoiceLevel().generation != beforeUpdate);
+    u26Zero(audio.getVoiceLevel());
+}
+
+TEST_CASE("Audio U26 voice level: one factory survives shutdown failed SE init and owner replacement") {
+    bool fail = false, throwing = false;
+    SUBCASE("normal restart") {}
+    SUBCASE("SE instance admission rejects after real VOICE creation") { fail = true; }
+    SUBCASE("SE instance allocation throws outside mixer mutex") { fail = true; throwing = true; }
+    AudioPathFiles files;
+    const auto file = files.writeWave(u26ConstantWave(6554));
+    SoLoudAudioEngine audio{SoLoudAudioEngine::OutputMode::ManualMix};
+    const auto factory = SoLoudAudioEngineTestAccess::observe(audio).factory;
+    CHECK(audio.getVoiceLevel().generation == 0);
+    CHECK_FALSE(audio.getVoiceLevel().supported);
+    if (fail) {
+        SoLoudAudioEngineTestAccess::failSE(audio, throwing);
+        CHECK_FALSE(audio.init());
+        CHECK(SoLoudAudioEngineTestAccess::sawRealVoiceBeforeFailure);
+        SoLoudAudioEngineTestAccess::clearFailure(audio);
+        const auto failed = SoLoudAudioEngineTestAccess::observe(audio);
+        CHECK(failed.joined);
+        CHECK(failed.factory == factory);
+        CHECK(failed.meter.installations == 1);
+        CHECK(failed.meter.instancesCreated == 1);
+        CHECK(failed.meter.instancesDestroyed == 1);
+        CHECK(audio.soloud().getVoiceCount() == 0);
+        CHECK_FALSE(audio.getVoiceLevel().supported);
+        CHECK(audio.getVoiceLevel().generation != 0);
+        u26Zero(audio.getVoiceLevel());
+    }
+    const auto previous = audio.getVoiceLevel().generation;
+    REQUIRE(audio.init());
+    CHECK(audio.getVoiceLevel().generation != previous);
+    const auto initGeneration = audio.getVoiceLevel().generation;
+    REQUIRE(audio.init());
+    CHECK(audio.getVoiceLevel().generation == initGeneration);
+    REQUIRE(audio.playVoice(file) != 0);
+    u27MixAudioFrames(audio, 4096);
+    const auto played = audio.getVoiceLevel();
+    REQUIRE(played.sampled);
+    const auto working = SoLoudAudioEngineTestAccess::observe(audio);
+    CHECK(working.meter.sampledGeneration == played.generation);
+    CHECK(working.factory == factory);
+    CHECK(working.meter.installations == 1);
+    CHECK(working.meter.instancesCreated - working.meter.instancesDestroyed == 1);
+    audio.shutdown();
+    const auto stopped = audio.getVoiceLevel();
+    CHECK(stopped.generation != played.generation);
+    CHECK_FALSE(stopped.supported);
+    u26Zero(stopped);
+    const auto joined = SoLoudAudioEngineTestAccess::observe(audio);
+    CHECK(joined.joined);
+    CHECK(joined.meter.instancesCreated == joined.meter.instancesDestroyed);
+    audio.shutdown();
+    CHECK(audio.getVoiceLevel().generation == stopped.generation);
+    REQUIRE(audio.init());
+    REQUIRE(audio.playVoice(file) != 0);
+    u26Zero(audio.getVoiceLevel());
+    u27MixAudioFrames(audio, 4096);
+    REQUIRE(audio.getVoiceLevel().sampled);
+    CHECK(audio.getVoiceLevel().generation != stopped.generation);
+    CHECK(SoLoudAudioEngineTestAccess::observe(audio).factory == factory);
+    CHECK(SoLoudAudioEngineTestAccess::observe(audio).meter.installations == 1);
+    SoLoudAudioEngine replacement{SoLoudAudioEngine::OutputMode::ManualMix};
+    REQUIRE(replacement.init());
+    REQUIRE(replacement.playVoice(file) != 0);
+    CHECK(replacement.getVoiceLevel().generation != audio.getVoiceLevel().generation);
+    CHECK(replacement.getVoiceLevel().generation != stopped.generation);
+}
+
+TEST_CASE("Audio U26 voice meter: planar RMS rejects invalid blocks without altering samples") {
+    VoiceMeter meter;
+    meter.invalidate();
+    std::unique_ptr<SoLoud::FilterInstance> filter(meter.createInstance());
+    REQUIRE(filter != nullptr);
+    std::array<float, 16> pcm{1, -1, 1, -1, 33, 44, 55, 66,
+                             -1, 1, -1, 1, 77, 88, 99, 22};
+    const auto original = pcm;
+    filter->filter(pcm.data(), 4, 8, 2, 48000, 0);
+    CHECK(pcm == original);
+    CHECK(meter.state.valid);
+    CHECK(meter.state.rawRms == 1);
+    CHECK(meter.state.sampledGeneration == meter.state.generation);
+    // Non-uniform samples distinguish RMS from mean absolute or peak.
+    pcm[0] = 0; pcm[1] = 0; pcm[2] = 0; pcm[3] = 1;
+    pcm[8] = 0; pcm[9] = 0; pcm[10] = 0; pcm[11] = -1;
+    filter->filter(pcm.data(), 4, 8, 2, 48000, 0);
+    CHECK(meter.state.rawRms == 0.5);
+    for (const auto invalid : {0, 1, 2, 3, 4, 5}) {
+        auto data = original;
+        unsigned samples = 4, stride = 8, channels = 2;
+        if (invalid == 0) samples = 0;
+        if (invalid == 1) channels = 0;
+        if (invalid == 2) stride = 3;
+        if (invalid == 3) data[2] = std::numeric_limits<float>::quiet_NaN();
+        if (invalid == 4) data[8] = std::numeric_limits<float>::infinity();
+        const auto copy = data;
+        const auto count = meter.state.invalidBlocks;
+        filter->filter(invalid == 5 ? nullptr : data.data(), samples, stride, channels, 48000, 0);
+        CHECK(std::memcmp(data.data(), copy.data(), sizeof(data)) == 0);
+        CHECK_FALSE(meter.state.valid);
+        CHECK(meter.state.rawRms == 0);
+        CHECK(meter.state.invalidBlocks == count + 1);
+    }
+    const auto generation = meter.state.generation;
+    meter.invalidate();
+    CHECK(meter.state.generation != generation);
+    CHECK_FALSE(meter.state.valid);
+    filter->filter(pcm.data(), 4, 8, 2, 48000, 0);
+    CHECK(meter.state.valid);
+    CHECK(meter.state.rawRms == 0.5);
+    CHECK(meter.state.sampledGeneration == meter.state.generation);
+    filter.reset();
+    CHECK(meter.state.instancesCreated == 1);
+    CHECK(meter.state.instancesDestroyed == 1);
+}
+
+TEST_CASE("Audio U26 voice level: a stopped tail may mix into an immediately admitted new session") {
+    AudioPathFiles files;
+    const auto loud = files.writeWave(u26ConstantWave(6554), "retiring.wav");
+    const auto silent = files.writeWave(u26ConstantWave(0), "new-silent.wav");
+    SoLoudAudioEngine audio{SoLoudAudioEngine::OutputMode::ManualMix};
+    REQUIRE(audio.init());
+    REQUIRE(audio.playVoice(loud) != 0);
+    u27MixAudioFrames(audio, 8192);
+    const auto old = audio.getVoiceLevel();
+    REQUIRE(old.rms > 0.1f);
+    audio.stopVoice();
+    const auto stopped = audio.getVoiceLevel();
+    CHECK_FALSE(stopped.playing);
+    REQUIRE(audio.playVoice(silent) != 0);
+    const auto admitted = audio.getVoiceLevel();
+    CHECK(admitted.generation != old.generation);
+    CHECK(admitted.generation != stopped.generation);
+    u26Zero(admitted);
+    u27MixAudioFrames(audio, 512);
+    const auto overlap = audio.getVoiceLevel();
+    CHECK(overlap.playing);
+    CHECK(overlap.sampled);
+    CHECK(overlap.rms > 0.01f); // bus-wide meter intentionally sees old tail
+    u27MixAudioFrames(audio, 4096);
+    CHECK(audio.getVoiceLevel().sampled);
+    CHECK(audio.getVoiceLevel().rms == 0);
+    CHECK(audio.getVoiceLevel().generation == admitted.generation);
+    CHECK(audio.consumeVoiceCompletions() == 0);
+}
+
+TEST_CASE("Audio U26 voice level: actual inaudible ticking skips filters until new PCM after unmute") {
+    AudioPathFiles files;
+    const auto file = files.writeWave(u26ConstantWave(6554));
+    SoLoudAudioEngine audio{SoLoudAudioEngine::OutputMode::ManualMix};
+    REQUIRE(audio.init());
+    const auto handle = audio.playVoice(file);
+    REQUIRE(handle != 0);
+    u27MixAudioFrames(audio, 8192);
+    const auto high = audio.getVoiceLevel();
+    REQUIRE(high.sampled);
+    REQUIRE(high.rms > 0.1f);
+    audio.setBusVolume("voice", 0);
+    const auto muted = audio.getVoiceLevel();
+    REQUIRE(muted.generation != high.generation);
+    u26Zero(muted);
+    const auto flags = SoLoudAudioEngineTestAccess::setVoiceBusInaudible(audio, true);
+    REQUIRE((flags & SoLoud::AudioSourceInstance::INAUDIBLE) != 0);
+    REQUIRE((flags & SoLoud::AudioSourceInstance::INAUDIBLE_TICK) != 0);
+    REQUIRE((flags & SoLoud::AudioSourceInstance::PAUSED) == 0);
+    const auto serial = SoLoudAudioEngineTestAccess::observe(audio).meter.blockSerial;
+    const auto clock = audio.soloud().getStreamTime(handle);
+    CHECK(u27MixAudioFrames(audio, 2048) == 0);
+    // This is the real mixer branch; the meter callback was neither replaced
+    // nor manually invoked. Establish skipped callbacks before recovery.
+    REQUIRE(SoLoudAudioEngineTestAccess::observe(audio).meter.blockSerial == serial);
+    REQUIRE(audio.soloud().getStreamTime(handle) > clock);
+    REQUIRE(audio.soloud().isValidVoiceHandle(handle));
+    CHECK(audio.getVoiceLevel().generation == muted.generation);
+    u26Zero(audio.getVoiceLevel());
+    audio.setBusVolume("voice", 1);
+    const auto resumed = audio.getVoiceLevel();
+    CHECK(resumed.generation != muted.generation);
+    u26Zero(resumed);
+    const auto restoredFlags = SoLoudAudioEngineTestAccess::setVoiceBusInaudible(audio, false);
+    REQUIRE((restoredFlags & SoLoud::AudioSourceInstance::INAUDIBLE) == 0);
+    u26Zero(audio.getVoiceLevel()); // clearing a flag cannot fabricate a PCM block
+    REQUIRE(u27MixAudioFrames(audio, 4096) > 1);
+    REQUIRE(SoLoudAudioEngineTestAccess::observe(audio).meter.blockSerial > serial);
+    const auto fresh = audio.getVoiceLevel();
+    CHECK(fresh.sampled);
+    CHECK(fresh.rms > 0.1f);
+    CHECK(fresh.generation == resumed.generation);
+    CHECK(SoLoudAudioEngineTestAccess::observe(audio).meter.sampledGeneration == fresh.generation);
 }

@@ -21,6 +21,7 @@ public:
     void update(float deltaTime) override;
     bool isPlaybackAvailable() const override { return false; }
     AudioBackendSnapshot getSnapshot() override;
+    VoiceLevelSnapshot getVoiceLevel() override;
     void suspend() override;
     void resume() override;
 

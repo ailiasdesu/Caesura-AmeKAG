@@ -33,7 +33,7 @@ Caesura 是面向程序员与独立团队的开源视觉小说引擎。剧本语
 
 **创作体验**
 
-- **KAG Neo-Genesis 剧本语言**：134 个声明式契约命令——对白、选择支、存档/回滚/履历、NVL、参数化宏、内联文本标记、i18n 热切换（[命令参考](docs/api/command-contracts.md)）
+- **KAG Neo-Genesis 剧本语言**：声明式契约命令涵盖对白、选择支、存档/回滚/履历、NVL、参数化宏、内联文本标记、i18n 热切换（数量以[自动生成的命令参考](docs/api/command-contracts.md)为准）
 - **KAG + Lua 混合脚本**：`[eval]` / `[iscript]` 在剧本内嵌 Lua，`kag.*` API 反向驱动剧情；也可以纯 Lua 直驱引擎
 - **Caesura Studio（开发暂停）**：仓库保留编辑器与 RPC 实现；现阶段不作为完整创作流程的就绪承诺，底层与 CLI 的开发优先。
 - **caesura 命令行**：`doctor` 环境体检、`create` 五模板脚手架、`check` 剧本契约校验、`flow` 分支图与死分支诊断、`i18n` 本地化管线、`build` / `package` 一键出包
@@ -42,7 +42,7 @@ Caesura 是面向程序员与独立团队的开源视觉小说引擎。剧本语
 
 - **渲染**：bgfx 多后端——三层合成、GPU 粒子、视频播放、转场特效、后处理链（bloom / vignette / LUT）、FreeType CJK + Ruby 注音。D3D11/OpenGL 的已执行图像范围见[U16记录](docs/plans/2026-09-09-007-native-render-effects-execution.md)；Metal、设备与当前整合候选按各自证据验证。
 - **音频与动画**：SoLoud 三总线（BGM / Voice / SE）、Live2D（Cubism SDK 可选）、SMA 骨骼动画、3D 小游戏场景
-- **存档系统**：加密存档、版本迁移、回滚快照、履历回看及显式云传输。可选 Steamworks/Live2D 的 SDK ON 编译与实际账号、模型运行分层记录，见[U26边界](docs/plans/2026-09-20-016-optional-sdk-cloud-boundaries-execution.md)。
+- **存档系统**：加密存档、版本迁移、回滚快照、履历回看及显式云传输。可选 Steamworks/Live2D 的 SDK ON 编译与实际账号、模型运行分层记录，见[U26边界](docs/plans/2026-09-20-016-optional-sdk-cloud-boundaries-execution.md)及[当前 Windows 语音口型诊断](docs/plans/2026-09-28-001-u26-voice-lipsync-validation.md)。
 - **分发安全**：CARC 加密归档（AES-256-GCM + Ed25519 签名）；最终包按指定路径和摘要接受静态、依赖与隔离运行检查，实际通过范围见[包验证记录](docs/plans/2026-09-13-013-final-package-isolation-execution.md)。
 
 **质量保障**
@@ -90,7 +90,7 @@ python scripts/caesura.py build my_vn --engine build/Debug/CaesuraAmeKAG.exe --c
 |---|---|
 | 入门：从克隆到第一个游戏 | [guides/getting-started.md](docs/guides/getting-started.md) |
 | KAG3 兼容性与迁移 | [compatibility.md](docs/compatibility.md) |
-| KAG 命令参考（134 条契约） | [api/command-contracts.md](docs/api/command-contracts.md) |
+| KAG 命令参考（自动生成） | [api/command-contracts.md](docs/api/command-contracts.md) |
 | 表达式语言（`[if]` / `[eval]` / `${}`） | [api/kag-expression-language.md](docs/api/kag-expression-language.md) |
 | Lua API 参考 | [api/lua-modules.md](docs/api/lua-modules.md) |
 | 编辑器 RPC API | [api/editor-api-reference.md](docs/api/editor-api-reference.md) |

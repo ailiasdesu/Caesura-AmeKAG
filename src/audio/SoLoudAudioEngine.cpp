@@ -1,4 +1,5 @@
 #include "SoLoudAudioEngine.h"
+#include "VoiceMeter.h"
 #include "di/api/ThreadAssert.h"
 #include "di/BackendRegistry.h"
 #include "../debug/api/DebugLog.h"
@@ -87,6 +88,14 @@ std::shared_ptr<SoLoud::AudioSource> SoLoudAudioEngine::loadWave(const std::stri
 
 // -- Lifecycle -------------------------------------------------------------
 
+SoLoudAudioEngine::SoLoudAudioEngine(OutputMode outputMode)
+    : m_outputMode(outputMode), m_voiceMeter(std::make_unique<VoiceMeter>()) {
+    // Bus::setFilter dereferences an existing BusInstance. Install exactly
+    // once here, before any instance exists; never reinstall during restart.
+    m_voiceBus.setFilter(0, m_voiceMeter.get());
+    ++m_voiceMeter->state.installations;
+}
+
 SoLoudAudioEngine::~SoLoudAudioEngine() {
     shutdown();
 }
@@ -131,9 +140,83 @@ AudioBackendSnapshot SoLoudAudioEngine::getSnapshot() {
     return snapshot;
 }
 
+VoiceLevelSnapshot SoLoudAudioEngine::getVoiceLevel() {
+    CAESURA_ASSERT_MAIN_THREAD();
+    VoiceLevelSnapshot snapshot;
+    if (!m_initialized) {
+        snapshot.generation = m_voiceMeter->state.generation;
+        return snapshot;
+    }
+    AudioMutexLock lock(m_soloud);
+    const auto& meter = m_voiceMeter->state;
+    snapshot.generation = meter.generation;
+    snapshot.supported = meter.available;
+    for (const auto handle : m_voicePool)
+        snapshot.playing |= m_soloud.getVoiceFromHandle_internal(handle) >= 0;
+    const int bus = m_soloud.getVoiceFromHandle_internal(m_voiceBusHandle);
+    if (!snapshot.supported || !snapshot.playing || m_softwareSuspended || bus < 0)
+        return snapshot;
+    const float gain = m_soloud.mVoice[bus]->mSetVolume;
+    if (!std::isfinite(gain) || gain <= 0 ||
+        !std::isfinite(m_globalVolume) || m_globalVolume <= 0 ||
+        !meter.valid || meter.sampledGeneration != meter.generation)
+        return snapshot;
+    const double effective = meter.rawRms * double(gain) * m_globalVolume;
+    if (!std::isfinite(effective)) return snapshot;
+    snapshot.sampled = true;
+    snapshot.rms = static_cast<float>(std::clamp(effective, 0.0, 1.0));
+    return snapshot;
+}
+
+void SoLoudAudioEngine::invalidateVoiceMeter() {
+    if (m_initialized) {
+        AudioMutexLock lock(m_soloud);
+        m_voiceMeter->invalidate();
+    } else {
+        m_voiceMeter->invalidate(); // No mixer, or after deinit has joined.
+    }
+}
+
+void SoLoudAudioEngine::observeVoiceMuteLocked() {
+    const int bus = m_soloud.getVoiceFromHandle_internal(m_voiceBusHandle);
+    const bool muted = bus < 0 || !std::isfinite(m_soloud.mVoice[bus]->mSetVolume)
+        || m_soloud.mVoice[bus]->mSetVolume <= 0;
+    // Recovery was invalidated before scheduling the fade. A skipped filter
+    // while its first gain is still zero is not another owner boundary.
+    if (m_voiceFadeRecovering) {
+        if (!muted) { m_voiceFadeRecovering = false; m_voiceGainMuted = false; }
+        return;
+    }
+    if (muted != m_voiceGainMuted) {
+        m_voiceMeter->invalidate();
+        m_voiceGainMuted = muted;
+    }
+}
+
+SoLoud::handle SoLoudAudioEngine::playBus(SoLoud::Bus& bus) {
+    // Match Soloud::play: source creation is outside its audio mutex, then
+    // playPrepared takes ownership, including its null-instance failure path.
+    bus.mSoloud = &m_soloud;
+    auto* instance = m_createBusInstance ? m_createBusInstance(bus) : bus.createInstance();
+    return m_soloud.playPrepared(bus, instance, -1.0f, 0.0f, false, 0);
+}
+
+void SoLoudAudioEngine::rollbackInit() noexcept {
+    // This path is required even when VOICE exists but m_initialized is false.
+    m_soloud.stopAll();
+    m_soloud.deinit(); // Backend teardown/join precedes direct state access.
+    m_voiceMeter->invalidate();
+    m_bgmBusHandle = m_voiceBusHandle = m_seBusHandle = 0;
+    m_initialized = false;
+    m_softwareSuspended = false;
+    m_voiceFadeRecovering = false;
+}
+
 bool SoLoudAudioEngine::init(){
     CAESURA_ASSERT_MAIN_THREAD();
     if (m_initialized) return true;
+    m_voiceMeter->invalidate();
+    try {
     m_voiceCompletionsPending = 0;
     m_softwareMixStats = {};
     m_softwareFractionalFrames = 0;
@@ -157,6 +240,7 @@ bool SoLoudAudioEngine::init(){
     );
     if (res != SoLoud::SO_NO_ERROR) {
         DEBUG_ERR(SubSys::Audio, ErrCode::Audio_SoLoudInitFailed, "[Audio] SoLoud init failed: %d", res);
+        rollbackInit();
         return false;
     }
 
@@ -173,32 +257,44 @@ bool SoLoudAudioEngine::init(){
     // Apply any bus volume configured before init() (stored pending values),
     // matching the init-time application pattern of setGlobalVolume.
     m_bgmBus.setVolume(m_bgmVolume);
-    m_bgmBusHandle = m_soloud.play(m_bgmBus);
+    m_bgmBusHandle = playBus(m_bgmBus);
     if (!m_soloud.isValidVoiceHandle(m_bgmBusHandle)) {
         DEBUG_ERR(SubSys::Audio, ErrCode::Audio_BusCreateFailed, "[Audio] BGM bus play() returned invalid handle 0");
-        m_soloud.deinit();
+        rollbackInit();
         return false;
     }
 
     m_voiceBus.setVolume(m_voiceVolume);
-    m_voiceBusHandle = m_soloud.play(m_voiceBus);
-    if (!m_soloud.isValidVoiceHandle(m_voiceBusHandle)) {
+    m_voiceBusHandle = playBus(m_voiceBus);
+    bool meterInstalled = false;
+    {
+        AudioMutexLock lock(m_soloud);
+        const int bus = m_soloud.getVoiceFromHandle_internal(m_voiceBusHandle);
+        meterInstalled = bus >= 0 && m_soloud.mVoice[bus]->mFilter[0] != nullptr;
+    }
+    if (!meterInstalled) {
         DEBUG_ERR(SubSys::Audio, ErrCode::Audio_BusCreateFailed, "[Audio] VOICE bus play() returned invalid handle 0");
-        m_soloud.deinit();
+        rollbackInit();
         return false;
     }
 
     m_seBus.setVolume(m_seVolume);
-    m_seBusHandle = m_soloud.play(m_seBus);
+    m_seBusHandle = playBus(m_seBus);
     if (!m_soloud.isValidVoiceHandle(m_seBusHandle)) {
         DEBUG_ERR(SubSys::Audio, ErrCode::Audio_BusCreateFailed, "[Audio] SE bus play() returned invalid handle 0");
-        m_soloud.deinit();
+        rollbackInit();
         return false;
     }
 
     m_initialized = true;
+    m_voiceGainMuted = !std::isfinite(m_voiceVolume) || m_voiceVolume <= 0;
+    m_voiceFadeRecovering = false;
     printf("[Audio] SoLoud initialized: 3 buses (BGM, VOICE, SE) ready.\n");
     return true;
+    } catch (...) {
+        rollbackInit();
+        return false;
+    }
 }
 
 void SoLoudAudioEngine::shutdown(){
@@ -213,6 +309,7 @@ void SoLoudAudioEngine::shutdown(){
     for (const unsigned int h : m_voicePool) allocatedHandles += (h != 0 ? 1u : 0u);
     m_soloud.stopAll();
     m_soloud.deinit();
+    m_voiceMeter->invalidate(); // Joined: no callback can publish old PCM.
     m_waveCache.clear();
     m_waveLRU.clear();
     m_waveLRUMap.clear();
@@ -251,21 +348,31 @@ void SoLoudAudioEngine::shutdown(){
 
 void SoLoudAudioEngine::suspend(){
     CAESURA_ASSERT_MAIN_THREAD();
-    if (!m_initialized) return;
+    if (!m_initialized || m_softwareSuspended) return;
+    AudioMutexLock lock(m_soloud);
+    m_voiceMeter->invalidate();
     m_softwareSuspended = true;
-    m_soloud.setPauseAll(true);
+    for (unsigned i = 0; i < m_soloud.mHighestVoice; ++i)
+        m_soloud.setVoicePause_internal(i, true);
 }
 
 void SoLoudAudioEngine::resume(){
     CAESURA_ASSERT_MAIN_THREAD();
-    if (!m_initialized) return;
-    m_soloud.setPauseAll(false);
+    if (!m_initialized || !m_softwareSuspended) return;
+    AudioMutexLock lock(m_soloud);
+    m_voiceMeter->invalidate();
+    for (unsigned i = 0; i < m_soloud.mHighestVoice; ++i)
+        m_soloud.setVoicePause_internal(i, false);
     m_softwareSuspended = false;
 }
 
 void SoLoudAudioEngine::update(float deltaTime){
     CAESURA_ASSERT_MAIN_THREAD();
     if (!m_initialized) return;
+    {
+        AudioMutexLock lock(m_soloud);
+        observeVoiceMuteLocked();
+    }
     m_soloud.update3dAudio();
     if (m_outputMode == OutputMode::Software && !m_softwareSuspended &&
         std::isfinite(deltaTime) && deltaTime > 0) {
@@ -310,6 +417,10 @@ void SoLoudAudioEngine::update(float deltaTime){
             }
             remaining -= count;
         }
+    }
+    {
+        AudioMutexLock lock(m_soloud);
+        observeVoiceMuteLocked();
     }
     cullFinishedHandles();
 }
@@ -419,8 +530,17 @@ void SoLoudAudioEngine::cullFinishedHandles() {
 
 void SoLoudAudioEngine::setGlobalVolume(float volume){
     CAESURA_ASSERT_MAIN_THREAD();
+    if (m_initialized) {
+        AudioMutexLock lock(m_soloud);
+        const bool wasMuted = !std::isfinite(m_globalVolume) || m_globalVolume <= 0;
+        const bool muted = !std::isfinite(volume) || volume <= 0;
+        if (wasMuted != muted) m_voiceMeter->invalidate();
+        m_globalVolume = volume;
+        // This vendor setter does not itself lock.
+        m_soloud.setGlobalVolume(volume);
+        return;
+    }
     m_globalVolume = volume;
-    if (m_initialized) m_soloud.setGlobalVolume(volume);
 }
 
 float SoLoudAudioEngine::getGlobalVolume() const {
@@ -445,8 +565,19 @@ void SoLoudAudioEngine::setBusVolume(const char* bus, float volume){
     } else if (b == "voice") {
         m_voiceVolume = volume;
         if (m_initialized) {
+            AudioMutexLock lock(m_soloud);
+            observeVoiceMuteLocked();
+            const bool muted = !std::isfinite(volume) || volume <= 0;
+            if (muted != m_voiceGainMuted || (m_voiceFadeRecovering && muted))
+                m_voiceMeter->invalidate();
+            m_voiceGainMuted = muted;
+            m_voiceFadeRecovering = false;
             m_voiceBus.setVolume(volume);
-            m_soloud.setVolume(m_voiceBusHandle, volume);
+            const int index = m_soloud.getVoiceFromHandle_internal(m_voiceBusHandle);
+            if (index >= 0) {
+                m_soloud.mVoice[index]->mVolumeFader.mActive = 0;
+                m_soloud.setVoiceVolume_internal(index, volume);
+            }
         }
     } else if (b == "se") {
         m_seVolume = volume;
@@ -559,15 +690,56 @@ unsigned int SoLoudAudioEngine::playVoice(const std::string& file){
     CAESURA_ASSERT_MAIN_THREAD();
     if (!m_initialized) return 0;
 
-    auto wav = loadWave(file);
+    {
+        AudioMutexLock lock(m_soloud);
+        bool capacity = false;
+        for (unsigned i = 0; i < VOICE_COUNT; ++i) {
+            const auto* voice = m_soloud.mVoice[i];
+            if (!voice || !(voice->mFlags & SoLoud::AudioSourceInstance::PROTECTED)) {
+                capacity = true;
+                break;
+            }
+        }
+        // Vendor findFreeVoice_internal stops its selected victim even when
+        // every slot is protected and no victim exists. Reject before that
+        // path, without culling, quota allocation, or meter invalidation.
+        if (!capacity) return 0;
+    }
+    // Playback admission is owner-thread only. Between this read and play,
+    // the callback can release slots but cannot allocate/protect new voices.
+    // Release the lock before play(), which acquires it itself.
+
+    std::shared_ptr<SoLoud::AudioSource> wav;
+    try {
+        wav = loadWave(file);
+        // Reserve retirement ownership before admitting a new mixer voice.
+        m_retiringVoice.reserve(m_retiringVoice.size() + 1);
+    } catch (...) { return 0; }
     if (!wav) return 0;
 
     cullFinishedHandles();
     auto& registry = BackendRegistry::instance();
     if (!registry.tryAlloc("audio_handles")) return 0;
 
-    SoLoud::handle h = m_voiceBus.play(*wav);
-    if (h == 0 || !m_soloud.isValidVoiceHandle(h)) {
+    SoLoud::handle h = 0;
+    try {
+        // Admission is paused so a callback cannot publish a new session's
+        // PCM before its epoch and owner slot have been committed together.
+        h = m_voiceBus.play(*wav, 1.0f, 0.0f, true);
+    } catch (...) {
+        registry.release("audio_handles");
+        return 0;
+    }
+    bool admitted = false;
+    {
+        AudioMutexLock lock(m_soloud);
+        const int index = m_soloud.getVoiceFromHandle_internal(h);
+        // Vendor failure returns UNKNOWN_ERROR (1), which can alias the
+        // first bus handle. Handle validity alone does not prove admission.
+        admitted = index >= 0 && m_soloud.mVoice[index]->mBusHandle == m_voiceBusHandle
+            && m_soloud.mVoice[index]->mAudioSourceID == wav->mAudioSourceID;
+    }
+    if (!admitted) {
         registry.release("audio_handles");
         return 0;
     }
@@ -580,7 +752,16 @@ unsigned int SoLoudAudioEngine::playVoice(const std::string& file){
     if (m_voicePool[slot] != 0) {
         retireHandle(m_voicePool[slot], 0.05f, m_retiringVoice);
     }
-    m_voicePool[slot] = h;
+    {
+        AudioMutexLock lock(m_soloud);
+        bool current = false;
+        for (const auto handle : m_voicePool)
+            current |= m_soloud.getVoiceFromHandle_internal(handle) >= 0;
+        if (!current) m_voiceMeter->invalidate();
+        m_voicePool[slot] = h;
+        const int index = m_soloud.getVoiceFromHandle_internal(h);
+        if (index >= 0) m_soloud.setVoicePause_internal(index, m_softwareSuspended);
+    }
 
     // BGM ducking (VN standard): while a voice line plays, lower the BGM
     // bus to 35% over 0.15s; cullFinishedHandles restores it when the
@@ -610,6 +791,7 @@ void SoLoudAudioEngine::stopVoice(){
         }
     }
     if (any) {
+        invalidateVoiceMeter();
         // Voice stop is also a ducking boundary: restore BGM immediately.
         if (m_bgmDucked) {
             m_bgmDucked = false;
@@ -803,7 +985,31 @@ void SoLoudAudioEngine::fadeVolume(const char* bus, float targetVolume, float fa
         m_soloud.fadeVolume(m_bgmBusHandle, targetVolume, fadeTime);
     } else if (b == "voice") {
         m_voiceVolume = targetVolume;
-        m_soloud.fadeVolume(m_voiceBusHandle, targetVolume, fadeTime);
+        AudioMutexLock lock(m_soloud);
+        observeVoiceMuteLocked();
+        const int index = m_soloud.getVoiceFromHandle_internal(m_voiceBusHandle);
+        if (index >= 0) {
+            auto* voice = m_soloud.mVoice[index];
+            const float from = voice->mSetVolume;
+            const bool targetMuted = !std::isfinite(targetVolume) || targetVolume <= 0;
+            if (fadeTime <= 0 || from == targetVolume) {
+                if (targetMuted != m_voiceGainMuted || (m_voiceFadeRecovering && targetMuted))
+                    m_voiceMeter->invalidate();
+                m_voiceGainMuted = targetMuted;
+                m_voiceFadeRecovering = false;
+                voice->mVolumeFader.mActive = 0;
+                m_soloud.setVoiceVolume_internal(index, targetVolume);
+            } else {
+                if (m_voiceGainMuted && !targetMuted && !m_voiceFadeRecovering) {
+                    m_voiceMeter->invalidate();
+                    m_voiceFadeRecovering = true;
+                }
+                if (targetMuted) m_voiceFadeRecovering = false;
+                // Equivalent to SoLoud::fadeVolume, within the same lock as
+                // recovery invalidation. The stored target is not live gain.
+                voice->mVolumeFader.set(from, targetVolume, fadeTime, voice->mStreamTime);
+            }
+        }
     } else if (b == "se") {
         m_seVolume = targetVolume;
         m_soloud.fadeVolume(m_seBusHandle, targetVolume, fadeTime);

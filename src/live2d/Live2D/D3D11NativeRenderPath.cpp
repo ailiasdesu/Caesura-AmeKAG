@@ -66,7 +66,6 @@ void D3D11NativeRenderPath::shutdown() {
         if (target.tex) target.tex->Release();
     }
     m_targets.clear();
-    m_lastOverriddenTex = nullptr;
     // GetImmediateContext() AddRefs the returned context; balance it here.
     // The underlying device/context remain owned by bgfx.
     if (m_context) { m_context->Release(); m_context = nullptr; }
@@ -117,7 +116,6 @@ void D3D11NativeRenderPath::releaseModelTarget(CsmRendering::CubismRenderer* ren
     if (it->second.rtv) it->second.rtv->Release();
     if (it->second.tex) it->second.tex->Release();
     m_targets.erase(it);
-    m_lastOverriddenTex = nullptr;
 }
 
 // ============================================================
@@ -209,12 +207,16 @@ void D3D11NativeRenderPath::endFrame(CubismRenderer* renderer, bgfx::TextureHand
     auto it = m_targets.find(renderer);
     if (it == m_targets.end() || !it->second.tex) return;
 
-    // Cubism already drew into this model's texture (bound in beginFrame);
-    // hand it to bgfx. overrideInternal recreates the SRV every call, so only
-    // do it when the texture actually changed (first frame / after resize).
-    if (m_lastOverriddenTex != it->second.tex) {
-        bgfx::overrideInternal(bgfxTex, reinterpret_cast<uintptr_t>(it->second.tex));
-        m_lastOverriddenTex = it->second.tex;
+    // A new bgfx handle can still have a queued texture creation command.
+    // Cache only a confirmed binding; a zero result must retry next frame.
+    // Keep this per model so simultaneous models do not recreate each
+    // other's shader-resource views on every frame.
+    auto& target = it->second;
+    if (target.boundBgfxTex.idx != bgfxTex.idx) {
+        const auto nativeTexture = reinterpret_cast<uintptr_t>(target.tex);
+        if (bgfx::overrideInternal(bgfxTex, nativeTexture) == nativeTexture) {
+            target.boundBgfxTex = bgfxTex;
+        }
     }
 }
 
@@ -223,7 +225,6 @@ void D3D11NativeRenderPath::resize(int width, int height) {
     // the next beginFrame if the size changes.
     m_width = width;
     m_height = height;
-    m_lastOverriddenTex = nullptr;
     for (auto& [renderer, target] : m_targets) {
         (void)renderer;
         if (target.rtv) target.rtv->Release();

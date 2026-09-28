@@ -219,6 +219,106 @@ local message=other_web.message(result)
 check("diagnostic does not echo a resource URL or unknown payload",not message:find("PRIVATE_",1,true) and not message:find("https://",1,true))
 check("recorded result did not alias caller mutation",record_ctx.capability_diagnostics[1].feature=="video.play" and record_ctx.capability_diagnostics[1].location.scene=="diagnostics.ks")
 
+-- U26 policy integration unit: real schema/runtime/character handler/backend.lua;
+-- only the host profile and native Live2D boundary are controlled. No SDK claim.
+local lip_facts=profile("native");lip_facts.compiled.live2d=true
+lip_facts.available.cubism=true;lip_facts.available.audio=false
+local lip_profile_reads=0
+local lip_runtime=instance("native",function()lip_profile_reads=lip_profile_reads+1;return lip_facts end)
+check("Live2D unit uses actual runtime policy",lip_runtime.configure_project_json("{}")==true)
+local actual_character=require("kag.commands.character")
+local actual_schema=require("kag.schema")
+local actual_tokenizer=require("tokenizer")
+local previous_live2d=rawget(_G,"Live2D")
+local boundary_calls={}
+local function boundary(name,...)
+    boundary_calls[#boundary_calls+1]={name,...}
+    return name=="load" and 41 or true
+end
+rawset(_G,"Live2D",{
+    load=function(...)return boundary("load",...)end,
+    show=function(...)return boundary("show",...)end,
+    hide=function(...)return boundary("hide",...)end,
+    unload=function(...)return boundary("unload",...)end,
+    set_mouth=function(...)return boundary("set_mouth",...)end,
+    set_voice_lipsync=function(...)return boundary("set_voice_lipsync",...)end,
+})
+local function lip_context(command)
+    return {current_scene="capability-live2d.ks",token_index=1,f={},sf={},tf={},
+        _live2dHandles=command=="live2d_load" and {} or {haru=41},live2d={}}
+end
+local function dispatch_live2d(command,raw,public_wrapper)
+    local ctx=lip_context(command)
+    local coerced=actual_schema.coerce(command,raw,ctx)
+    local called,value
+    if public_wrapper then
+        called,value=pcall(lip_runtime.wrap_command(actual_character[command],command),ctx,coerced)
+    else
+        called,value=pcall(lip_runtime.invoke_command,actual_character[command],ctx,coerced,command)
+    end
+    return called,value,ctx
+end
+local function denied_as(ctx,feature,reason)
+    local entries=ctx.capability_diagnostics
+    return type(entries)=="table" and #entries==1 and entries[1].status=="unsupported"
+        and entries[1].feature==feature and entries[1].reason==reason
+end
+for _,command in ipairs({"live2d_load","live2d_show","live2d_hide","live2d_unload"}) do
+    local raw={model="haru"};if command=="live2d_load" then raw.storage="Haru.model3.json" end
+    lip_facts.available.cubism=true;local before=#boundary_calls
+    local ok=dispatch_live2d(command,raw,true)
+    check(command.." reaches real handler/native boundary with Cubism and no audio",ok and #boundary_calls==before+1)
+    lip_facts.available.cubism=false;before=#boundary_calls
+    local blocked,_,blocked_ctx=dispatch_live2d(command,raw,true)
+    check(command.." public wrapper denies unavailable Cubism before native effect",not blocked and #boundary_calls==before
+        and denied_as(blocked_ctx,"live2d.cubism","backend_unavailable"))
+    lip_facts.available.cubism=true;lip_facts.compiled.live2d=false;before=#boundary_calls
+    blocked,_,blocked_ctx=dispatch_live2d(command,raw,false)
+    check(command.." scheduler invocation denies SDK-off before native effect",not blocked and #boundary_calls==before
+        and denied_as(blocked_ctx,"live2d.cubism","sdk_disabled"))
+    lip_facts.compiled.live2d=true
+end
+for _,source in ipairs({"manual","off"}) do
+    local before=#boundary_calls;local ok=dispatch_live2d("live2d_lip_sync",{model="haru",source=source},false)
+    local last=boundary_calls[#boundary_calls]
+    check(source.." remains usable with NullAudio-equivalent availability",ok and #boundary_calls==before+1
+        and last[1]==(source=="manual" and "set_mouth" or "set_voice_lipsync") and last[3]==(source=="manual" and 0 or false))
+end
+local parsed=actual_tokenizer.parse('[live2d_lip_sync model=haru value=0.4]')
+check("real tokenizer retains default-source tag",parsed[1] and parsed[1].type=="command" and parsed[1].cmd=="live2d_lip_sync" and #parsed[1].params==2)
+local tag_params={}
+for _,pair in ipairs(parsed[1].params or {}) do tag_params[pair[1]]=pair[2] end
+local before=#boundary_calls
+local ok=dispatch_live2d("live2d_lip_sync",tag_params,false)
+check("real schema default manual reaches native mouth despite unavailable audio",ok and #boundary_calls==before+1
+    and boundary_calls[#boundary_calls][1]=="set_mouth" and boundary_calls[#boundary_calls][3]==.4)
+before=#boundary_calls
+local blocked,_,blocked_ctx=dispatch_live2d("live2d_lip_sync",{model="haru",source="voice"},false)
+check("Cubism plus NullAudio-equivalent facts denies voice specifically on audio.play",not blocked and #boundary_calls==before
+    and denied_as(blocked_ctx,"audio.play","backend_unavailable"))
+lip_facts.available.audio=true;before=#boundary_calls;local reads=lip_profile_reads
+ok=dispatch_live2d("live2d_lip_sync",{model="haru",source="voice"},true)
+check("fresh playable-audio fact admits voice through real handler",ok and #boundary_calls==before+1 and lip_profile_reads>reads
+    and boundary_calls[#boundary_calls][1]=="set_voice_lipsync" and boundary_calls[#boundary_calls][3]==true)
+lip_facts.available.audio=false;before=#boundary_calls
+blocked,_,blocked_ctx=dispatch_live2d("live2d_lip_sync",{model="haru",source="voice"},true)
+check("losing audio availability is rechecked without a cached allow",not blocked and #boundary_calls==before
+    and denied_as(blocked_ctx,"audio.play","backend_unavailable"))
+for _,source in ipairs({"manual","voice","off"}) do
+    lip_facts.available.audio=true;lip_facts.available.cubism=false;before=#boundary_calls
+    blocked,_,blocked_ctx=dispatch_live2d("live2d_lip_sync",{model="haru",source=source},false)
+    check(source.." denies unavailable Cubism before native mouth change",not blocked and #boundary_calls==before
+        and denied_as(blocked_ctx,"kag.live2d_lip_sync","backend_unavailable"))
+end
+-- source is an enum, not an interpolated string: do not add new syntax while
+-- synchronizing capability policy. Macros must already have expanded to a literal.
+for _,unresolved in ipairs({"$tf.mode","${f.mode}","%mode%"}) do
+    before=#boundary_calls
+    local accepted=pcall(actual_schema.coerce,"live2d_lip_sync",{model="haru",source=unresolved},{f={mode="voice"},tf={mode="voice"}})
+    check("unresolved enum source remains a real schema error "..unresolved,not accepted and #boundary_calls==before)
+end
+rawset(_G,"Live2D",previous_live2d)
+
 print(string.format("Capability Runtime Tests: %d passed, %d failed",passed,failed))
 if failed==0 then print("ALL CAPABILITY RUNTIME TESTS PASSED") end
 os.exit(failed==0 and 0 or 1)

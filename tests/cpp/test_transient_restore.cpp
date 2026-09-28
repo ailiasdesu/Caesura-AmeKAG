@@ -55,6 +55,7 @@ public:
 
 class TransientAnimation final : public IAnimationBackend {
 public:
+    bool setVoiceLipSync(int, bool) override { return false; }
     bool init() override { ++initializations; return true; }
     void shutdown() override { ++shutdowns; }
     // This fixture simulates model ownership, not Cubism motion support.

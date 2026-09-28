@@ -76,6 +76,8 @@ for _, cmd in ipairs(cmds) do
             for c in pairs(spec.choices) do cs[#cs + 1] = c end
             table.sort(cs)
             range = table.concat(cs, ",")
+        elseif spec.values then
+            range = table.concat(spec.values, ", ")
         end
         out[#out + 1] = string.format("| `%s` | %s | %s | %s | %s |",
             name, spec.type or "string",

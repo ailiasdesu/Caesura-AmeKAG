@@ -10,10 +10,10 @@
 |--------|-------|
 | Module libraries (src/) | 16 |
 | API interface headers (src/*/api/I*.h) | 41 |
-| Pure-virtual interface methods | 457 |
-| Lua binding functions (luaL_Reg entries) | 182 |
+| Pure-virtual interface methods | 459 |
+| Lua binding functions (luaL_Reg entries) | 188 |
 | KAG command handler files | 13 |
-| KAG contract commands (command-contracts.md) | 134 |
+| KAG contract commands (command-contracts.md) | 138 |
 | RPC HTTP endpoints (EditorServer) | 36 |
 | RPC stdin JSON-RPC methods | 29 |
 | Lua runtime scripts (scripts/, excl. demo/check) | 93 |
@@ -25,7 +25,7 @@
 | archive | IArchiveReader.h | 7 |
 | archive | IArchiveWriter.h | 3 |
 | archive | ICryptoEngine.h | 12 |
-| audio | IAudioBackend.h | 33 |
+| audio | IAudioBackend.h | 34 |
 | audio | IAudioFocusService.h | 5 |
 | audio | IAudioRestore.h | 5 |
 | debug | IDebugManager.h | 26 |
@@ -35,7 +35,7 @@
 | entry | IEngineHostSnapshot.h | 1 |
 | input | IInputRouter.h | 14 |
 | job | IJobSystem.h | 9 |
-| live2d | IAnimationBackend.h | 16 |
+| live2d | IAnimationBackend.h | 17 |
 | minigame | IMiniGameBackend.h | 13 |
 | platform | IDisplayService.h | 1 |
 | platform | ILifecycleService.h | 4 |
@@ -75,6 +75,7 @@
 | EngineBinding.cpp | 7 | Engine |
 | FontRestoreBinding.cpp | 6 | — |
 | KAGBinding.cpp | 36 | KAG |
+| Live2DBinding.cpp | 6 | Live2D |
 | MiniGameBinding.cpp | 5 | mini_game |
 | RenderBinding.cpp | 38 | _ASYNC_CALLBACKS, _ASYNC_CALLBACKS, Render |
 | RestoreBinding.cpp | 6 | Restore |

@@ -35,12 +35,12 @@ private:
     struct ModelTarget {
         ID3D11Texture2D* tex = nullptr;
         ID3D11RenderTargetView* rtv = nullptr;
+        bgfx::TextureHandle boundBgfxTex = BGFX_INVALID_HANDLE;
     };
     bool createModelTarget(CsmRendering::CubismRenderer* renderer, int width, int height);
 
     ID3D11Device*        m_device = nullptr;
     ID3D11DeviceContext* m_context = nullptr;
-    ID3D11Texture2D*     m_lastOverriddenTex = nullptr;
     std::unordered_map<CsmRendering::CubismRenderer*, ModelTarget> m_targets;
 
     int m_width = 1280;

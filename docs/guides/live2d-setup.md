@@ -92,7 +92,7 @@ assets/live2d/
 
 ### 5. 当前可调用入口与验证范围
 
-2026-09-24 源码核对：模型加载、显示，以及动作、表情和参数控制的 C++ 接口位于 `src/live2d/api/IAnimationBackend.h`。引擎初始化后，通过 `BackendRegistry::instance().getAnimationBackend()` 取得接口；先确认 `isCubismAvailable()`，避免把静态 PNG 降级当作 Cubism 已初始化。Windows 真实模型验证需要 D3D11、对应模型纹理和实际渲染结果。
+2026-09-28 当前源码：模型加载、显示、动作、表情、参数与语音口型控制的 C++ 接口位于 `src/live2d/api/IAnimationBackend.h`。引擎初始化后，通过 `BackendRegistry::instance().getAnimationBackend()` 取得接口；先确认 `isCubismAvailable()`，避免把静态 PNG 降级当作 Cubism 已初始化。Windows 真实模型验证需要 D3D11、对应模型纹理和实际渲染结果。
 
 现有编辑器 HTTP `POST /api/live2d/load` 支持模型加载及显示。在编辑器服务器已经启动、请求满足其令牌认证要求时，可使用以下请求体；`modelPath` 必须指向实际资源根内的文件，SDK 目录存在本身不满足资源路径约束。
 
@@ -106,11 +106,20 @@ assets/live2d/
 }
 ```
 
-取得模型句柄只证明加载调用成功。纹理、实际图像、动作和释放行为仍需分别验证；当前 SDK ON 证据与待验条件见 [U26 执行记录](../plans/2026-09-20-016-optional-sdk-cloud-boundaries-execution.md)。C++ `playMotion`、`setExpression` 与 `setParameter` 是已有入口，但动作分组参数及动作/表情对象所有权存在待真实 SDK 复现的静态问题，不能由编译成功推断播放和释放通过。
+取得模型句柄只证明加载调用成功。纹理、实际图像、动作和释放行为仍需分别验证；本轮 Windows 真实模型、口型和设备证据见 [U26 语音口型执行记录](../plans/2026-09-28-001-u26-voice-lipsync-validation.md)，更早的边界见 [U26 历史记录](../plans/2026-09-20-016-optional-sdk-cloud-boundaries-execution.md)。C++ `playMotion`、`setExpression` 与 `setParameter` 是已有入口，但本轮没有因此宣称动作分组及表情所有权问题已闭环。
 
-KAG 动态路径目前尚未接线。`fg` 使用纹理加载；`motion`、`expression` 并不是当前注册的对应命令。已声明的 `live2d_motion`、`live2d_expression`、`live2d_lip_sync` 只记录脚本上下文，能力目录明确标为 `command_not_wired`，现有 Lua/RPC 没有这些动态控制绑定。不要把上下文测试当作模型执行结果。
+原生 KAG 现已接通 `[live2d_load]`、`[live2d_show]`、`[live2d_hide]`、`[live2d_unload]` 和 `[live2d_lip_sync]`。它们通过 Script 模块的 Lua `Live2D` 表调用实际 Cubism 后端；模型句柄属于当前场景上下文，不写入存档。带活动模型的保存会明确拒绝。`live2d_motion`、`live2d_expression` 仍只记录上下文，不能据此宣称真实动作或表情已播放；Web 不提供这些动态 Cubism 命令。
 
-口型也需区分控制来源：C++ 可通过 `setParameter` 指定模型参数；自动读取语音包络并驱动 LipSync 参数的应用接线尚未实现。模型动作本身可能包含嘴部曲线，因此观察到嘴部运动不能单独证明语音驱动口型同步。
+```ks
+[live2d_load model=haru storage="assets/live2d/Haru/Haru.model3.json"]
+[live2d_show model=haru x=0 y=0 scale=0.5]
+[live2d_lip_sync model=haru source=voice]
+[playvoice storage="assets/voice/line.wav"]
+[live2d_lip_sync model=haru source=off]
+[live2d_unload model=haru]
+```
+
+`source=voice` 还要求音频播放能力可用：后端只读当前 VOICE 总线已混出的 PCM 电平，经模型包络驱动真实 `ParamMouthOpenY`；初始静音、暂停/恢复、自然结束和停止均重置相应代次。`source=manual value=0.5` 写入指定嘴型并关闭自动驱动；`source=off` 关闭自动驱动且不能同时传 `value`。缺 SDK、未初始化的 Cubism、无该参数的模型或 Web 路径不会伪装为成功。Windows D3D11 + Haru 的图像与 WinMM 设备路径已按本轮记录验证；电平与像素证据不等于扬声器声压或硬件回调精确时刻。
 
 ## 编译宏参考
 

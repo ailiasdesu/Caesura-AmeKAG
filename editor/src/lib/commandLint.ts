@@ -44,7 +44,8 @@ export const KNOWN_COMMANDS: string[] = [
   'assert', 'sma_play', 'sma_stop', 'sma_anim', 'sma_ik', 'sma_variant',
   'steam_achievement',
   // live2d
-  'live2d_expression', 'live2d_lip_sync', 'live2d_motion',
+  'live2d_expression', 'live2d_hide', 'live2d_lip_sync', 'live2d_load',
+  'live2d_motion', 'live2d_show', 'live2d_unload',
   // round 71: KAG3-compat arithmetic + character + effects + notification
   'add', 'sub', 'mul', 'div', 'mod', 'dec', 'csp', 'csd', 'csl',
   'textspeed', 'cps', 'palette', 'vibrate', 'notify',

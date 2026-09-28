@@ -196,13 +196,15 @@ public:
 |------|------|--------|------|
 | `init` | — | `bool` | 初始化音频引擎 |
 | `isPlaybackAvailable` | — | `bool` | owner 线程查询实际实施会话；Null 始终为 false，ManualMix 可用不等于物理输出 |
+| `getSnapshot` | — | `AudioBackendSnapshot` | owner 线程读取后端、会话句柄与缓存计数；Device 各项读取不构成全局原子快照 |
+| `getVoiceLevel` | — | `VoiceLevelSnapshot` | owner 线程只读 VOICE 混音 PCM 电平、播放/采样状态与代次；不推进混音或消费结束事件 |
 | `shutdown` | — | — | 关闭并释放所有资源 |
 | `update` | `deltaTime` | — | 每帧更新音频系统 |
 | `suspend` | — | — | 暂停全部播放（混音器暂停，保留已加载资源） |
 | `resume` | — | — | 从暂停位置继续播放 |
 | `playBGM` | `file`, `fadeTime=1.0f` | `uint` | 播放背景音乐（支持淡入） |
 | `stopBGM` | `fadeTime=1.0f` | — | 停止 BGM（支持淡出） |
-| `playVoice` | `file` | `uint` | 播放语音（绝对中断前一条） |
+| `playVoice` | `file` | `uint` | 播放语音；当前后端允许四槽重叠，轮转的旧语音短暂淡出；失败返回 0 |
 | `stopVoice` | — | — | 停止语音 |
 | `playSE` | `file` | `uint` | 播放 2D 音效 |
 | `playRawPCM` | `samples`, `numFrames`, `sampleRate`, `channels` | `uint` | 播放交错的 float PCM（视频音频等），返回句柄 |
@@ -475,6 +477,7 @@ struct PointerEvent {
 | `loadModel(path, name)` | 加载模型，返回 handle（0=失败） |
 | `unloadModel(handle)` | 卸载模型 |
 | `isLoaded(handle)` | 模型是否已加载 |
+| `loadedModelCount()` / `clearModels()` | 查询并清空已加载模型；清空不复用旧句柄 |
 | `showModel(handle, x, y, scale)` | 显示模型在指定位置 |
 | `hideModel(handle)` | 隐藏模型 |
 | `setOpacity(handle, opacity)` | 设置透明度 (0.0–1.0) |
@@ -482,12 +485,14 @@ struct PointerEvent {
 | `playMotion(handle, name)` | 播放指定动作 |
 | `setExpression(handle, name)` | 设置表情 |
 | `setParameter(handle, param, value)` | 设置模型参数 |
+| `setVoiceLipSync(handle, enabled)` | 为含 `ParamMouthOpenY` 的真实 Cubism 模型开启/关闭 VOICE 驱动；默认关闭，不支持时返回 false |
 | `name` | 返回后端名称 |
 
 **降级行为**：无 Cubism SDK 时，NullAnimationBackend 支持 PNG/JPG/BMP 静态图片作为立绘，通过 TextureManager 加载。
 
-当前没有注册 `live2d` 全局 Lua 表；后续脚本绑定必须位于 Script 模块，并在调用时经
-`BackendRegistry::getAnimationBackend()` 解析接口。
+Script 模块注册全局 Lua `Live2D` 表：`load`、`show`、`hide`、`unload`、`set_mouth`、
+`set_voice_lipsync`。绑定在 owner 线程经 `BackendRegistry::getAnimationBackend()` 解析接口，
+仅对实际初始化的 Cubism 后端开放；静态 PNG 回退不冒充动态模型能力。
 
 ---
 

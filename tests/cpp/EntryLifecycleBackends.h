@@ -244,6 +244,7 @@ private:
 
 class AudioBackend final : public IAudioBackend {
 public:
+    VoiceLevelSnapshot getVoiceLevel() override { return {}; }
     explicit AudioBackend(LifecycleProbe& probe) : m_probe(probe) {}
     ~AudioBackend() override { ++m_probe.destructorCalls; }
 
@@ -331,6 +332,7 @@ private:
 
 class AnimationBackend final : public IAnimationBackend {
 public:
+    bool setVoiceLipSync(int, bool) override { return false; }
     explicit AnimationBackend(LifecycleProbe& probe) : m_probe(probe) {}
     ~AnimationBackend() override { ++m_probe.destructorCalls; }
 

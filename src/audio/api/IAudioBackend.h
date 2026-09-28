@@ -27,6 +27,14 @@ struct AudioBackendSnapshot {
     uint64_t restoredSources = 0;
 };
 
+struct VoiceLevelSnapshot {
+    bool supported = false;
+    bool playing = false; // Valid current VOICE handles, not only retiring tails.
+    bool sampled = false; // A valid PCM block belonging to this generation.
+    float rms = 0.0f; // Finite 0..1 source-block RMS scaled by current bus/master gain.
+    uint64_t generation = 0; // Nonreused invalidation identity; zero means unavailable.
+};
+
 // ---------------------------------------------------------------------------
 // IAudioBackend   Abstract audio backend interface
 // ---------------------------------------------------------------------------
@@ -56,6 +64,12 @@ public:
     // Device playback may finish between the mixer's individually locked
     // reads; this is not a globally atomic or global-quiescence assertion.
     virtual AudioBackendSnapshot getSnapshot() = 0;
+
+    // Owner/main thread only. Observe actual mixed VOICE PCM without mixing,
+    // updating, culling handles, consuming completions, or releasing quotas.
+    // BGM, SE and playRawPCM are excluded. Models must reset their envelope
+    // on generation changes before applying any new sample or frame delta.
+    virtual VoiceLevelSnapshot getVoiceLevel() = 0;
 
     // -- App-lifecycle audio suspend/resume (mobile backgrounding) ----------
     // Suspends all playback (mixer paused) without releasing loaded assets;

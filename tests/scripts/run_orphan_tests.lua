@@ -39,6 +39,7 @@ local tests = {
     "test_text_restore",
     "test_layer_restore",
     "test_transient_restore",
+    "test_live2d_pipeline",
     "test_wait_restore_edges",
     "test_rollback_session",
     "test_rollback_boundaries",

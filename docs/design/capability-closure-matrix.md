@@ -1,28 +1,28 @@
 # Capability Closure Matrix (auto-generated)
 
 > 由 python scripts/capability_closure.py 生成；勿手动编辑。
-> 生成时间（输入源最新 mtime）：2026-09-27T07:20:43Z
+> 生成时间（输入源最新 mtime）：2026-09-28T07:23:03Z
 > 生成命令：python scripts/capability_closure.py
-> 源指纹（输入内容 sha256 前 16 hex）：2cb697780f399151
+> 源指纹（输入内容 sha256 前 16 hex）：b8b8106568f8e446
 > 输出确定性：同源指纹同字节（generated_at 为输入源最新 mtime；跨机 checkout 的 mtime 差异属 by-design，确定性以指纹为准）
 
 ## 概述
 
-- 合约总数（Declared，docs/api/command-contracts.md）：**134**
-- 已注册（Dispatched）：**166**
-- 触达效果面（Consumed，调用形上下文+一跳穿透 v4）：**87**
-- 测试引用（Tested，启发式计数）：**143**
-- UNWIRED：0 · PARTIAL：4 · CLOSED：127 · EXTRA：32 · EXPERIMENTAL(人工)：3
-- **结构扫描与人工声明**：Structural Closed=127 · Test references=143 · Platform declarations=3 · Package declarations=0
+- 合约总数（Declared，docs/api/command-contracts.md）：**138**
+- 已注册（Dispatched）：**170**
+- 触达效果面（Consumed，调用形上下文+一跳穿透 v4）：**92**
+- 测试引用（Tested，启发式计数）：**147**
+- UNWIRED：0 · PARTIAL：4 · CLOSED：132 · EXTRA：32 · EXPERIMENTAL(人工)：2
+- **结构扫描与人工声明**：Structural Closed=132 · Test references=147 · Platform declarations=4 · Package declarations=0
   - 列注记：测试引用只表示源码中发现引用；未读取运行日志，不代表执行、通过或覆盖率。Platform/Package/Observable 为人工声明，原始平台、包和设备证据未由本扫描器重验。
 - **幻影绑定（v5）**：**2** 处 backend.<name> 调用命中
   - 提取模式：union of: bindings/*.cpp luaL_Reg { name, lua_X }; backend.lua ^function Backend.X; backend_factory.lua cmd==X; kag.lua ^function KAG.X
-  - 清单大小：199 个可解析名（cpp=159 · shim=69 · factory=64 · kag=20，绑定文件 15 个）
+  - 清单大小：205 个可解析名（cpp=159 · shim=75 · factory=64 · kag=20，绑定文件 16 个）
   - web/jsBackend 交叉核对（仅报告，不参与判定）：幻影名在 web/bridge.js 亦有=render_frame
     · 原生+js 均无=（无）
-- **恒等式：**134 = CLOSED(127) + PARTIAL(4) + UNWIRED(0) + EXPERIMENTAL(在册 3)；166 = 134(Declared) + EXTRA(32) + EXPERIMENTAL(合约外 0)**
+- **恒等式：**138 = CLOSED(132) + PARTIAL(4) + UNWIRED(0) + EXPERIMENTAL(在册 2)；170 = 138(Declared) + EXTRA(32) + EXPERIMENTAL(合约外 0)**
 
-**范围声明（t103 MUST-FIX 3）**：本矩阵的 134 = 声明式 KAG 命令合约闭包（docs/api/command-contracts.md 全量条目）。下列能力**不在 134 内**：
+**范围声明（t103 MUST-FIX 3）**：本矩阵的 138 = 声明式 KAG 命令合约闭包（docs/api/command-contracts.md 全量条目）。下列能力**不在 138 内**：
 - 原生手势链：SwipeDown / SwipeUp / LongPress / Pinch / TwoFingerTap / ThreeFingerHold（平台层）；
 - 文本标记参数：letter_spacing / spacing / font / line_height 等内联标记（非命令）；
 - KAG.* Lua API：jump/call/return_to_caller 等直接 API（注册键存在但非合约命令，见 EXTRA 的 api-alias）。
@@ -117,9 +117,9 @@
 | clearscreen | n | Y | Y | EXTRA | - | - | - | ? | scripts/kag.lua:209 |
 | close | Y | Y | Y | CLOSED | 2 | - | - | ? | scripts/kag.lua:230 |
 | cps | Y | Y | n | CLOSED | 25 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:1270 |
-| csd | Y | Y | Y | CLOSED | 9 | - | - | ? | scripts/kag/commands/character.lua:150 |
-| csl | Y | Y | Y | CLOSED | 14 | - | - | ? | scripts/kag/commands/character.lua:166 |
-| csp | Y | Y | Y | CLOSED | 25 | - | - | ? | scripts/kag/commands/character.lua:120 |
+| csd | Y | Y | Y | CLOSED | 9 | - | - | ? | scripts/kag/commands/character.lua:170 |
+| csl | Y | Y | Y | CLOSED | 14 | - | - | ? | scripts/kag/commands/character.lua:186 |
+| csp | Y | Y | Y | CLOSED | 25 | - | - | ? | scripts/kag/commands/character.lua:140 |
 | ct | n | Y | Y | EXTRA | 2 | - | - | ? | scripts/kag.lua:354 |
 | dec | Y | Y | n | CLOSED ⚠ | 19 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/math.lua:129 |
 | delay | Y | Y | n | CLOSED | 33 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag.lua:339 |
@@ -165,9 +165,13 @@
 | layout_slot | Y | Y | Y | CLOSED | 25 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/layout.lua:204 |
 | ld | Y | Y | Y | CLOSED | 3 | - | - | ? | scripts/kag.lua:399 |
 | listsaves | Y | Y | Y | CLOSED | 6 | - | - | ? | scripts/kag/commands/save.lua:488 |
-| live2d_expression | Y | Y | n | EXPERIMENTAL ⚠ | 1 | - ⚠ | - ⚠ | ? ⚠ | scripts/kag/commands/character.lua:189 |
-| live2d_lip_sync | Y | Y | n | EXPERIMENTAL ⚠ | 1 | - ⚠ | - ⚠ | ? ⚠ | scripts/kag/commands/character.lua:200 |
-| live2d_motion | Y | Y | n | EXPERIMENTAL ⚠ | 3 | - ⚠ | - ⚠ | ? ⚠ | scripts/kag/commands/character.lua:177 |
+| live2d_expression | Y | Y | n | EXPERIMENTAL ⚠ | 2 | - ⚠ | - ⚠ | ? ⚠ | scripts/kag/commands/character.lua:209 |
+| live2d_hide | Y | Y | Y | CLOSED | 2 | - | - | ? | scripts/kag/commands/character.lua:257 |
+| live2d_lip_sync | Y | Y | Y | CLOSED ⚠ | 24 | win ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/character.lua:269 |
+| live2d_load | Y | Y | Y | CLOSED | 6 | - | - | ? | scripts/kag/commands/character.lua:237 |
+| live2d_motion | Y | Y | n | EXPERIMENTAL ⚠ | 4 | - ⚠ | - ⚠ | ? ⚠ | scripts/kag/commands/character.lua:197 |
+| live2d_show | Y | Y | Y | CLOSED | 2 | - | - | ? | scripts/kag/commands/character.lua:252 |
+| live2d_unload | Y | Y | Y | CLOSED | 1 | - | - | ? | scripts/kag/commands/character.lua:262 |
 | load | Y | Y | Y | CLOSED | 64 | - | - | ? | scripts/kag/commands/save.lua:395 |
 | loadplace | Y | Y | Y | CLOSED | 6 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/save.lua:519 |
 | macro | n | Y | n | EXTRA | 67 | - | - | ? | scripts/kag.lua:243 |
@@ -348,9 +352,9 @@
 - live2d_expression — Observable=? · PlatformTested=- · Packaged=- · Status=EXPERIMENTAL (raw: PARTIAL)
   - reason：t119 判级：写 ctx.live2d[model].expression 状态；LIVE2D=OFF 无消费+Tested=0——feature-gated
   - evidence：scripts/kag/commands/character.lua:189-197
-- live2d_lip_sync — Observable=? · PlatformTested=- · Packaged=- · Status=EXPERIMENTAL (raw: PARTIAL)
-  - reason：t119 判级：写 ctx.live2d[model].lip_sync 状态；LIVE2D=OFF 无消费+Tested=0——feature-gated
-  - evidence：scripts/kag/commands/character.lua:200-207
+- live2d_lip_sync — Observable=VERIFIED · PlatformTested=win · Packaged=- · Status=CLOSED (raw: CLOSED)
+  - reason：2026-09-28：原生 KAG 从模型上下文句柄调用 Live2D 绑定；SDK-ON Windows Haru 的 VOICE PCM、Core 参数与 D3D11 像素均有同源码指纹的实际执行证据。仅在 Cubism 与所需音频能力可用时支持；Web 仍不支持。
+  - evidence：scripts/kag/commands/character.lua:269-298 → src/script/bindings/Live2DBinding.cpp → src/live2d/Live2D/Live2DBackend.cpp；docs/plans/2026-09-28-001-u26-voice-lipsync-validation.md 引用 L1/M5 本地 receipt SHA-256 96c7db490383afd792b87606d5d654182e6ce834418c93c2ddf41fb811ef32f3
 - live2d_motion — Observable=? · PlatformTested=- · Packaged=- · Status=EXPERIMENTAL (raw: PARTIAL)
   - reason：t119 判级：handler 仅写 ctx.live2d[model].current_motion 状态；本构建 CAESURA_LIVE2D=OFF（NullAnimation）无消费方+Tested=0——feature-gated
   - evidence：scripts/kag/commands/character.lua:177-186
@@ -505,10 +509,6 @@
   - reason：t119 判级：写 ctx.live2d[model].expression 状态；LIVE2D=OFF 无消费+Tested=0——feature-gated
   - evidence：scripts/kag/commands/character.lua:189-197
   - note：同 live2d_motion（M4 特性矩阵 Live2D 行）。
-- live2d_lip_sync - 人工覆盖状态 EXPERIMENTAL（能力存在但无消费方/无真实测试面）；机器判级：PARTIAL（合约内）
-  - reason：t119 判级：写 ctx.live2d[model].lip_sync 状态；LIVE2D=OFF 无消费+Tested=0——feature-gated
-  - evidence：scripts/kag/commands/character.lua:200-207
-  - note：同 live2d_motion（M4 特性矩阵 Live2D 行）。
 - live2d_motion - 人工覆盖状态 EXPERIMENTAL（能力存在但无消费方/无真实测试面）；机器判级：PARTIAL（合约内）
   - reason：t119 判级：handler 仅写 ctx.live2d[model].current_motion 状态；本构建 CAESURA_LIVE2D=OFF（NullAnimation）无消费方+Tested=0——feature-gated
   - evidence：scripts/kag/commands/character.lua:177-186
@@ -603,7 +603,7 @@
 3. **Tested 为原始引用计数**：tests/scripts/*.lua 与 web/*.test.js 中 [<name> 或 kag.<name> 出现次数，不区分断言与非断言上下文（注释/数组/字符串也算）。
 4. **Observable / Platform / Packaged 协议化（t197）**：Observable 可由 overrides JSON 人工覆盖（⚠ 标记）；Platform（platform_tested）/ Packaged（packaged）现为协议值（默认 '-'=无证据；platform_tested 为 android,ios,linux,macos,web,win 逗号分隔去重排序子集，packaged 为 <=120 字符描述），非协议值由扫描器自动迁移为 '-'（诚实未验证）；平台运行矩阵/打包验证由 Phase2 分发逐项补证。
 5. 判级只依赖命令名静态匹配；同名异构（如 vfx 的 flash 与 transition 的 flash）以注册表实际键为准。导出表引用的子表（如 TransCommands.Bezier = Bezier）经 pairs() 一并注册为调度键——EXTRA(subtable-key)，非用户命令面。
-6. 合约计数以 command-contracts.md 的 ### 条目数为准（表头标注 134 须一致）。
+6. 合约计数以 command-contracts.md 的 ### 条目数为准（表头标注 138 须一致）。
 7. overrides JSON 的 commands 键必须落在已知命令名集合内；未知键被响亮拒绝（exit 非 0），绝不静默忽略。
 8. **v4 已修复（历史注记保留）**：v3 判据只扫 handler 直接体——同文件工具函数/委托链内的效果面调用（t110-t119 五批人工核真 18+ 例：layout/layout_slot/tween/vibrate/nameplate 的工具函数链、模块表委托 toast.show/VFX.flash/HistoryUI.show 等）不被捕获；v4 一跳穿透（同文件 local + require()d 模块函数）已覆盖该盲区。仍存在的判定噪声：跨两跳以上的链（工具函数再调工具函数）、绑定接口（binding().draw_mesh 类——sma_play 等经人工证据层覆盖）、rawset(ctx.tf, ...) 形态（判据边缘）。
 10. **raw 口径（t185/t192 定稿）**：任何『raw/机器原判级』汇总一律以**记录级 status_machine** 为准（=overrides 人工裁决与 v7 类别应用之前的机器判级，永不丢弃）；status_counts_v4_raw/status_counts_v5_raw 为版本快照口径，仅作对账，不作最终判定依据。

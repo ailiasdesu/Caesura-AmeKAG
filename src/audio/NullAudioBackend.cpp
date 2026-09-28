@@ -11,6 +11,7 @@ NullAudioBackend::NullAudioBackend() {
 
 bool NullAudioBackend::init() { return true; }
 AudioBackendSnapshot NullAudioBackend::getSnapshot() { return {}; }
+VoiceLevelSnapshot NullAudioBackend::getVoiceLevel() { return {}; }
 void NullAudioBackend::shutdown() {}
 void NullAudioBackend::update(float /*deltaTime*/) {}
 void NullAudioBackend::suspend() {}

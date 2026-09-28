@@ -225,6 +225,7 @@ caesura_add_module(Archive
 
 caesura_add_module(Audio
     src/audio/SoLoudAudioEngine.cpp
+    src/audio/VoiceMeter.cpp
     src/audio/AudioRestore.cpp
     src/audio/NullAudioBackend.cpp
 )
@@ -338,6 +339,7 @@ caesura_add_module(Script
     src/script/bindings/AudioRestoreBinding.cpp
     src/script/bindings/FontRestoreBinding.cpp
     src/script/bindings/TransientRestoreBinding.cpp
+    src/script/bindings/Live2DBinding.cpp
     src/script/bindings/AIBinding.cpp
     src/script/bindings/EngineBinding.cpp
 )

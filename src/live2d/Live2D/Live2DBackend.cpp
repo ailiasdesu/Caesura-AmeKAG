@@ -30,6 +30,8 @@
 #include "ILive2DRenderPath.h"
 #include "../PathConfinement.h"
 #include "../../render/api/IRenderDevice.h"
+#include "audio/api/IAudioBackend.h"
+#include "di/BackendRegistry.h"
 #include "debug/api/DebugLog.h"
 #ifdef _WIN32
 #include "D3D11NativeRenderPath.h"
@@ -42,6 +44,8 @@
 #endif
 
 #include <fstream>
+#include <algorithm>
+#include <cmath>
 #include <vector>
 #include <cstring>
 #include <cctype>
@@ -477,6 +481,17 @@ bool Live2DBackend::createRenderer(Live2DModel& model) {
 // ============================================================
 void Live2DBackend::render(float dt) {
     if (!m_renderPath) return;
+
+    // One owner-thread observation shared by all opted-in models. The audio
+    // backend may be replaced or shut down between frames; never cache it.
+    VoiceLevelSnapshot voice;
+    for (const auto& [handle, model] : m_models) {
+        if (!model->voiceLipSync.enabled()) continue;
+        if (auto* audio = BackendRegistry::instance().getAudioBackend()) {
+            voice = audio->getVoiceLevel();
+        }
+        break;
+    }
     for (auto& [handle, model] : m_models) {
         if (!model->visible || !model->renderer || !model->userModel) continue;
 
@@ -489,6 +504,16 @@ void Live2DBackend::render(float dt) {
         userModel->expressionManager()->UpdateMotion(cubismModel, dt);
         if (auto* pose = userModel->pose()) {
             pose->UpdateParameters(cubismModel, dt);
+        }
+        if (model->voiceLipSync.enabled()) {
+            auto* rawModel = cubismModel->GetModel();
+            const int mouthIndex = model->voiceLipSync.parameterIndex();
+            if (rawModel && mouthIndex >= 0 && mouthIndex < csmGetParameterCount(rawModel)) {
+                if (float* values = csmGetParameterValues(rawModel)) {
+                    model->voiceLipSync.apply(voice.supported && voice.playing && voice.sampled,
+                        voice.rms, voice.generation, dt, values[mouthIndex]);
+                }
+            }
         }
         // Recompute model vertices/deformations before drawing (csmUpdateModel).
         cubismModel->Update();
@@ -585,6 +610,9 @@ void Live2DBackend::setParameter(int handle, const std::string& param, float val
     float* values = csmGetParameterValues(rawModel);
     for (csmInt32 i = 0; i < count; ++i) {
         if (ids[i] && param == ids[i]) {
+            if (param == "ParamMouthOpenY") {
+                it->second->voiceLipSync.disable(values[i]);
+            }
             values[i] = value;
             return;
         }
@@ -594,6 +622,39 @@ void Live2DBackend::setParameter(int handle, const std::string& param, float val
 // ============================================================
 // Model lifecycle
 // ============================================================
+bool Live2DBackend::setVoiceLipSync(int modelHandle, bool enabled) {
+    if (!m_initialized) return false;
+    auto it = m_models.find(modelHandle);
+    if (it == m_models.end() || !it->second->userModel) return false;
+    auto* cubismModel = it->second->userModel->GetModel();
+    if (!cubismModel) return false;
+    auto* rawModel = cubismModel->GetModel();
+    if (!rawModel) return false;
+
+    // Query Core arrays directly: Framework GetParameterIndex can silently
+    // manufacture an index for a missing parameter. Only a real 0..1-capable
+    // ParamMouthOpenY is eligible for this minimal shared-VOICE contract.
+    const csmInt32 count = csmGetParameterCount(rawModel);
+    const char** ids = csmGetParameterIds(rawModel);
+    const float* minimum = csmGetParameterMinimumValues(rawModel);
+    const float* maximum = csmGetParameterMaximumValues(rawModel);
+    float* values = csmGetParameterValues(rawModel);
+    if (!ids || !minimum || !maximum || !values) return false;
+    for (csmInt32 i = 0; i < count; ++i) {
+        if (!ids[i] || std::strcmp(ids[i], "ParamMouthOpenY") != 0) continue;
+        if (!std::isfinite(minimum[i]) || !std::isfinite(maximum[i]) ||
+            minimum[i] > 0.0f || maximum[i] < 1.0f) {
+            return false;
+        }
+        if (enabled) {
+            return it->second->voiceLipSync.enable(i, minimum[i], maximum[i], values[i]);
+        }
+        it->second->voiceLipSync.disable(values[i]);
+        return true;
+    }
+    return false;
+}
+
 int Live2DBackend::loadModel(const std::string& path, const std::string& name) {
     const std::string confined = confineToModelRoot(path);
     if (confined.empty()) {
@@ -653,7 +714,19 @@ void Live2DBackend::showModel(int handle, float x, float y, float scale) {
 
 void Live2DBackend::hideModel(int handle) {
     auto it = m_models.find(handle);
-    if (it != m_models.end()) it->second->visible = false;
+    if (it == m_models.end()) return;
+    auto& model = *it->second;
+    model.visible = false;
+    if (!model.voiceLipSync.enabled() || !model.userModel) return;
+    auto* cubismModel = model.userModel->GetModel();
+    if (!cubismModel) return;
+    auto* rawModel = cubismModel->GetModel();
+    const int mouthIndex = model.voiceLipSync.parameterIndex();
+    if (rawModel && mouthIndex >= 0 && mouthIndex < csmGetParameterCount(rawModel)) {
+        if (float* values = csmGetParameterValues(rawModel)) {
+            model.voiceLipSync.hide(values[mouthIndex]);
+        }
+    }
 }
 
 void Live2DBackend::setOpacity(int handle, float opacity) {

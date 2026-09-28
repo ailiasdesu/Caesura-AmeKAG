@@ -2,6 +2,7 @@
 #ifdef CAESURA_LIVE2D
 
 #include "../api/IAnimationBackend.h"
+#include "VoiceLipSyncState.h"
 #include <string>
 #include <unordered_map>
 #include <memory>
@@ -44,12 +45,14 @@ public:
     bool playMotion(int handle, const std::string& name) override;
     void setExpression(int handle, const std::string& name) override;
     void setParameter(int handle, const std::string& param, float value) override;
+    bool setVoiceLipSync(int modelHandle, bool enabled) override;
 
     const char* name() const override { return "Live2D"; }
 
     void setRenderDevice(IRenderDevice* device);
 
 private:
+    friend struct Live2DVoiceLipSyncProbeAccess;
     struct CachedMotion {
         std::vector<char> data;
         std::string group;
@@ -61,6 +64,7 @@ private:
         std::string name;
         bool visible = false;
         float x = 0, y = 0, scale = 1.0f, opacity = 1.0f;
+        Detail::VoiceLipSyncState voiceLipSync;
 
         // Cubism
         std::unique_ptr<Csm::CubismUserModel> userModel;

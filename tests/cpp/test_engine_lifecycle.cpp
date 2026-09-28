@@ -224,6 +224,7 @@ TEST_CASE("Engine: service access before init throws") {
 // nulls, so no GPU or display is needed.
 namespace {
 struct FailingAudioBackend : IAudioBackend {
+    VoiceLevelSnapshot getVoiceLevel() override { return {}; }
     AudioBackendSnapshot getSnapshot() override { return {}; }
     bool init() override { return false; }
     void shutdown() override {}

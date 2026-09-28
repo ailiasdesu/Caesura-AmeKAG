@@ -165,6 +165,22 @@ end
 -- Render
 -- =========================================================================
 
+-- Native animation bindings deliberately return an explicit failure when
+-- unavailable. They never infer model identity from a global character name.
+local function live2d_call(method, ...)
+    local native = rawget(_G, "Live2D")
+    local fn = type(native) == "table" and native[method]
+    if type(fn) ~= "function" then return false, "Live2D native binding unavailable" end
+    return fn(...)
+end
+
+function Backend.live2d_load(path, name) return live2d_call("load", path, name) end
+function Backend.live2d_show(handle, x, y, scale) return live2d_call("show", handle, x, y, scale) end
+function Backend.live2d_hide(handle) return live2d_call("hide", handle) end
+function Backend.live2d_unload(handle) return live2d_call("unload", handle) end
+function Backend.live2d_set_mouth(handle, value) return live2d_call("set_mouth", handle, value) end
+function Backend.live2d_set_voice_lipsync(handle, enabled) return live2d_call("set_voice_lipsync", handle, enabled) end
+
 function Backend.create_viewport(w, h)
     return render_or_guard("create_viewport", w, h)
 end

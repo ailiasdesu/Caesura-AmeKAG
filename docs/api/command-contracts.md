@@ -3,7 +3,7 @@
 > Generated from the declarative schema registry (`kag/schema.lua`) — do not edit.
 > Regenerate: `lua scripts/schema_doc.lua > docs/api/command-contracts.md`
 
-## Commands (134)
+## Commands (138)
 
 ### `[add]`
 
@@ -486,7 +486,7 @@ _Category: layer · Blocking: no (fire-and-forget) · declare an hbox/vbox/grid 
 | `cols` | number | - | 1..128 | - |
 | `gap` | number | 0 | 0..8192 | - |
 | `h` | number | - | 0..8192 | - |
-| `kind` | enum | - | - | yes |
+| `kind` | enum | - | hbox, vbox, grid | yes |
 | `layer` | string | - | - | - |
 | `name` | string | - | - | yes |
 | `padding` | number | 0 | 0..8192 | - |
@@ -546,14 +546,32 @@ _Category: character · Blocking: no (fire-and-forget) · Set a Live2D facial ex
 | `model` | string | - | - | yes |
 | `weight` | number | 1.0 | 0.0..1.0 | - |
 
-### `[live2d_lip_sync]`
+### `[live2d_hide]`
 
-_Category: character · Blocking: no (fire-and-forget) · Set Live2D lip sync mouth open parameter (0.0 = closed, 1.0 = fully open)_
+_Category: character · Blocking: no (fire-and-forget) · Hide or unload a context-owned Live2D model_
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
 | `model` | string | - | - | yes |
-| `value` | number | 0.0 | 0.0..1.0 | - |
+
+### `[live2d_lip_sync]`
+
+_Category: character · Blocking: no (fire-and-forget) · Control a loaded Live2D mouth manually, from VOICE PCM, or turn automatic control off_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `model` | string | - | - | yes |
+| `source` | enum | manual | manual, voice, off | - |
+| `value` | number | - | 0.0..1.0 | - |
+
+### `[live2d_load]`
+
+_Category: character · Blocking: no (fire-and-forget) · Load a Live2D model owned by the current scene context_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `model` | string | - | - | yes |
+| `storage` | file | - | - | yes |
 
 ### `[live2d_motion]`
 
@@ -565,6 +583,25 @@ _Category: character · Blocking: no (fire-and-forget) · Play a Live2D motion a
 | `fadeout` | number | 500 | 0..10000 | - |
 | `model` | string | - | - | yes |
 | `motion` | string | - | - | yes |
+
+### `[live2d_show]`
+
+_Category: character · Blocking: no (fire-and-forget) · Show a loaded Live2D model_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `model` | string | - | - | yes |
+| `scale` | number | 1 | 0.001..- | - |
+| `x` | number | 0 | - | - |
+| `y` | number | 0 | - | - |
+
+### `[live2d_unload]`
+
+_Category: character · Blocking: no (fire-and-forget) · Hide or unload a context-owned Live2D model_
+
+| Param | Type | Default | Range / Choices | Required |
+|---|---|---|---|---|
+| `model` | string | - | - | yes |
 
 ### `[load]`
 
@@ -1219,10 +1256,10 @@ _Category: layer · Blocking: yes (waits for completion) · declaratively tween 
 
 | Param | Type | Default | Range / Choices | Required |
 |---|---|---|---|---|
-| `attr` | enum | - | - | yes |
+| `attr` | enum | - | x, y, alpha, scale | yes |
 | `delay` | number | 0 | 0..30000 | - |
 | `dur` | number | - | 100..30000 | yes |
-| `ease` | enum | linear | - | - |
+| `ease` | enum | linear | linear, ease_in, ease_out, ease_in_out, back_out | - |
 | `from` | string | - | - | - |
 | `target` | string | - | - | yes |
 | `to` | string | - | - | yes |
