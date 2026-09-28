@@ -43,3 +43,15 @@ RED 收据 `u27-gc-observation-control-01/run-01/report.json` 的 SHA256 为 `44
 父提交 7c23 的 Foundation Release 完整门禁已通过：C++ 1548/1548、453513 条断言、零失败零跳过；Lua 147/147 + 57/57；CTest 71 通过、1 个预先允许的可选 AI 跳过。严格 verifier 的 manifest SHA256 为 `b1a8908f40a1dc04f2bc1d9261daeb664b034983215dbd4bc0b7be21b8a2f409`。该证据先于本次修复，不能冒充新候选完整通过。
 
 新候选完整 Debug/Release、匹配新探针的诊断/故障/冷启动/短跑/一小时长跑以及正式 CPU 基线比较继续执行。原 CPU 噪声结论保持 INCONCLUSIVE。U24/U25 的设备及配额条件、U26 其余 SDK/账号范围、U28 声明与 U29 最终候选交付继续保持各自未完成项；本记录不授权合并、发布或标签变更。
+
+## 908e 完整 Debug 与文档同步续记
+
+修复提交为 `908e661c91d4e2eae5bdce22a45c601760d97284`。该干净提交在独立 Foundation OFF 构建目录完成完整 Windows Debug：11 项 required 检查全部实际退出 0；C++ 1549/1549、453544 条断言、零失败零跳过；Lua 147/147 + 57/57；CTest 72 项发现、71 通过、1 个预准 AI 跳过、零失败，总时长 1219.69 秒。源码及夹具身份稳定，受控进程清理完成。
+
+- 原运行：`u27-908e-observation-gates-01/debug-raw-01/run.json`，run ID `0e5b8030-434c-4d60-82e8-bb3fa8bfe7cd`，SHA256 `2c6665a0833889405859807699cc236fd04118382c787f536b3d77e741d7ecb5`。
+- 严格 manifest：`u27-908e-observation-gates-01/debug-bundle-02/908e661c91d4e2eae5bdce22a45c601760d97284/0e5b8030-434c-4d60-82e8-bb3fa8bfe7cd/windows-debug/manifest.json`，SHA256 `970a95dc1b8a00a4d4761151fd82ee4217fb1718870d8372a1d55658434d0cf0`。
+- 首次 collector 调用因输出目录缺少 `<source_sha>/<run_id>/<profile_name>` 后缀而拒绝；原失败保留。只修正外层整理目录，使用同一原始执行收据通过严格 verifier，没有重复构建或测试，也没有使用 diagnostic 放宽。
+
+该提交的托管 CI `36415081654/attempt1` 已主动取消：本机按同一 CI 命令实际发现平台同步锚点仍为 e7e9b1a，且旧计划自动事实块闭合计数过期。托管终态为 4 个作业成功、7 个取消、聚合门禁失败；没有候选通过或最终包准入结论。原始 API、作业日志、取消原因及本地失败见 `u29-908e-hosted-ci-01/terminal-review-01/report.json`，SHA256 `4a0a9f9660d96f7d391f6a23a5619875e76bbe7665b9efddace5ac77381fdb2d`。
+
+随后仅文档同步至 908e 代码锚：YAML 和生成页保留原平台逐项状态、执行提交、日期及证据；历史计划只更新自动事实块，不恢复旧排期。新的文档提交仍需自己的托管门禁和 Release/最终包绑定，908e 本机通过不被改写为别的提交通过。旧 e51 四条加密配对已接受，可作为新候选受损后回退测试的已知旧包；选择收据 `u29-908e-prior-package-selection-01/selection-01.json` 的 SHA256 为 `efb605a19d2e7231be514810b6cdd294f8675ea890bba46bffa11695585a12af`，独审无阻断项，未来实际回退尚未执行。原 f87 回退 RED 继续保留。
