@@ -1770,9 +1770,9 @@ jobs:
       with:
         name: android-slices
         path: |
-          $RUNNER_TEMP/sdl3-android/
-          $RUNNER_TEMP/openssl-android/
-        if-no-files-found: warn
+          ${{ runner.temp }}/sdl3-android/
+          ${{ runner.temp }}/openssl-android/
+        if-no-files-found: error
     - name: Upload APK & AAB artifacts (device day)
       uses: actions/upload-artifact@v4
       with:
