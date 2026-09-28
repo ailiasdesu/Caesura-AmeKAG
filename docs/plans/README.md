@@ -4,6 +4,8 @@
 
 进度显示：[当前待办清单](2026-09-05-003-runtime-foundation-todo.md)。详细证据见 [执行记录](2026-09-05-002-runtime-foundation-execution.md)。
 
+2026-09-28 U27 内存观测接续：[原长跑失败、单次分配栈诊断与真实 GC 红绿回归](2026-09-28-002-u27-memory-observation-validation.md)。探针已修正 GC 前后计数混用，固定 64 MiB 预算未变；定向回归与独立审查通过，新候选完整门禁和匹配探针的一小时长跑待验。原长跑 FAIL 与 CPU INCONCLUSIVE 保留，完整目标仍为 U1–U29。
+
 2026-09-28 U26 原生语音口型接续：[当前 Windows SDK/设备诊断记录](2026-09-28-001-u26-voice-lipsync-validation.md) 绑定未提交源码指纹，覆盖真实 Haru/KAG、WinMM 输出路径、完整 Windows Debug 与 Web 测试；物理可听性、Steam 账号、非 Windows SDK 及最终 U29 候选仍未由该记录验收。完整目标继续为 U1–U29。
 
 2026-09-27 恢复后当前接续：完整目标仍为 U1–U29，底层优先、Studio 暂停。当前代码 `a4fdaab98181aad3acaf0ab470d9208ef29c1dfd`（`codex/u29-click-load-owner`）修复回放点击执行 `[load]` 后待提交恢复被同帧脚本结束清理丢弃的问题。真实 Lua 回归先失败后通过，主套件147、隔离套件56通过，独立审查无剩余可行动问题；单文件 Lua 替换的真实原生正确/错误密钥对照通过，但不是重建候选或最终包验收。新候选完整 Debug、跨平台 CI 和完整加密矩阵仍待执行。 前候选 a6 的12项托管CI、Windows完整门禁、当前一小时长跑、四条普通跨候选冷读和四条坏包拒绝后旧包回退已分别核验；原加密正确密钥场景实际失败，不接受为完整交付。详见[U29 最新续记](2026-09-24-017-foundation-integration-execution.md#2026-09-27-回放加载事务修复与已恢复终态)。

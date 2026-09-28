@@ -16,6 +16,7 @@
 #include "render/api/ITextureManager.h"
 #include "resource/api/IImageDecoder.h"
 #include "script/api/ILuaManager.h"
+#include "SoakMemoryObservation.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <windows.h>
@@ -108,6 +109,8 @@ private:
 };
 
 json observe(Engine& engine) {
+ auto* vm=BackendRegistry::instance().getLuaManager();require(vm&&vm->state(),"Missing VM observation");
+ const auto memory=Caesura::TestSupport::observeSoakMemory(vm->state());
  const auto s=captureRuntimeStats(engine);json j;
  j["jobs"]["supported"]=s.jobs.supported;
  j["jobs"]["running"]=s.jobs.running;
@@ -176,14 +179,8 @@ json observe(Engine& engine) {
  j["host"]["delivery"]=s.host.delivery==AsyncHostDelivery::DirectDrain?"DirectDrain":"SdlEvents";
  j["audio"]["outputMode"]=s.audio.outputMode==AudioOutputMode::Device?"Device":s.audio.outputMode==AudioOutputMode::ManualMix?"ManualMix":s.audio.outputMode==AudioOutputMode::Software?"Software":"Unknown";
  j["render"]["backendKind"]=s.render.backendKind==RenderBackendKind::GraphicsApi?"GraphicsApi":s.render.backendKind==RenderBackendKind::Noop?"Noop":"Unknown";
- PROCESS_MEMORY_COUNTERS_EX mem{};mem.cb=sizeof(mem);DWORD handles=0;
- require(GetProcessMemoryInfo(GetCurrentProcess(),reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&mem),sizeof(mem))!=0,"Memory observation failed");
- require(GetProcessHandleCount(GetCurrentProcess(),&handles)!=0,"Handle observation failed");
- auto* vm=BackendRegistry::instance().getLuaManager();require(vm&&vm->state(),"Missing VM observation");
- auto* L=vm->state();lua_gc(L,LUA_GCCOLLECT,0);
- const uint64_t luaBytes=uint64_t(lua_gc(L,LUA_GCCOUNT,0))*1024+uint64_t(lua_gc(L,LUA_GCCOUNTB,0));
- j["memory"]={{"privateBytes",uint64_t(mem.PrivateUsage)},{"rssBytes",uint64_t(mem.WorkingSetSize)},
-  {"osHandles",handles},{"luaBytes",luaBytes},{"textureBytes",BackendRegistry::instance().getTextureManager()->totalTextureBytes()}};
+ j["memory"]={{"privateBytes",memory.privateBytes},{"rssBytes",memory.rssBytes},
+  {"osHandles",memory.osHandles},{"luaBytes",memory.luaBytes},{"textureBytes",BackendRegistry::instance().getTextureManager()->totalTextureBytes()}};
  return j;
 }
 bool quietDebts(const json& j) {

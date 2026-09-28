@@ -95,6 +95,7 @@ set(TEST_SOURCES
     cpp/test_sandbox_quota.cpp
     cpp/test_particle_system.cpp
     cpp/test_engine_lifecycle.cpp
+    cpp/test_soak_memory_observation.cpp
     cpp/test_mini_game.cpp
     cpp/test_steam.cpp
     cpp/test_live2d.cpp
