@@ -27,6 +27,11 @@ def _uint(value, label, minimum=0):
     return value
 
 
+def _bool(value, label):
+    _need(type(value) is bool, label + ": invalid boolean")
+    return value
+
+
 def _number(value, label):
     _need(type(value) in (int, float) and math.isfinite(value) and value >= 0,
           label + ": invalid nonnegative finite number")
@@ -153,6 +158,23 @@ def check_trace(result, events, expected_process, observed_seconds, mode):
             voices = activities.get("voice_handles")
             _need(isinstance(voices, list) and len(voices) == 3, "Missing voice admissions")
             _need(len({_uint(handle, "voice admission", 1) for handle in voices}) == 3, "Voice handles are not distinct")
+            _need(_uint(activities.get("voice_source_count"), "voice source count") == len(voices),
+                  "Voice source count differs from three admissions")
+            _need(_uint(activities.get("cycle"), "activity cycle") == cycle
+                  and activities.get("stage") == "observed", "Missing current-cycle admission observation")
+            for path in ("pre_admission.backend.supported", "pre_admission.host.supported",
+                         "pre_admission.host.tracking_supported", "voice.supported"):
+                _need(_bool(_get(activities, path), path), "Unsupported admission observation: " + path)
+            _bool(_get(activities, "pre_admission.backend.playing"), "pre-admission playing")
+            for path in ("pre_admission.backend.completions_pending", "pre_admission.host.pending",
+                         "pre_admission.host.active", "pre_admission.host.owner_refs"):
+                _need(_uint(_get(activities, path), path) == 0, "Nonempty pre-admission completion ownership: " + path)
+            playing = _bool(_get(activities, "voice.playing"), "admitted voice playing")
+            pending = _uint(_get(activities, "voice.completions_pending"), "admitted voice pending")
+            accepted = (playing and pending == 0) or (not playing and pending == 1)
+            _need(accepted, "Invalid voice admission playing/completion pair")
+            _need(_bool(activities.get("accepted"), "reported admission acceptance") == accepted,
+                  "Reported acceptance differs from observed admission state")
             finished = take("activities_finished", cycle)["detail"]
             for key, expected in (("completed", 1), ("natural", 1), ("cancelled_admissions", 8)):
                 _need(_uint(finished.get(key), key) == expected, "Incomplete activity " + key)

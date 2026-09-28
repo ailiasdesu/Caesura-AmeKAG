@@ -17,6 +17,7 @@
 #include "resource/api/IImageDecoder.h"
 #include "script/api/ILuaManager.h"
 #include "SoakMemoryObservation.h"
+#include "SoakVoiceAdmission.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <windows.h>
@@ -410,6 +411,9 @@ private:
   require(elapsed(cycleStart_)<10,"Cycle watchdog exceeded ten seconds");
   switch(phase_) {
   case 0: {
+   voiceHandles_={};
+   report_["activity_admission"]={{"cycle",cycle_},{"stage","not_started"},{"async_id",0},
+    {"voice_handles",voiceHandles_},{"voice_source_count",voiceHandles_.size()}};
    if(cycle_==20&&faultMode_=="fault-resources")startFault();
    cycleStart_=Clock::now();lua("Soak.begin("+std::to_string(cycle_+1)+")");
    texture_=textures_->createSolidTexture(43,170,82,255);target_=render_->createRenderTarget(32,32);
@@ -429,15 +433,42 @@ private:
   case 4:if(take()){lua("Soak.load()");event("load");phase(5);}break;
   case 5:if(advanced()){capture("restored");phase(6);}break;
   case 6:if(take()){
+   voiceHandles_={};
+   auto& admissionDetail=report_["activity_admission"];
+   admissionDetail={{"cycle",cycle_},{"stage","precondition"},{"async_id",0},
+    {"voice_handles",voiceHandles_},{"voice_source_count",voiceHandles_.size()}};
+   // Observe old ownership before admitting either async work or a new voice.
+   // isVoicePlaying culls an old natural EOF into the observable queue; it
+   // does not consume that queue. Never clear notifications to make this pass.
+   const bool beforePlaying=audio_->isVoicePlaying();
+   const auto beforeAudio=audio_->getSnapshot();
+   const auto beforeHost=engine_->getHostSnapshot();
+   admissionDetail["pre_admission"]={
+    {"backend",{{"supported",beforeAudio.supported},{"playing",beforePlaying},
+     {"completions_pending",beforeAudio.voiceCompletionsPending}}},
+    {"host",{{"supported",beforeHost.supported},{"tracking_supported",beforeHost.audioCompletionTrackingSupported},
+     {"pending",beforeHost.audioCompletionsPending},{"active",beforeHost.audioCompletionsActive},
+     {"owner_refs",beforeHost.audioCompletionOwnerRefs}}}};
+   require(beforeAudio.supported&&beforeAudio.voiceCompletionsPending==0
+    &&beforeHost.supported&&beforeHost.audioCompletionTrackingSupported
+    &&beforeHost.audioCompletionsPending==0&&beforeHost.audioCompletionsActive==0
+    &&beforeHost.audioCompletionOwnerRefs==0,"Voice completion ownership was not empty before admission");
    const auto admission=lua("return Soak.async_begin()");
+   admissionDetail["async_id"]=admission;admissionDetail["stage"]="async_returned";
    // Production uses a round-robin overlap pool. Explicit stop implements
    // interruption; three playVoice calls alone would create three live lines.
-   const auto a=audio_->playVoice("assets/soak/long-a.wav");audio_->stopVoice();
-   const auto b=audio_->playVoice("assets/soak/long-b.wav");audio_->stopVoice();
-   const auto c=audio_->playVoice("assets/soak/short.wav");
-   require(admission>0&&a&&b&&c&&a!=b&&b!=c&&audio_->isVoicePlaying(),"Real async/voice admissions failed");
-   voiceHandles_={a,b,c};
-   event("activities_admitted",{{"async_id",admission},{"voice_handles",{a,b,c}}});phase(7);
+   voiceHandles_[0]=audio_->playVoice("assets/soak/long-a.wav");
+   admissionDetail["voice_handles"]=voiceHandles_;admissionDetail["stage"]="first_voice_returned";audio_->stopVoice();
+   voiceHandles_[1]=audio_->playVoice("assets/soak/long-b.wav");
+   admissionDetail["voice_handles"]=voiceHandles_;admissionDetail["stage"]="second_voice_returned";audio_->stopVoice();
+   voiceHandles_[2]=audio_->playVoice("assets/soak/short.wav");
+   admissionDetail["voice_handles"]=voiceHandles_;admissionDetail["stage"]="third_voice_returned";
+   const auto observed=TestSupport::observeSoakVoiceAdmission(*audio_,admission,voiceHandles_);
+   admissionDetail["voice"]={{"supported",observed.supported},{"playing",observed.playing},
+    {"completions_pending",observed.completionsPending}};
+   admissionDetail["accepted"]=observed.accepted();admissionDetail["stage"]="observed";
+   event("activities_admitted",admissionDetail);
+   require(observed.accepted(),"Real async/voice admissions failed");phase(7);
   }break;
   case 7:if(lua("return Soak.completed")==1&&lua("return Soak.natural")==1){
    lua("Soak.cancel_batch();Soak.rollback_begin()");event("activities_finished",{{"completed",1},{"natural",1},{"cancelled_admissions",8}});phase(8);

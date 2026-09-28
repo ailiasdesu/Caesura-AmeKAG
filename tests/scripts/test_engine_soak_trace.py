@@ -27,7 +27,11 @@ def fixture(cycles=40, cycle_seconds=6.1):
                         "frame_id":request,"pixel":[130,35,50] if page=="b" else [20,50,90]})]
             if page == "a": names.append(("save", {"bytes":900}))
             if page == "b": names.append(("load", {}))
-        names += [("activities_admitted", {"async_id":cycle+1,"voice_handles":[3*cycle+1,3*cycle+2,3*cycle+3]}),
+        names += [("activities_admitted", {"cycle":cycle,"stage":"observed", "async_id":cycle+1,
+                    "voice_handles":[3*cycle+1,3*cycle+2,3*cycle+3],"voice_source_count":3,
+                    "pre_admission":{"backend":{"supported":True,"playing":False,"completions_pending":0},
+                                     "host":{"supported":True,"tracking_supported":True,"pending":0,"active":0,"owner_refs":0}},
+                    "voice":{"supported":True,"playing":True,"completions_pending":0},"accepted":True}),
                   ("activities_finished", {"completed":1,"natural":1,"cancelled_admissions":8}),
                   ("rollback", {})]
         for offset,(name,detail) in enumerate(names):
@@ -74,6 +78,70 @@ class SoakTraceTests(unittest.TestCase):
         before=copy.deepcopy(self.args)
         self.assertEqual(check_trace(*self.args),[])
         self.assertEqual(self.args,before)
+
+    def test_voice_admission_accepts_only_the_two_observed_states(self):
+        for playing,pending in ((True,0),(False,1)):
+            with self.subTest(playing=playing,pending=pending):
+                self.args=list(fixture())
+                self.event("activities_admitted")["detail"]["voice"].update(playing=playing,completions_pending=pending)
+                before=copy.deepcopy(self.args)
+                self.assertEqual(check_trace(*self.args),[])
+                self.assertEqual(self.args,before)
+
+    def test_voice_admission_rejects_stopped_ambiguous_and_duplicate_completions(self):
+        for playing,pending in ((False,0),(True,1),(False,2),(True,2)):
+            with self.subTest(playing=playing,pending=pending):
+                self.args=list(fixture())
+                detail=self.event("activities_admitted")["detail"]
+                detail["voice"].update(playing=playing,completions_pending=pending)
+                detail["accepted"]=True  # A claimed result cannot override the computed pair.
+                self.reject()
+
+    def test_voice_admission_requires_all_observation_fields(self):
+        paths=("cycle","stage","voice_source_count","accepted","pre_admission","voice",
+               "pre_admission.backend","pre_admission.host","pre_admission.backend.supported",
+               "pre_admission.backend.playing","pre_admission.backend.completions_pending",
+               "pre_admission.host.supported","pre_admission.host.tracking_supported",
+               "pre_admission.host.pending","pre_admission.host.active","pre_admission.host.owner_refs",
+               "voice.supported","voice.playing","voice.completions_pending")
+        for path in paths:
+            with self.subTest(path=path):
+                self.args=list(fixture());target=self.event("activities_admitted")["detail"]
+                parts=path.split(".")
+                for key in parts[:-1]:target=target[key]
+                del target[parts[-1]]
+                self.reject()
+
+    def test_voice_admission_rejects_old_backend_and_host_completion_ownership(self):
+        for path in ("backend.completions_pending","host.pending","host.active","host.owner_refs"):
+            with self.subTest(path=path):
+                self.args=list(fixture());group,key=path.split(".")
+                self.event("activities_admitted")["detail"]["pre_admission"][group][key]=1
+                self.reject()
+
+    def test_voice_admission_rejects_unsupported_observation_and_stale_cycle(self):
+        for path,value in (("pre_admission.backend.supported",False),("pre_admission.host.supported",False),
+                           ("pre_admission.host.tracking_supported",False),("voice.supported",False),
+                           ("cycle",19),("stage","third_voice_returned"),("accepted",False),
+                           ("voice_source_count",2),("voice_source_count",4)):
+            with self.subTest(path=path,value=value):
+                self.args=list(fixture());target=self.event("activities_admitted")["detail"];parts=path.split(".")
+                for key in parts[:-1]:target=target[key]
+                target[parts[-1]]=value;self.reject()
+
+    def test_voice_admission_requires_exact_boolean_and_integer_types(self):
+        for path,value in (("async_id",True),("cycle",True),("voice_source_count",True),("accepted",1),
+                           ("voice.playing",1),("voice.supported",1),("voice.completions_pending",False),
+                           ("voice.completions_pending",1.0),("pre_admission.backend.playing",0),
+                           ("pre_admission.backend.supported",1),("pre_admission.backend.completions_pending",False),
+                           ("pre_admission.host.supported",1),("pre_admission.host.tracking_supported",1),
+                           ("pre_admission.host.pending",False),("pre_admission.host.active",False),
+                           ("pre_admission.host.owner_refs",False)):
+            with self.subTest(path=path,value=value):
+                self.args=list(fixture());target=self.event("activities_admitted")["detail"];parts=path.split(".")
+                for key in parts[:-1]:target=target[key]
+                target[parts[-1]]=value;self.reject()
+        self.args=list(fixture());self.event("activities_admitted")["detail"]["voice_handles"][0]=True;self.reject()
 
     def test_diagnostic_is_not_a_short_or_long_duration(self):
         for mode in ["short","long"]:
