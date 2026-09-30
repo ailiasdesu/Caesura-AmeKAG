@@ -54,7 +54,7 @@ class GateTests(unittest.TestCase):
             self.outputs.update({prefix+'_artifact_id':str(identifier),prefix+'_artifact_digest':sha(archive),prefix+'_manifest_sha256':sha(directory/('upload-manifest.json' if role=='package' else 'manifest.json'))})
             self.artifacts[identifier]=dict(id=identifier,name='untrusted-name-'+role,digest='sha256:'+sha(archive),expired=False,expires_at='2999-01-01T00:00:00Z',workflow_run=dict(id=producer['run_id'],repository_id=producer['repository_id'],head_repository_id=producer['repository_id'],head_sha=self.source))
         self.outputs.update(native_debug_receipt_sha256=sha(self.e.run_path),native_debug_run_uuid=self.e.run['run_id'])
-        self.token='disposable-gate-token';self.calls=[];self.api_count=0;self.count=0;self.prior_failure=False;self.final_changed=False;self.fillers=0;self.short_body=False;self.api_hook=None
+        self.token='disposable-gate-token';self.calls=[];self.api_count=0;self.count=0;self.prior_failure=False;self.final_changed=False;self.fillers=0;self.short_body=False;self.api_hook=None;self.android_jobs=None
         self.expected_path=self.root/'expected.json';self.policy_path=self.root/'policy.json';self.outputs_path=self.root/'outputs.json';self.write_inputs()
         fixture=self
         class Handler(http.server.BaseHTTPRequestHandler):
@@ -113,6 +113,7 @@ class GateTests(unittest.TestCase):
         if route.endswith('/jobs'):
             attempt=int(route.split('/')[-2]);jobs=[dict(id=1000+i,run_id=e['run_id'],run_attempt=attempt,name='optional'+str(i),head_sha=self.source,status='completed',conclusion='success') for i in range(self.fillers)]
             jobs.append(dict(id=40+attempt+(100 if self.final_changed and self.api_count==3 else 0),run_id=e['run_id'],run_attempt=attempt,name=self.policy['required_jobs']['native'],head_sha=self.source,status='completed',conclusion='failure' if self.prior_failure and attempt==1 else 'success'))
+            if self.android_jobs is not None:jobs.extend(copy.deepcopy(self.android_jobs[attempt]))
             page=int(parse_qs(parsed.query)['page'][0]);size=int(parse_qs(parsed.query)['per_page'][0]);headers={}
             if page*size<len(jobs):headers['Link']=f'<https://api.github.com{parsed.path}?per_page={size}&page={page+1}>; rel="next"'
             return dict(total_count=len(jobs),jobs=jobs[(page-1)*size:page*size]),headers
@@ -145,6 +146,57 @@ class GateTests(unittest.TestCase):
         self.assertEqual([f['name'] for f in result['upload_files']],[self.p.name])
         for path in self.work.rglob('*'):
             if path.is_file() and path.suffix in ('.json','.body'):self.assertNotIn(self.token,path.read_text(errors='replace'));self.assertNotIn('private-signed-query',path.read_text(errors='replace'))
+
+    def use_android_compile_requirement(self):
+        # Import the real selection, not a fixture-invented required Android role.
+        template=json.loads((Path(__file__).resolve().parents[2]/'scripts/release_input_policy.json').read_text(encoding='utf-8'))
+        android=template['required_jobs'].get('android-compile')
+        if android is not None:self.policy['required_jobs']['android-compile']=android
+        self.android_jobs={attempt:[dict(id=700+attempt,run_id=self.expected['run_id'],run_attempt=attempt,
+            name='Validate engine / Android CMake probe (gate)',head_sha=self.source,
+            status='completed',conclusion='success')] for attempt in (1,2)}
+        self.write_inputs()
+
+    def test_required_android_success_needs_no_new_artifact_role(self):
+        self.use_android_compile_requirement()
+        result=self.call()
+        self.assertEqual(result['status'],'FIXTURE_INPUTS_VERIFIED')
+        initial=json.loads((self.work/'api-initial/summary.json').read_text())
+        self.assertIn('android-compile',initial['jobs'])
+        self.assertEqual(initial['jobs']['android-compile']['id'],702)
+        self.assertEqual(set(result['downloads']),{'execution','package'})
+        self.assertFalse(result['release_ready'])
+
+    def test_current_policy_blocks_android_failure_before_any_download(self):
+        self.use_android_compile_requirement()
+        cases=[('failure','completed','failure'),('cancelled','completed','cancelled'),
+               ('skipped','completed','skipped'),('timed_out','completed','timed_out'),
+               ('in_progress','in_progress',None),('missing',None,None),
+               ('duplicate',None,None),('wrong_name',None,None)]
+        baseline=copy.deepcopy(self.android_jobs)
+        for case,status,conclusion in cases:
+            with self.subTest(case=case):
+                self.android_jobs=copy.deepcopy(baseline)
+                if case=='missing':self.android_jobs[2]=[]
+                elif case=='duplicate':self.android_jobs[2].append(dict(self.android_jobs[2][0],id=999))
+                elif case=='wrong_name':self.android_jobs[2][0]['name']='Validate engine / Android unrelated success'
+                else:self.android_jobs[2][0].update(status=status,conclusion=conclusion)
+                before=len(self.calls)
+                with self.assertRaises(ValueError):self.call()
+                stage='resolve-jobs' if case in ('missing','duplicate','wrong_name') else 'hosted-initial'
+                report=self.failure(stage)
+                self.assertEqual(report['downloads'],{})
+                self.assertNotIn('upload_files',report)
+                self.assertFalse(any(path.endswith('/zip') for path,_ in self.calls[before:]))
+
+    def test_current_policy_retains_prior_android_failure_after_green_retry(self):
+        self.use_android_compile_requirement()
+        self.android_jobs[1][0]['conclusion']='failure'
+        with self.assertRaises(ValueError):self.call()
+        report=self.failure('hosted-initial')
+        self.assertEqual(report['downloads'],{})
+        self.assertNotIn('upload_files',report)
+        self.assertTrue(any('android-compile in attempt 1' in error for error in report['errors']))
 
     def test_pages_wire_binds_fixed_id_and_tar_in_separate_deployment_plan(self):
         self.with_pages();result=self.call()

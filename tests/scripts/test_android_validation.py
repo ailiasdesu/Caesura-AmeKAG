@@ -1021,5 +1021,100 @@ class AndroidSourceLinkTests(unittest.TestCase):
                 junction.rmdir()
 
 
+class AndroidCIJobTests(unittest.TestCase):
+    """CI consumes one already-built JNI; only tool execution is a fixture."""
+    def setUp(self):
+        self.fixture = AndroidDriverTests('test_wrong_request_shape_and_bool_refuse_before_commands')
+        self.fixture.setUp()
+        self.addCleanup(self.fixture.doCleanups)
+        self.native = put(self.fixture.root / 'built/libCaesuraAmeKAG.so', elf())
+        try:
+            import ci_android_package
+            self.adapter = ci_android_package
+        except ModuleNotFoundError:
+            self.adapter = None
+
+    def call(self):
+        self.assertIsNotNone(self.adapter, 'CI must invoke the strict existing Android package contract')
+        self.fixture.sequence += 1
+        self.fixture.work = self.fixture.root / ('ci-' + str(self.fixture.sequence))
+        args = dict(repo=self.fixture.repo, source_sha=self.fixture.head, native_library=self.native,
+                    sdl_root=self.fixture.root/'tools/sdl', jdk_root=self.fixture.root/'tools/jdk',
+                    sdk_root=self.fixture.root/'tools/sdk', ndk_root=self.fixture.root/'tools/ndk',
+                    gradle_root=self.fixture.root/'tools/gradle',
+                    bundletool_jar=self.fixture.root/'tools/bundletool/bundletool_jar',
+                    work_dir=self.fixture.work, runner=self.fixture.runner)
+        # Use the same already-checked ordinary Git launcher as the driver fixture.
+        with patch.dict(os.environ, {'PATH':str(Path(self.fixture.git).parent)+os.pathsep+os.environ.get('PATH','')}):
+            return self.adapter.run_ci_android_package(**args)
+
+    def test_existing_jni_unsigned_sign_verify_without_native_rebuild(self):
+        with patch.dict(os.environ, {'CAESURA_ANDROID_KEYSTORE':'must-not-pass',
+                'CAESURA_KEYSTORE_PATH':'must-not-pass','JAVA_TOOL_OPTIONS':'must-not-pass'}):
+            report = self.call()
+        self.assertEqual(report['status'], 'FIXTURE_ONLY')
+        self.assertEqual(report['package']['status'], 'FIXTURE_PACKAGE_VERIFIED')
+        self.assertEqual(report['private_cleanup'], 'COMPLETE')
+        names = [name for name, _, _ in self.fixture.calls]
+        self.assertEqual(names.count('gradle'), 1)
+        self.assertNotIn('configure', names)
+        self.assertNotIn('compile', names)
+        gradle = next(argv for name, argv, _ in self.fixture.calls if name == 'gradle')
+        for prop in ('-PcaesuraVersionName=1.0.1','-PcaesuraVersionCode=1',
+                     '-PcaesuraNdkVersion=27.3.13750724','-PcaesuraBuildToolsVersion=34.0.0',
+                     '-PcaesuraKeepJniBytes=true'):
+            self.assertIn(prop, gradle)
+        self.assertNotIn('--offline', gradle)
+        self.assertIn(':app:assembleDebug', gradle)
+        for _, _, env in self.fixture.calls:
+            for key in ('CAESURA_ANDROID_KEYSTORE','CAESURA_KEYSTORE_PATH','JAVA_TOOL_OPTIONS'):
+                self.assertNotIn(key, env)
+        self.assertEqual(self.adapter.verify_ci_android_package_stable(report)['status'], 'CI_ANDROID_PACKAGE_STABLE')
+        proof = self.fixture.work/'proof/ci-android-package.json'
+        original = proof.read_bytes();proof.write_bytes(b'changed proof copy')
+        with self.assertRaises((ValueError, RuntimeError)):
+            self.adapter.verify_ci_android_package_stable(report)
+        proof.write_bytes(original)
+        Path(report['outputs']['apk']['path']).write_bytes(b'late changed archive')
+        with self.assertRaises((ValueError, RuntimeError)):
+            self.adapter.verify_ci_android_package_stable(report)
+
+    def test_missing_or_changed_staged_payload_is_refused_before_signing(self):
+        def corrupt(name, argv):
+            if name == 'gradle':
+                archive = self.fixture.work/'android-stage/app/build/outputs/apk/release/app-release-unsigned.apk'
+                rewrite_zip(archive, remove=('assets/game/scripts/kag/init.lua',))
+        self.fixture.hook = corrupt
+        with self.assertRaisesRegex(ValueError, 'JNI/assets'):
+            self.call()
+        self.assertNotIn('test-key', [name for name, _, _ in self.fixture.calls])
+
+    def test_signature_business_change_fails_and_cleans_private_files(self):
+        def corrupt(name, argv):
+            if name == 'sign-aab':
+                rewrite_zip(Path(argv[argv.index('-signedjar')+1]), {'extra-business.txt': b'late'})
+        self.fixture.hook = corrupt
+        with self.assertRaisesRegex(ValueError, 'business'):
+            self.call()
+        self.assertFalse((self.fixture.work/'private-signing').exists())
+        report = json.loads((self.fixture.work/'ci-android-package.json').read_text())
+        self.assertEqual(report['status'], 'FAIL')
+        self.assertEqual(report['private_cleanup'], 'COMPLETE')
+
+    def test_wrong_source_version_and_unpinned_bundletool_refuse(self):
+        self.assertIsNotNone(self.adapter)
+        original = (self.fixture.repo/'CMakeLists.txt').read_bytes()
+        put(self.fixture.repo/'CMakeLists.txt', 'project(Other VERSION 9.9.9)')
+        self.fixture.commit()
+        with self.assertRaisesRegex(ValueError, 'version'):
+            self.call()
+        self.assertFalse(self.fixture.calls)
+        put(self.fixture.repo/'CMakeLists.txt', original)
+        self.fixture.commit()
+        with patch.object(self.adapter, 'BUNDLETOOL_SHA256', '0'*64):
+            with self.assertRaisesRegex(ValueError, 'bundletool'):
+                self.adapter.verify_bundletool(self.fixture.root/'tools/bundletool/bundletool_jar')
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

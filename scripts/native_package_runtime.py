@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 import base64
 import ctypes
+import copy
 import hashlib
 import http.client
 import json
@@ -39,6 +40,10 @@ class _ObservationError(RuntimeContractError):
     def __init__(self, message, observations):
         super().__init__(message)
         self.observations = observations
+
+
+class _StaleWindowsModuleSnapshot(RuntimeContractError):
+    """A nonzero enumerated HMODULE became invalid before its path was read."""
 
 
 class _LibrariesPending(RuntimeContractError):
@@ -206,25 +211,43 @@ def _observe_loaded_modules(identity: ProcessIdentity, report: dict) -> dict:
     _need(process_identity(identity.pid) == identity, "Module owner changed before observation")
     if os.name == "nt":
         from ctypes import wintypes
+        source = "windows:EnumProcessModulesEx/GetModuleFileNameExW"
+        report.update(source=source, partial_paths=[], api_failures=[])
         kernel = ctypes.WinDLL("kernel32", use_last_error=True)
         psapi = ctypes.WinDLL("psapi", use_last_error=True)
         kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
         kernel.OpenProcess.restype = wintypes.HANDLE
         kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel.CloseHandle.restype = wintypes.BOOL
         psapi.EnumProcessModulesEx.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD,
                                                ctypes.POINTER(wintypes.DWORD), wintypes.DWORD]
         psapi.EnumProcessModulesEx.restype = wintypes.BOOL
         psapi.GetModuleFileNameExW.argtypes = [wintypes.HANDLE, wintypes.HMODULE, wintypes.LPWSTR, wintypes.DWORD]
         psapi.GetModuleFileNameExW.restype = wintypes.DWORD
-        handle = kernel.OpenProcess(0x0410, False, identity.pid)  # QUERY_INFORMATION | VM_READ
-        _need(handle, "Cannot open the recorded process for module inspection")
+        def failure(function, error, **details):
+            observed = dict(function=function, last_error=error, **details)
+            report['api_failures'].append(observed)
+            report['api_failure'] = observed
+        ctypes.set_last_error(0)
+        handle = kernel.OpenProcess(0x0410, False, identity.pid)
+        open_error = ctypes.get_last_error()
+        if not handle:
+            failure('OpenProcess', open_error, process_handle=0, size=0)
+            raise RuntimeContractError("Cannot open the recorded process for module inspection")
         try:
             count = 256
             while True:
                 modules = (wintypes.HMODULE * count)()
                 needed = wintypes.DWORD()
-                _need(psapi.EnumProcessModulesEx(handle, modules, ctypes.sizeof(modules),
-                                                ctypes.byref(needed), 3), "Cannot enumerate loaded modules")
+                ctypes.set_last_error(0)
+                ok = psapi.EnumProcessModulesEx(handle, modules, ctypes.sizeof(modules),
+                                                ctypes.byref(needed), 3)
+                enum_error = ctypes.get_last_error()
+                if not ok:
+                    failure('EnumProcessModulesEx', enum_error, process_handle=int(handle),
+                            size=needed.value, capacity=ctypes.sizeof(modules))
+                    raise RuntimeContractError("Cannot enumerate loaded modules")
+                _need(needed.value % ctypes.sizeof(wintypes.HMODULE) == 0, "Misaligned loaded module enumeration")
                 if needed.value <= ctypes.sizeof(modules):
                     break
                 count = (needed.value + ctypes.sizeof(wintypes.HMODULE) - 1) // ctypes.sizeof(wintypes.HMODULE)
@@ -232,12 +255,28 @@ def _observe_loaded_modules(identity: ProcessIdentity, report: dict) -> dict:
             paths = []
             for module in modules[:needed.value // ctypes.sizeof(wintypes.HMODULE)]:
                 buffer = ctypes.create_unicode_buffer(32768)
+                ctypes.set_last_error(0)
                 size = psapi.GetModuleFileNameExW(handle, module, buffer, len(buffer))
-                _need(0 < size < len(buffer) - 1, "Cannot read an exact loaded module path")
+                path_error = ctypes.get_last_error()
+                if not 0 < size < len(buffer) - 1:
+                    failure('GetModuleFileNameExW', path_error, process_handle=int(handle),
+                            module_handle=int(module or 0), size=size, capacity=len(buffer))
+                    # Only the observed unload boundary is retryable. Access denial,
+                    # truncation, enumeration errors and other API errors stay fatal.
+                    kind = _StaleWindowsModuleSnapshot if size == 0 and path_error == 6 and module else RuntimeContractError
+                    raise kind("Cannot read an exact loaded module path")
                 paths.append(buffer.value)
+                report['partial_paths'] = list(paths)
         finally:
-            kernel.CloseHandle(handle)
-        source = "windows:EnumProcessModulesEx/GetModuleFileNameExW"
+            ctypes.set_last_error(0)
+            closed = kernel.CloseHandle(handle)
+            close_error = ctypes.get_last_error()
+            if not closed:
+                failure('CloseHandle', close_error, process_handle=int(handle), size=0)
+                raise RuntimeContractError("Cannot close module inspection handle")
+            # A stale snapshot is eligible for a fresh observation only while the
+            # exact PID, creation time and executable still belong to this owner.
+            _need(process_identity(identity.pid) == identity, "Module owner changed during observation")
     elif sys.platform.startswith("linux"):
         paths = []
         for line in Path(f"/proc/{identity.pid}/maps").read_text().splitlines():
@@ -409,17 +448,76 @@ def _inspect_libraries(identity: ProcessIdentity, package: Path, required: list[
         raise
 
 
+def _reject_partial_library_conflict(report, package, required):
+    # A failed prefix never proves success, but an already observed foreign
+    # same-name image must not disappear from the evidence on a later attempt.
+    observed = {Path(path).resolve(strict=False) for path in report.get('partial_paths', [])}
+    for relative in required:
+        declared = package / relative
+        expected = declared.resolve(strict=True)
+        names = {declared.name.casefold(), expected.name.casefold()}
+        _need(not any(path.name.casefold() in names and path not in {expected, declared}
+                      for path in observed),
+              f"A second source for required library was observed in a failed snapshot: {relative}")
+
+
 def _loaded_libraries(identity: ProcessIdentity, package: Path, required: list[str], deadline=None) -> dict:
+    attempts = []
     try:
         while True:
+            if len(attempts) >= 3:
+                error = RuntimeContractError("Module reobservation attempt budget exhausted")
+                error.module_observation = attempts[-1]
+                raise error
+            if attempts and (deadline is None or time.monotonic() >= deadline):
+                error = RuntimeContractError("Module reobservation deadline expired")
+                error.module_observation = attempts[-1]
+                raise error
+            recorded = False
             try:
-                return _inspect_libraries(identity, package, required)
-            except _LibrariesPending:
+                result = _inspect_libraries(identity, package, required)
+                if attempts:
+                    attempts.append(copy.deepcopy({**result, 'status':'OBSERVED'}))
+                    recorded = True
+                    if time.monotonic() >= deadline:
+                        error = RuntimeContractError("Module reobservation exceeded deadline")
+                        error.module_observation = result
+                        raise error
+                    result['snapshot_attempts'] = attempts
+                return result
+            except _StaleWindowsModuleSnapshot as error:
+                report = dict(getattr(error, 'module_observation', {}))
+                attempts.append(copy.deepcopy(report))
+                try:
+                    _reject_partial_library_conflict(report, package, required)
+                    _need(process_identity(identity.pid) == identity, "Module owner changed before reobservation")
+                except (OSError, ValueError, RuntimeContractError) as fatal:
+                    fatal.module_observation = report
+                    raise
+                if len(attempts) >= 3 or deadline is None or time.monotonic() >= deadline:
+                    raise
+                # Discard all paths and re-enumerate. There is no reuse/union of
+                # partial snapshots and no extension of the caller's deadline.
+            except _LibrariesPending as error:
+                if attempts:
+                    pending = copy.deepcopy(getattr(error, 'module_observation', {}))
+                    pending.update(status='PENDING', error=str(error), error_type=type(error).__name__)
+                    attempts.append(pending)
+                    if len(attempts) >= 3:
+                        raise
                 if deadline is None or time.monotonic() >= deadline:
                     raise
                 time.sleep(min(0.02, max(0, deadline - time.monotonic())))
+            except (OSError, ValueError, RuntimeContractError, subprocess.SubprocessError) as error:
+                if attempts and not recorded:
+                    failed = copy.deepcopy(getattr(error, 'module_observation', {}))
+                    failed.update(status='NOT_VERIFIED', error=str(error), error_type=type(error).__name__)
+                    attempts.append(failed)
+                raise
     except (OSError, ValueError, RuntimeContractError, subprocess.SubprocessError) as error:
         details = dict(getattr(error, "module_observation", {}))
+        if attempts:
+            details['snapshot_attempts'] = attempts
         details.update(status="NOT_VERIFIED", required=required, error=str(error),
                        error_type=type(error).__name__, process=asdict(identity))
         observed = {"loaded_modules":details}

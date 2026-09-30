@@ -567,7 +567,7 @@ def _stage_snapshot(stage):
     return dict(paths=sorted(paths), **_tree(stage, sorted(paths)))
 
 
-def _gradle(value, tc, stage, work, command):
+def _gradle(value, tc, stage, work, command, *, offline=True, include_debug=False):
     gradle = Path(tc['components']['gradle']['root']); tool = tc['tools']['java']['path']
     args = [tool, '-Xmx64m', '-Xms64m', '-javaagent:' + str(gradle / 'lib/agents/gradle-instrumentation-agent-8.9.jar'),
             '-Dorg.gradle.appname=gradle', '-Duser.home=' + str(work / 'home'), '-Duser.language=en', '-Duser.country=US', '-Dfile.encoding=UTF-8',
@@ -579,10 +579,25 @@ def _gradle(value, tc, stage, work, command):
             '-PcaesuraNdkVersion=' + NDK, '-PcaesuraBuildToolsVersion=34.0.0', '-PcaesuraKeepJniBytes=true',
             '-Pandroid.builder.sdkDownload=false',
             ':app:assembleRelease', ':app:bundleRelease']
-    version = command.run('gradle-version', args[:-2] + ['--version'], value['timeouts']['gradle'], Path(stage['path']))
+    if not offline:
+        # Hosted CI may resolve dependencies online; never label that path as the
+        # full driver's prelocked offline dependency verification.
+        args.remove('--offline')
+        index = args.index('--dependency-verification')
+        del args[index:index + 2]
+    tasks = 2
+    if include_debug:
+        args.insert(len(args) - 2, ':app:assembleDebug')
+        tasks += 1
+    version = command.run('gradle-version', args[:-tasks] + ['--version'], value['timeouts']['gradle'], Path(stage['path']))
     need(re.findall(r'^Gradle ([^\r\n]+)\s*$', version, re.M) == ['8.9'], 'Actual Gradle version differs')
     command.run('gradle', args, value['timeouts']['gradle'], Path(stage['path']))
     need(_stage_snapshot(Path(stage['path'])) == stage['snapshot'], 'Gradle modified staged input')
+    return _verify_unsigned_packages(stage, work)
+
+
+def _verify_unsigned_packages(stage, work):
+    """Lock already-built unsigned bytes against the independent staging tree."""
     unsigned = {}
     for kind, name in (('apk', 'app/build/outputs/apk/release/app-release-unsigned.apk'), ('aab', 'app/build/outputs/bundle/release/app-release.aab')):
         produced = lock(Path(stage['path']) / name)

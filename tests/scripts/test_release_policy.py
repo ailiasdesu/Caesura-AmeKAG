@@ -94,6 +94,22 @@ class PolicyTests(unittest.TestCase):
         self.template["required_jobs"].pop("ios-compile");self.write()
         with self.assertRaisesRegex(ValueError,"required"):self.call()
 
+    def test_android_compile_is_required_without_adding_package_artifacts(self):
+        result=self.call()
+        value=json.loads(result["policy_json"])
+        self.assertEqual(value["required_jobs"].get("android-compile"),
+                         "Validate engine / Android CMake probe (gate)")
+        self.assertEqual(len(value["required_jobs"]),10)
+        self.assertEqual(len(value["artifact_roles"]),11)
+        self.assertNotIn("android-compile",value["artifact_roles"].values())
+
+    def test_policy_cannot_drop_android_compile_after_promotion(self):
+        self.template["required_jobs"].pop("android-compile",None)
+        self.write()
+        with self.assertRaisesRegex(ValueError,"required"):
+            self.call()
+        self.assertFalse(self.output.exists())
+
     def test_profile_platform_or_configuration_must_match_lane(self):
         self.profiles["profiles"]["linux-release"]["configuration"]="Debug";self.write()
         with self.assertRaisesRegex(ValueError,"profile"):self.call()

@@ -1092,6 +1092,171 @@ class NativePackageRuntimeTests(unittest.TestCase):
                 for handle in handles:
                     kernel.CloseHandle(handle)
 
+    if os.name == "nt":
+        @contextmanager
+        def module_snapshot_boundary(self, *, mode="unload", repeat=False, foreign=False):
+            """Real PSAPI/FreeLibrary boundary; denial/truncation are explicit API fixtures."""
+            import ctypes
+            from ctypes import wintypes
+            name = "u29-snapshot-required.dll"
+            expected = self.package/name
+            shutil.copy2(Path(os.environ["SystemRoot"])/"System32/version.dll", expected)
+            external = self.root/name
+            shutil.copy2(expected, external)
+            trigger = self.package/"u29-snapshot-trigger.dll"
+            shutil.copy2(expected, trigger)
+            original = ctypes.WinDLL
+            kernel = original("kernel32", use_last_error=True)
+            kernel.LoadLibraryW.argtypes=[wintypes.LPCWSTR];kernel.LoadLibraryW.restype=wintypes.HMODULE
+            kernel.FreeLibrary.argtypes=[wintypes.HMODULE];kernel.FreeLibrary.restype=wintypes.BOOL
+            state = dict(enumerations=0, failures=[], foreign_handle=None, handle=None, fired=False)
+            if foreign:
+                state['foreign_handle']=kernel.LoadLibraryW(str(external))
+                self.assertTrue(state['foreign_handle'])
+            selected = trigger if foreign else expected
+            state['handle']=kernel.LoadLibraryW(str(selected));self.assertTrue(state['handle'])
+            state['target']=state['handle']
+            case=self
+            class Function:
+                def __init__(self,fn,kind):object.__setattr__(self,'fn',fn);object.__setattr__(self,'kind',kind)
+                def __setattr__(self,k,v):setattr(self.fn,k,v)
+                def __call__(self,*args):
+                    ctypes.set_last_error(0)
+                    result=self.fn(*args);error=ctypes.get_last_error()
+                    if self.kind=='enum':
+                        state['enumerations']+=1
+                        needed=ctypes.cast(args[3],ctypes.POINTER(wintypes.DWORD)).contents.value
+                        handles=[int(v or 0) for v in args[1][:min(len(args[1]),needed//ctypes.sizeof(wintypes.HMODULE))]]
+                        if result and needed<=args[2] and (repeat or not state['fired']):
+                            state['fired']=True;state['target']=state['handle']
+                            case.assertIn(state['target'],handles)
+                            if foreign:case.assertLess(handles.index(state['foreign_handle']),handles.index(state['target']))
+                            if mode=='unload':
+                                case.assertTrue(kernel.FreeLibrary(state['handle']));state['handle']=None
+                    elif int(args[1] or 0)==state['target'] and (repeat or not state['failures']):
+                        if mode=='unload':
+                            case.assertEqual(result,0);case.assertEqual(error,6)
+                            # A fresh complete snapshot must see this reloaded library.
+                            state['handle']=kernel.LoadLibraryW(str(selected));case.assertTrue(state['handle'])
+                            if foreign:
+                                case.assertTrue(kernel.FreeLibrary(state['foreign_handle']));state['foreign_handle']=None
+                        elif mode=='denied':result,error=0,5
+                        elif mode=='truncated':result,error=len(args[2])-1,122
+                        state['failures'].append(dict(size=result,last_error=error,module=state['target']))
+                    ctypes.set_last_error(error)
+                    return result
+            class Psapi:
+                def __init__(self,dll):
+                    self.EnumProcessModulesEx=Function(dll.EnumProcessModulesEx,'enum')
+                    self.GetModuleFileNameExW=Function(dll.GetModuleFileNameExW,'path')
+            def factory(name,*args,**kw):
+                dll=original(name,*args,**kw)
+                return Psapi(dll) if name.lower()=='psapi' else dll
+            try:
+                identity=runtime.process_identity(os.getpid())
+                with patch.object(ctypes,'WinDLL',factory):yield identity,[name],state
+            finally:
+                for key in ('handle','foreign_handle'):
+                    if state[key]:self.assertTrue(kernel.FreeLibrary(state[key]))
+
+        def test_real_unloaded_snapshot_reobserves_fresh_complete_paths(self):
+            with self.module_snapshot_boundary() as (identity,required,state):
+                result=runtime._loaded_libraries(identity,self.package,required,time.monotonic()+3)
+                self.assertEqual(result['status'],'VERIFIED')
+                self.assertEqual(state['enumerations'],2)
+                self.assertEqual(len(result['snapshot_attempts']),2)
+                failed=result['snapshot_attempts'][0]
+                self.assertEqual(failed['api_failure']['function'],'GetModuleFileNameExW')
+                self.assertEqual(failed['api_failure']['last_error'],6)
+                self.assertEqual(failed['api_failure']['size'],0)
+                self.assertTrue(failed['partial_paths'])
+                self.assertEqual(result['snapshot_attempts'][1]['status'],'OBSERVED')
+                self.assertEqual(result['required'][0]['resolved_path'],str((self.package/required[0]).resolve()))
+
+        def test_repeated_real_module_snapshot_invalidation_stops_after_three(self):
+            with self.module_snapshot_boundary(repeat=True) as (identity,required,state):
+                with self.assertRaises(runtime._ObservationError) as caught:
+                    runtime._loaded_libraries(identity,self.package,required,time.monotonic()+3)
+                self.assertEqual(state['enumerations'],3)
+                observed=caught.exception.observations['loaded_modules']
+                self.assertEqual(len(observed['snapshot_attempts']),3)
+                self.assertTrue(all(x['api_failure']['last_error']==6 for x in observed['snapshot_attempts']))
+                self.assertEqual(observed['status'],'NOT_VERIFIED')
+
+        def test_module_snapshot_denial_and_truncation_are_not_retried(self):
+            for mode,code in [('denied',5),('truncated',122)]:
+                with self.subTest(mode=mode),self.module_snapshot_boundary(mode=mode) as (identity,required,state):
+                    with self.assertRaises(runtime._ObservationError) as caught:
+                        runtime._loaded_libraries(identity,self.package,required,time.monotonic()+3)
+                    self.assertEqual(state['enumerations'],1)
+                    observed=caught.exception.observations['loaded_modules']
+                    self.assertEqual(observed['api_failure']['last_error'],code)
+                    self.assertTrue(observed['partial_paths'])
+
+        def test_expired_deadline_never_reobserves_invalidated_snapshot(self):
+            with self.module_snapshot_boundary() as (identity,required,state):
+                with self.assertRaises(runtime._ObservationError):
+                    runtime._loaded_libraries(identity,self.package,required,time.monotonic()-1)
+                self.assertLessEqual(state['enumerations'],1)
+
+        def test_stale_then_pending_snapshots_share_three_attempt_budget(self):
+            import ctypes
+            delayed=self.package/'u29-after-budget-version.dll'
+            shutil.copy2(Path(os.environ['SystemRoot'])/'System32/version.dll',delayed)
+            original=runtime._inspect_libraries
+            calls=[];loaded=[]
+            kernel=ctypes.WinDLL('kernel32',use_last_error=True)
+            kernel.FreeLibrary.argtypes=[ctypes.c_void_p];kernel.FreeLibrary.restype=ctypes.c_int
+            def inspect(identity,package,required):
+                calls.append(len(calls)+1)
+                if len(calls)==4:
+                    loaded.append(ctypes.WinDLL(str(delayed)))
+                return original(identity,package,required)
+            try:
+                with self.module_snapshot_boundary() as (identity,required,state):
+                    with patch.object(runtime,'_inspect_libraries',side_effect=inspect):
+                        with self.assertRaises(runtime._ObservationError) as caught:
+                            runtime._loaded_libraries(identity,self.package,[*required,delayed.name],time.monotonic()+3)
+                    self.assertEqual(calls,[1,2,3])
+                    attempts=caught.exception.observations['loaded_modules']['snapshot_attempts']
+                    self.assertEqual(len(attempts),3)
+                    self.assertEqual([x['status'] for x in attempts],['NOT_VERIFIED','PENDING','PENDING'])
+                    self.assertTrue(all(x.get('error_type')=='_LibrariesPending' for x in attempts[1:]))
+            finally:
+                for module in loaded:self.assertTrue(kernel.FreeLibrary(module._handle))
+
+        def test_owner_change_after_snapshot_failure_is_not_retried(self):
+            with self.module_snapshot_boundary() as (identity,required,state):
+                original=runtime.process_identity
+                def observed_owner(pid):
+                    value=original(pid)
+                    return runtime.ProcessIdentity(value.pid,value.created+'1',value.executable,value.source) if state['failures'] else value
+                with patch.object(runtime,'process_identity',side_effect=observed_owner):
+                    with self.assertRaises(runtime._ObservationError) as caught:
+                        runtime._loaded_libraries(identity,self.package,required,time.monotonic()+3)
+                self.assertEqual(state['enumerations'],1)
+                self.assertIn('owner changed',caught.exception.observations['loaded_modules']['error'])
+                self.assertEqual(caught.exception.observations['loaded_modules']['api_failure']['last_error'],6)
+
+        def test_reobservation_that_finishes_after_deadline_is_rejected(self):
+            with self.module_snapshot_boundary() as (identity,required,state):
+                clock=time.monotonic;deadline=clock()+3
+                def observed_time():return deadline+1 if state['enumerations']>=2 else clock()
+                with patch.object(runtime.time,'monotonic',side_effect=observed_time):
+                    with self.assertRaises(runtime._ObservationError) as caught:
+                        runtime._loaded_libraries(identity,self.package,required,deadline)
+                self.assertEqual(state['enumerations'],2)
+                self.assertIn('deadline',caught.exception.observations['loaded_modules']['error'])
+
+        def test_foreign_required_library_in_failed_prefix_is_not_washed_away(self):
+            with self.module_snapshot_boundary(foreign=True) as (identity,required,state):
+                with self.assertRaises(runtime._ObservationError) as caught:
+                    runtime._loaded_libraries(identity,self.package,required,time.monotonic()+3)
+                self.assertEqual(state['enumerations'],1)
+                observed=caught.exception.observations['loaded_modules']
+                self.assertIn('second source',observed['error'])
+                self.assertIn(str(self.root/required[0]),observed['partial_paths'])
+
     def test_actual_current_process_module_paths_are_observed(self):
         self.assertIsNotNone(runtime, "Native package runtime controller is not implemented")
         identity = runtime.process_identity(os.getpid())

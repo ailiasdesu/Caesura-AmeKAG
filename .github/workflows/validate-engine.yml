@@ -975,12 +975,12 @@ jobs:
     - name: Download and verify pinned AppImage builder and runtime
       env:
         APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
-        APPIMAGE_RUNTIME_SHA256: 1cc49bcf1e2ccd593c379adb17c9f85a36d619088296504de95b1d06215aebbf
+        APPIMAGE_RUNTIME_SHA256: 2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
       run: |
         set -euo pipefail
         mkdir "$RUNNER_TEMP/u22-appimage-tools"
         curl --fail --location --output "$RUNNER_TEMP/u22-appimage-tools/appimagetool" https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
-        curl --fail --location --output "$RUNNER_TEMP/u22-appimage-tools/runtime" https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64
+        curl --fail --location --output "$RUNNER_TEMP/u22-appimage-tools/runtime" https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64
         printf '%s  %s\n' "$APPIMAGETOOL_SHA256" "$RUNNER_TEMP/u22-appimage-tools/appimagetool" "$APPIMAGE_RUNTIME_SHA256" "$RUNNER_TEMP/u22-appimage-tools/runtime" | sha256sum --check --strict
         chmod +x "$RUNNER_TEMP/u22-appimage-tools/appimagetool"
     - name: Validate final Linux TGZ and AppImage outside the checkout
@@ -993,7 +993,7 @@ jobs:
           --appimagetool "$RUNNER_TEMP/u22-appimage-tools/appimagetool" \
           --appimagetool-sha256 ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0 \
           --runtime "$RUNNER_TEMP/u22-appimage-tools/runtime" \
-          --runtime-sha256 1cc49bcf1e2ccd593c379adb17c9f85a36d619088296504de95b1d06215aebbf \
+          --runtime-sha256 2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d \
           --github-output "$GITHUB_OUTPUT"
     - name: Recheck accepted bytes immediately before upload
       env:
@@ -1609,10 +1609,11 @@ jobs:
         if [ -x "$lua" ]; then :; else lua=$(command -v lua || true); fi
         if [ -n "$lua" ]; then "$lua" scripts/ks_check.lua tests/projects/first_vn/story.ks; fi
   android-compile:
-    name: Android CMake probe (audit)
+    name: Android CMake probe (gate)
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    continue-on-error: true
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
     steps:
     - uses: actions/checkout@v4
       with:
@@ -1637,15 +1638,30 @@ jobs:
         with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as out:
             for key, name in (("EXECUTION_WORK", "u23-execution"), ("PACKAGE_WORK", "u23-package")):
                 out.write(key + "=" + str(base / (name + "-" + suffix)) + "\n")
+    - uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '17'
+    - name: Select fixed Android package tools
+      shell: bash
+      run: |
+        set -euo pipefail
+        "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "ndk;27.3.13750724" "platforms;android-35" "build-tools;34.0.0"
+        echo "NDK_DIR=$ANDROID_SDK_ROOT/ndk/27.3.13750724" >> "$GITHUB_ENV"
+        curl --fail --location --max-time 180 https://services.gradle.org/distributions/gradle-8.9-bin.zip -o "$RUNNER_TEMP/gradle-8.9-bin.zip"
+        curl --fail --location --max-time 30 https://services.gradle.org/distributions/gradle-8.9-bin.zip.sha256 -o "$RUNNER_TEMP/gradle-8.9-bin.zip.sha256"
+        GRADLE_SHA=$(cat "$RUNNER_TEMP/gradle-8.9-bin.zip.sha256")
+        [[ "$GRADLE_SHA" =~ ^[0-9a-f]{64}$ ]]
+        echo "$GRADLE_SHA  $RUNNER_TEMP/gradle-8.9-bin.zip" | sha256sum --check
+        unzip -q "$RUNNER_TEMP/gradle-8.9-bin.zip" -d "$RUNNER_TEMP"
+        echo "GRADLE_ROOT=$RUNNER_TEMP/gradle-8.9" >> "$GITHUB_ENV"
+        curl --fail --location --max-time 180 https://github.com/google/bundletool/releases/download/1.17.1/bundletool-all-1.17.1.jar -o "$RUNNER_TEMP/bundletool-all-1.17.1.jar"
+        echo "45881ead13388872d82c4255b195488b7fc33f2cac5a9a977b0afc5e92367592  $RUNNER_TEMP/bundletool-all-1.17.1.jar" | sha256sum --check
     - name: Build SDL3 Android slice (arm64-v8a)
       shell: bash
       run: |
         set -e
-        NDK="${ANDROID_NDK_HOME:-$ANDROID_NDK_LATEST_HOME}"
-        if [ -z "$NDK" ]; then NDK=$(ls -d "${ANDROID_SDK_ROOT:-}/ndk/"* 2>/dev/null | head -1); fi
-        echo "NDK=$NDK"
-        test -n "$NDK" || { echo "no NDK on runner"; exit 1; }
-        echo "NDK_DIR=$NDK" >> "$GITHUB_ENV"
+        NDK="$NDK_DIR"
         git clone --depth 1 --branch release-3.2.4 https://github.com/libsdl-org/SDL.git "$RUNNER_TEMP/sdl-src"
         cmake -S "$RUNNER_TEMP/sdl-src" -B "$RUNNER_TEMP/sdl-build" \
           -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
@@ -1684,87 +1700,30 @@ jobs:
       run: |
         cmake --build build-android --parallel 3
         ls -la build-android/libCaesuraAmeKAG.so
-    - name: Stage native libs for the APK (A2 host)
+    - name: Build controlled unsigned packages and verify final TEST-signed bytes
+      id: android_package
       shell: bash
       run: |
-        set -e
-        mkdir -p android/app/src/main/jniLibs/arm64-v8a
-        cp build-android/libCaesuraAmeKAG.so android/app/src/main/jniLibs/arm64-v8a/
-        cp "$RUNNER_TEMP/sdl3-android/lib/libSDL3.so" android/app/src/main/jniLibs/arm64-v8a/
-        ls -la android/app/src/main/jniLibs/arm64-v8a/
-    - name: Stage game bundle (A3 + R6 read glue contract)
+        python -B scripts/ci_android_package.py run \
+          --repo "$GITHUB_WORKSPACE" --source-sha "$SOURCE_SHA" \
+          --native-library "$GITHUB_WORKSPACE/build-android/libCaesuraAmeKAG.so" \
+          --sdl-root "$RUNNER_TEMP/sdl3-android" --jdk-root "$JAVA_HOME" \
+          --sdk-root "$ANDROID_SDK_ROOT" --ndk-root "$NDK_DIR" \
+          --gradle-root "$GRADLE_ROOT" --bundletool-jar "$RUNNER_TEMP/bundletool-all-1.17.1.jar" \
+          --work "$PACKAGE_WORK" --github-output "$GITHUB_OUTPUT"
+    - name: Recheck exact Android package evidence before upload
       shell: bash
-      run: |
-        set -e
-        # Canonical engine resource root (same contract as demo/):
-        #   <root>/scripts  (runtime; config.lua entry_script -> game entry)
-        #   <root>/assets   (shared media pool)
-        #   <root>/demo/<project>/ (entry.lua + story.ks + assets/)
-        # MainActivity extracts APK assets/game/** into internal storage
-        # once, then forwards --resource-root <root> to SDL_main argv.
-        rm -rf android/app/src/main/assets/game
-        mkdir -p android/app/src/main/assets/game/demo
-        cp -r scripts  android/app/src/main/assets/game/scripts
-        cp -r assets   android/app/src/main/assets/game/assets
-        cp -r tests/projects/first_vn android/app/src/main/assets/game/demo/first_vn
-        sed -i 's|config.entry_script = .*|config.entry_script = "../demo/first_vn/entry.lua"  -- A3/R6: first_vn entry (engine resolves scripts/../demo/first_vn)|' \
-          android/app/src/main/assets/game/scripts/config.lua
-        grep -n "entry_script" android/app/src/main/assets/game/scripts/config.lua
-    - name: Generate ephemeral test keystore (Track A5)
-      shell: bash
-      run: |
-        set -e
-        bash scripts/generate_android_keystore.sh --test --keystore "$RUNNER_TEMP/ci-release.keystore"
-        echo "CAESURA_ANDROID_KEYSTORE=$RUNNER_TEMP/ci-release.keystore" >> "$GITHUB_ENV"
-        echo "CAESURA_ANDROID_KEYSTORE_PASS=caesura_test_pass" >> "$GITHUB_ENV"
-        echo "CAESURA_ANDROID_KEY_ALIAS=caesura-test" >> "$GITHUB_ENV"
-        echo "CAESURA_ANDROID_KEY_PASS=caesura_test_pass" >> "$GITHUB_ENV"
-    - name: Gradle assembleDebug, assembleRelease & bundleRelease (Track A5)
-      shell: bash
-      run: |
-        set -e
-        # Hosted ubuntu images ship the Android SDK; compileSdk 35 may be
-        # missing → install defensively (licenses are pre-accepted).
-        yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" >/dev/null 2>&1 || true
-        GRADLE="gradle"
-        if gradle --version 2>/dev/null | grep -q "Gradle 8.9\|Gradle 8.10\|Gradle 8.1[1-9]"; then
-          echo "using runner gradle"
-        else
-          echo "runner gradle too old/missing - downloading 8.9"
-          curl -sL https://services.gradle.org/distributions/gradle-8.9-bin.zip -o /tmp/gradle.zip
-          unzip -q /tmp/gradle.zip -d /tmp
-          GRADLE="/tmp/gradle-8.9/bin/gradle"
-        fi
-        cd android
-        echo "=== Building assembleDebug ==="
-        "$GRADLE" --no-daemon --console=plain assembleDebug
-        echo "=== Building assembleRelease (Signed with ephemeral key) ==="
-        "$GRADLE" --no-daemon --console=plain assembleRelease
-        echo "=== Building bundleRelease (AAB for Play Store) ==="
-        "$GRADLE" --no-daemon --console=plain bundleRelease
-        cd ..
-    - name: Verify Android release artifacts (zipalign & apksigner) (Track A5)
-      shell: bash
-      run: |
-        set -e
-        echo "=== Locating Android Build Tools ==="
-        BT_DIR=$(ls -d "$ANDROID_SDK_ROOT/build-tools/"* 2>/dev/null | sort -V | tail -n 1)
-        echo "Build tools: $BT_DIR"
-        ZIPALIGN="$BT_DIR/zipalign"
-        APKSIGNER="$BT_DIR/apksigner"
-
-        echo "=== 1. APK Alignment Verification (zipalign -c) ==="
-        "$ZIPALIGN" -c -v 4 android/app/build/outputs/apk/release/app-release.apk
-
-        echo "=== 2. APK Signature Verification (apksigner verify) ==="
-        "$APKSIGNER" verify --verbose --print-certs android/app/build/outputs/apk/release/app-release.apk
-
-        echo "=== 3. APK Content Check ==="
-        unzip -l android/app/build/outputs/apk/release/app-release.apk | grep -E "assets/game/demo/first_vn/story.ks|assets/game/demo/first_vn/entry.lua|assets/game/scripts/kag/init.lua|assets/game/assets/lang/|libCaesuraAmeKAG.so|libSDL3.so"
-
-        echo "=== 4. AAB Content & Structure Check ==="
-        test -f android/app/build/outputs/bundle/release/app-release.aab
-        unzip -l android/app/build/outputs/bundle/release/app-release.aab | grep -E "base/lib/arm64-v8a/libCaesuraAmeKAG.so|base/lib/arm64-v8a/libSDL3.so|base/assets/game/scripts/kag/init.lua|base/manifest/AndroidManifest.xml"
+      env:
+        ANDROID_RECEIPT: ${{ steps.android_package.outputs.receipt }}
+        ANDROID_RECEIPT_SHA256: ${{ steps.android_package.outputs.receipt_sha256 }}
+      run: python -B scripts/ci_android_package.py verify --receipt "$ANDROID_RECEIPT" --sha256 "$ANDROID_RECEIPT_SHA256"
+    - name: Preserve Android package contract originals
+      if: ${{ always() && env.PACKAGE_WORK != '' && steps.android_package.outcome != 'skipped' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: android-package-contract-evidence
+        path: ${{ env.PACKAGE_WORK }}/proof/
+        if-no-files-found: error
     - name: Upload android slices for local builds (device day)
       uses: actions/upload-artifact@v4
       with:
@@ -1773,12 +1732,9 @@ jobs:
           ${{ runner.temp }}/sdl3-android/
           ${{ runner.temp }}/openssl-android/
         if-no-files-found: error
-    - name: Upload APK & AAB artifacts (device day)
+    - name: Upload exact verified APK and AAB
       uses: actions/upload-artifact@v4
       with:
         name: android-release-artifacts
-        path: |
-          android/app/build/outputs/apk/debug/app-debug.apk
-          android/app/build/outputs/apk/release/app-release*.apk
-          android/app/build/outputs/bundle/release/app-release*.aab
-        if-no-files-found: warn
+        path: ${{ steps.android_package.outputs.upload_files }}
+        if-no-files-found: error

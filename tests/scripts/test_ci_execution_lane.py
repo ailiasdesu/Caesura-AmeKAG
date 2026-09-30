@@ -403,11 +403,47 @@ class WorkflowContractTests(unittest.TestCase):
                         selected += 1
                         self.assertIn("env." + variable + " != ''", step.get("if", ""),
                                       "Unset work path after a guard failure must never resolve to runner root")
-        self.assertEqual(selected, 11)
+        self.assertEqual(selected, 12)
 
-    def test_existing_hard_gates_and_optional_android_state_are_retained(self):
-        self.assertTrue(self.jobs["android-compile"]["continue-on-error"])
-        for key in ("ios-compile", "android-static", "build-linux", "build-windows-debug"):
+    def test_android_release_uses_strict_package_adapter_and_exact_final_outputs(self):
+        steps = self.jobs["android-compile"]["steps"]
+        commands = [s.get("run", "") for s in steps]
+        self.assertTrue(any("ci_android_package.py run" in c for c in commands))
+        self.assertTrue(any("ci_android_package.py verify" in c for c in commands))
+        self.assertFalse(any("generate_android_keystore.sh" in c or "unzip -l" in c for c in commands))
+        self.assertFalse(any("cp -r scripts" in c for c in commands))
+        uploads = [s for s in steps if s.get("uses", "").startswith("actions/upload-artifact@")]
+        proof = next(s for s in uploads if s["with"]["name"] == "android-package-contract-evidence")
+        self.assertEqual(proof["with"]["if-no-files-found"], "error")
+        final = next(s for s in uploads if s["with"]["name"] == "android-release-artifacts")
+        self.assertEqual(final["with"]["path"], "${{ steps.android_package.outputs.upload_files }}")
+        self.assertEqual(final["with"]["if-no-files-found"], "error")
+
+    def test_linux_appimage_runtime_uses_dated_source_and_consistent_lock(self):
+        steps = self.jobs["release-linux"]["steps"]
+        download = next(s for s in steps if s.get("name") ==
+                        "Download and verify pinned AppImage builder and runtime")
+        runtime_line = next(line for line in download["run"].splitlines()
+                            if "AppImage/type2-runtime/releases/download/" in line)
+        runtime_url = runtime_line.split()[-1]
+        self.assertRegex(runtime_url,
+            r"^https://github\.com/AppImage/type2-runtime/releases/download/[0-9]{8}/runtime-x86_64$")
+        locked = download["env"]["APPIMAGE_RUNTIME_SHA256"]
+        self.assertRegex(locked, r"^[0-9a-f]{64}$")
+        package = next(s for s in steps if s.get("id") == "package")
+        self.assertIn("--runtime-sha256 " + locked, package["run"])
+        self.assertIn("set -euo pipefail", download["run"])
+        self.assertIn("sha256sum --check --strict", download["run"])
+        self.assertNotIn("continue-on-error", download)
+        self.assertNotIn("|| true", download["run"])
+
+    def test_existing_hard_gates_include_android_compile(self):
+        policy = json.loads((ROOT / "scripts/release_input_policy.json").read_text(encoding="utf-8"))
+        self.assertEqual(policy["required_jobs"].get("android-compile"),
+                         "Validate engine / " + self.jobs["android-compile"]["name"])
+        for step in self.jobs["android-compile"]["steps"]:
+            self.assertNotIn("continue-on-error", step)
+        for key in ("android-compile", "ios-compile", "android-static", "build-linux", "build-windows-debug"):
             self.assertNotIn("continue-on-error", self.jobs[key])
         text = json.dumps(self.workflow)
         for command in ("web_audio_smoke.mjs", "test_replay_cli.py", "verify_android_regression.py",

@@ -24,7 +24,7 @@ PLATFORMS=("windows","linux","macos")
 EXECUTION_ROLES={f"{platform}-{configuration}-execution" for platform in PLATFORMS for configuration in ("debug","release")}
 PACKAGE_ROLES={platform+"-package" for platform in (*PLATFORMS,"web")}
 PAGES_ROLES={"pages-artifact"}
-JOB_ROLES={role.removesuffix("-execution") for role in EXECUTION_ROLES}|{"web-package","ios-compile","android-static"}
+JOB_ROLES={role.removesuffix("-execution") for role in EXECUTION_ROLES}|{"web-package","ios-compile","android-static","android-compile"}
 TEMPLATE_KEYS={"schema_version","required_jobs","artifact_roles","output_prefixes","execution_inputs","package_inputs","pages_inputs"}
 
 

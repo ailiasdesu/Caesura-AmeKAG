@@ -9,7 +9,8 @@
     "macos-release": "Validate engine / macOS · Clang · Release and Package",
     "web-package": "Validate engine / Web · Final Package",
     "ios-compile": "Validate engine / iOS CMake probe (gate)",
-    "android-static": "Validate engine / Android static contract (no NDK)"
+    "android-static": "Validate engine / Android static contract (no NDK)",
+    "android-compile": "Validate engine / Android CMake probe (gate)"
   },
   "artifact_roles": {
     "windows-debug-execution": "windows-debug",

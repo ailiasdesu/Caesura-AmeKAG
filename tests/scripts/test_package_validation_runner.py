@@ -146,8 +146,13 @@ class PackageValidationRunner(unittest.TestCase):
         self.assertEqual(old["status"], "DIAGNOSTIC_PASS")
 
     def test_attempt_inside_repository_is_refused_before_side_effects(self):
+        # This parent exists in a clean checkout; no ignored build artifacts are required.
+        attempt = ROOT / "tests/never-create-package-attempt"
+        self.assertTrue(attempt.parent.is_dir())
+        self.assertFalse(attempt.exists())
         with self.assertRaises(ValueError):
-            self.run_attempt(attempt_dir=ROOT / "artifacts/validation/never-create-package-attempt")
+            self.run_attempt(attempt_dir=attempt)
+        self.assertFalse(attempt.exists())
         self.runtime.assert_not_called()
 
     def test_attempt_inside_input_directory_does_not_modify_the_input(self):
