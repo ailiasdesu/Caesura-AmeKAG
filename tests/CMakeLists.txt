@@ -764,6 +764,25 @@ if(CAESURA_BASH_PROGRAM)
 
 endif()
 
+if(WIN32 AND MSVC AND CAESURA_LIVE2D AND TARGET Live2DCubismCore
+        AND Python3_Interpreter_FOUND AND CMAKE_GENERATOR MATCHES "^Visual Studio ")
+    add_test(NAME CaesuraCubismRuntimeLibrary
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_cubism_runtime_library.py
+            --existing-build "${CMAKE_BINARY_DIR}" --configuration "$<CONFIG>"
+            --cmake "${CMAKE_COMMAND}"
+            --helper "${CMAKE_SOURCE_DIR}/cmake/CaesuraCubismRuntime.cmake"
+            --core-dir "${CUBISM_CORE_DIR}"
+            --work-root "${CMAKE_CURRENT_BINARY_DIR}/cubism-crt-validation"
+            --generator "${CMAKE_GENERATOR}"
+            --generator-instance "${CMAKE_GENERATOR_INSTANCE}")
+    set_tests_properties(CaesuraCubismRuntimeLibrary PROPERTIES
+        LABELS "live2d;cmake;validation"
+        RUN_SERIAL TRUE
+        TIMEOUT 720
+        PASS_REGULAR_EXPRESSION "ALL CUBISM CRT CONFIGURATION TESTS PASSED")
+endif()
+
 # Always refresh runtime fixtures when CaesuraTests is built, including when
 # only Lua/demo/assets changed and the C++ executable does not relink.
 add_custom_target(CaesuraTestAssets

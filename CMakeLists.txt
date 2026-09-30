@@ -385,16 +385,11 @@ if(CAESURA_LIVE2D)
         set(CUBISM_PLATFORM_LIBRARIES)
 
         # --- Cubism Core (prebuilt) ---
-        add_library(Live2DCubismCore STATIC IMPORTED)
         if(WIN32)
             if(NOT MSVC)
                 message(FATAL_ERROR "Live2D Cubism Core on Windows requires MSVC")
             endif()
-            set_target_properties(Live2DCubismCore PROPERTIES
-                IMPORTED_LOCATION "${CUBISM_CORE_DIR}/lib/windows/x86_64/143/Live2DCubismCore_MT.lib"
-                IMPORTED_LOCATION_DEBUG "${CUBISM_CORE_DIR}/lib/windows/x86_64/143/Live2DCubismCore_MTd.lib"
-                INTERFACE_INCLUDE_DIRECTORIES "${CUBISM_CORE_DIR}/include"
-            )
+            include(cmake/CaesuraCubismRuntime.cmake)
             set(CUBISM_FRAMEWORK_RENDERER D3D11)
             list(APPEND CUBISM_PLATFORM_LIBRARIES d3d11 d3dcompiler)
             list(APPEND CUBISM_ENGINE_RENDER_PATH_SRCS
@@ -402,6 +397,7 @@ if(CAESURA_LIVE2D)
                 src/live2d/Live2D/D3D11NativeRenderPath.cpp
             )
         elseif(APPLE)
+            add_library(Live2DCubismCore STATIC IMPORTED)
             set_target_properties(Live2DCubismCore PROPERTIES
                 IMPORTED_LOCATION "${CUBISM_CORE_DIR}/lib/macos/${CAESURA_CUBISM_ARCH}/libLive2DCubismCore.a"
                 INTERFACE_INCLUDE_DIRECTORIES "${CUBISM_CORE_DIR}/include"
@@ -419,6 +415,7 @@ if(CAESURA_LIVE2D)
                 PROPERTIES LANGUAGE OBJCXX
             )
         elseif(UNIX)
+            add_library(Live2DCubismCore STATIC IMPORTED)
             set_target_properties(Live2DCubismCore PROPERTIES
                 IMPORTED_LOCATION "${CUBISM_CORE_DIR}/lib/linux/${CAESURA_CUBISM_ARCH}/libLive2DCubismCore.a"
                 INTERFACE_INCLUDE_DIRECTORIES "${CUBISM_CORE_DIR}/include"
@@ -458,6 +455,10 @@ if(CAESURA_LIVE2D)
         )
 
         add_library(CubismFramework STATIC ${CUBISM_FRAMEWORK_SRCS})
+        if(WIN32)
+            caesura_add_windows_cubism_core(
+                Live2DCubismCore "${CUBISM_CORE_DIR}" CubismFramework)
+        endif()
         target_include_directories(CubismFramework PUBLIC
             "${CUBISM_FRAMEWORK_DIR}/src"
             "${CUBISM_CORE_DIR}/include"

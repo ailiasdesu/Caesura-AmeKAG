@@ -515,7 +515,11 @@ class WebPackageRuntimeTests(unittest.TestCase):
                     moved = lease.path.with_name(lease.path.name + '-retained-original')
                     (lease.path / 'original').write_text('keep owned original')
                     lease.path.rename(moved)
-                    replacement = self.root / ('replacement-' + kind)
+                    # Directory replacement uses an atomic rename, so stage it
+                    # on the lease's filesystem. TMPDIR may be a different mount
+                    # from the short /tmp root needed for Chrome's Unix sockets.
+                    replacement_root = moved if kind == 'directory' else self.root
+                    replacement = replacement_root / ('replacement-' + kind)
                     replacement.mkdir()
                     (replacement / 'foreign').write_text('keep replacement')
                     if kind == 'directory':

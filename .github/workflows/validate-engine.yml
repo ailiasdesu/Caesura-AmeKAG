@@ -496,7 +496,7 @@ jobs:
         base = Path(os.environ["RUNNER_TEMP"]).resolve(strict=True)
         suffix = "-".join(os.environ[k] for k in ("GITHUB_JOB", "GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT"))
         with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as out:
-            for key, name in (("EXECUTION_WORK", "u23-execution"), ("PACKAGE_WORK", "u23-package")):
+            for key, name in (("EXECUTION_WORK", "u23-execution"), ("PACKAGE_WORK", "u23-package"), ("CROSSFS_WORK", "u29-web-runtime-crossfs")):
                 out.write(key + "=" + str(base / (name + "-" + suffix)) + "\n")
     - name: Install workflow test parser
       shell: bash
@@ -504,6 +504,17 @@ jobs:
     - uses: actions/setup-node@v4
       with:
         node-version: 22.23.2
+    - name: Complete Web runtime suite across real filesystems
+      id: crossfs
+      shell: bash
+      run: python scripts/ci_web_runtime_crossfs.py --work "$CROSSFS_WORK" --source-sha "$SOURCE_SHA"
+    - name: Preserve cross-filesystem Web runtime evidence
+      if: always() && steps.crossfs.outcome != 'skipped' && env.CROSSFS_WORK != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: u29-web-runtime-crossfs-${{ github.run_id }}-${{ github.run_attempt }}
+        path: ${{ env.CROSSFS_WORK }}/
+        if-no-files-found: error
     - name: Install Dependencies
       run: |
         sudo apt-get update

@@ -267,6 +267,9 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
     capture_thumbnail: () => null,
   }
   const jsBackend = {
+    // Emscripten's errno domain: ENOENT=44, EACCES=2. Do not use native
+    // libc numbers or localized messages for transactional locale reads.
+    is_file_missing_error: (errno) => errno === 44,
     // Logical resolution for the Lua layout stack (scripts/viewport.lua):
     // the web player's #stage is the render target, so viewport-following
     // layout defaults (bg/fg layer sizes, message box, dialogue positions)
