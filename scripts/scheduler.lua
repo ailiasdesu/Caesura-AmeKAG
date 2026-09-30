@@ -502,6 +502,11 @@ function scheduler.run(ctx, tokens, start_index)
                 ctx.current_scene = path
                 ctx.label_index = nil  -- raw tokens: run() entry rebuilds
                 refresh_compiled()
+                -- load_tokens also signals run-ending scene replacements.
+                -- This call has already entered the callee in this coroutine;
+                -- do not let a later callee-local choice inherit that signal.
+                -- Actual cross-scene jump/link replacements still set it.
+                ctx._scene_changed = false
                 i = 0
             elseif new_tokens then
                 -- [round 98] cross-scene switch budget: an A<->B [call] chain
