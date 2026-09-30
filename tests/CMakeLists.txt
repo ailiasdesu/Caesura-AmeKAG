@@ -773,7 +773,7 @@ if(WIN32 AND MSVC AND CAESURA_LIVE2D AND TARGET Live2DCubismCore
             --cmake "${CMAKE_COMMAND}"
             --helper "${CMAKE_SOURCE_DIR}/cmake/CaesuraCubismRuntime.cmake"
             --core-dir "${CUBISM_CORE_DIR}"
-            --work-root "${CMAKE_CURRENT_BINARY_DIR}/cubism-crt-validation"
+            --work-root "${CMAKE_BINARY_DIR}/crt"
             --generator "${CMAKE_GENERATOR}"
             --generator-instance "${CMAKE_GENERATOR_INSTANCE}")
     set_tests_properties(CaesuraCubismRuntimeLibrary PROPERTIES

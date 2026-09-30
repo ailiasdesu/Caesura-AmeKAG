@@ -635,11 +635,14 @@ class WebPackageRuntimeTests(unittest.TestCase):
         existing = self.root / 'existing'
         existing.mkdir()
         (existing / 'notes').write_text('preserve', encoding='utf-8')
-        for attempt in (existing, ROOT / 'artifacts' / 'must-not-create-web-runtime-test'):
+        # ROOT exists in a clean checkout; rejection must not depend on a
+        # generated artifacts directory being present before this test runs.
+        repo_attempt = ROOT / 'must-not-create-web-runtime-test'
+        for attempt in (existing, repo_attempt):
             with self.subTest(attempt=attempt), self.assertRaises(RuntimeContractError):
                 run_web_package(self.package, attempt, **kwargs)
         self.assertEqual((existing / 'notes').read_text(), 'preserve')
-        self.assertFalse((ROOT / 'artifacts' / 'must-not-create-web-runtime-test').exists())
+        self.assertFalse(repo_attempt.exists())
 
 
 if __name__ == '__main__':

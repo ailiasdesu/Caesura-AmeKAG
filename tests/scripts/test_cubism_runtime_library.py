@@ -80,8 +80,8 @@ def matrix(args: argparse.Namespace) -> list[dict]:
          ('MultiThreadedDebugDLL', 'MultiThreadedDLL')),
     ]
     results = []
-    for name, value, expected_runtimes in cases:
-        work = root / name
+    for index, (name, value, expected_runtimes) in enumerate(cases):
+        work = root / str(index)
         source, build = work / 'source', work / 'build'
         source.mkdir(parents=True)
         (source / 'framework.cpp').write_text(
