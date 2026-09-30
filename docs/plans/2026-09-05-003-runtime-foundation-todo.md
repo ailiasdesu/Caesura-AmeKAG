@@ -1,5 +1,18 @@
 # 当前待办与进度
 
+## 2026-10-01 当前接续
+
+当前代码为 `c68ffbc02cccda227a85b104013124b55d415326`，详情见[c68 执行记录](2026-10-01-001-candidate-runtime-fixture-validation.md)。locale/首条 save/CRT/验证夹具修复、当前 SDK11＋strict、CrossFS30、Windows27、Web642与AE4各有实际原件或明确源码复用桥；它们不是全平台或完整交付通过。原 bef1 SDK FAIL、当前 CI 平台文档 freshness FAIL、早期长跑失败与 CPU INCONCLUSIVE 均保留。
+
+- [ ] 文档同步后按正常新候选流程完成 CI／必需 Verify／aggregate，并取回同 source/run/attempt 的最终包；旧失败不改记。
+- [ ] 当前 Foundation Release strict 和本地 SoakProbe 身份闭合后，再完成固定合同的当前一小时 long。
+- [ ] 当前 SDK strict 已作为前置接受；继续 P6 的当前输入、导出与实际场景验收，不能以该 strict 代替 P6。
+- [ ] 保持完整 native author/恢复与 Web author12＋cold2、AE5 等独立范围；未来包字段在实际产出前保持 PENDING。
+- [ ] 用户指定 EAS Apple 三 lane 与设备／账号／物理输出按各自条件继续，不以其他平台替代。
+
+完整目标仍为 U1–U29，底层优先、Studio 暂停。以下日期段落保留各自历史证据，不覆盖本节。
+
+
 2026-09-30 最新接续：[被调用场景选择跳转修复与 3a3 验收记录](2026-09-30-001-called-scene-choice-validation.md)。3a3 一小时长跑、AE5 有界真实音频、四组密钥对照和坏包后旧包回退已分别复核；最终包 AE3 在读档前因 callee 本地选择被旧场景切换标记丢弃而失败。当前最小 Lua 修复取得真实红绿、完整 Lua 和单文件原生替换诊断，仍待新候选完整门禁／最终包，不表示 U1–U29 完成。
 
 ## 2026-09-28 当前接续

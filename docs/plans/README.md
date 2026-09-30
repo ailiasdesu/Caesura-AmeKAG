@@ -1,5 +1,7 @@
 # 当前迭代计划
 
+2026-10-01 最新接续：[c68 运行时、验证夹具修复与当前证据接续](2026-10-01-001-candidate-runtime-fixture-validation.md)。locale 错误域、首条 callee save、CRT 与 clean-checkout/CrossFS 夹具修复已取得分项真实证据；当前 SDK-ON Debug 完整11项与 strict 已通过，Linux CrossFS30、Windows27、Web642及AE4分别按源绑定接受。当前 CI 因平台文档 freshness 失败，P6、当前 Release/long、最终包与作者恢复验收继续；本次仅同步文档锚，不提升能力行或宣布 U1–U29 完成。
+
 2026-09-30 最新接续：[托管 JDK 输入隔离与来源闭包](2026-09-30-004-controlled-jdk-inputs.md)。已实测拒绝项是指向根外系统信任库的 cacerts 链接；新输入准备器保持严格路径和签名规则，单独锁定明确依赖并生成普通文件镜像。输出目录约束采用真实验证的普通读取句柄方案；当前完整复验与新版独审均通过，真实 hosted 链继续，旧候选失败不改记。
 
 2026-09-30 最新接续：[托管 Android 工具路径前置诊断与 Windows 回执编码回归](2026-09-30-003-hosted-android-toolchain-preflight.md)。d880 的 Android 原生编译通过，但严格工具路径清点拒绝未定位链接；本地完整 Release 因测试默认编码读取 UTF-8 回执失败。隔离增量保留全部拒绝规则，增加前置精确诊断并修正两处测试读取；真实 CP936 完整驱动／包套件 88/88。实际托管路径仍待取证，完整目标不变。
