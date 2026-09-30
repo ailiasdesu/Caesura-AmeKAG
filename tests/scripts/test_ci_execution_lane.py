@@ -405,6 +405,22 @@ class WorkflowContractTests(unittest.TestCase):
                                       "Unset work path after a guard failure must never resolve to runner root")
         self.assertEqual(selected, 12)
 
+    def test_android_jdk_receipt_binds_mirror_and_explicit_cacerts_without_global_java_change(self):
+        steps=self.jobs['android-compile']['steps']
+        ca=next(s for s in steps if s.get('id')=='jdk_cacerts')
+        prepared=next(s for s in steps if s.get('id')=='jdk_inputs')
+        self.assertIn('ci_jdk_inputs.py select-cacerts',ca['run'])
+        self.assertIn('--path /etc/ssl/certs/adoptium/cacerts',ca['run'])
+        self.assertNotIn('sha256sum',ca['run'])
+        self.assertIn('--external-receipt-sha256 "$CA_RECEIPT_SHA256"',prepared['run'])
+        self.assertNotIn('JAVA_HOME=',prepared['run'])
+        for step in [s for s in steps if 'ci_android_package.py preflight' in s.get('run','') or s.get('id')=='android_package']:
+            self.assertIn('--jdk-root "$JDK_INPUT_ROOT"',step['run'])
+            self.assertIn('--jdk-input-receipt "$JDK_INPUT_RECEIPT"',step['run'])
+            self.assertIn('--jdk-input-sha256 "$JDK_INPUT_SHA256"',step['run'])
+            self.assertEqual(step['env']['JDK_INPUT_ROOT'],'${{ steps.jdk_inputs.outputs.jdk_root }}')
+            self.assertNotIn('continue-on-error',step)
+
     def test_android_tool_preflight_precedes_compilation_without_replacing_package_gate(self):
         job=self.jobs['android-compile'];steps=job['steps']
         pre=[i for i,s in enumerate(steps) if 'ci_android_package.py preflight' in s.get('run','')]

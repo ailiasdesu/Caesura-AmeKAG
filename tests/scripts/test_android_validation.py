@@ -1038,8 +1038,10 @@ class AndroidCIJobTests(unittest.TestCase):
         self.assertIsNotNone(self.adapter, 'CI must invoke the strict existing Android package contract')
         self.fixture.sequence += 1
         self.fixture.work = self.fixture.root / ('ci-' + str(self.fixture.sequence))
+        prepared=self.prepared_jdk()
         args = dict(repo=self.fixture.repo, source_sha=self.fixture.head, native_library=self.native,
-                    sdl_root=self.fixture.root/'tools/sdl', jdk_root=self.fixture.root/'tools/jdk',
+                    sdl_root=self.fixture.root/'tools/sdl', jdk_root=Path(prepared['mirror_root']),
+                    jdk_input_receipt=prepared['receipt_path'],jdk_input_sha256=prepared['receipt_sha256'],
                     sdk_root=self.fixture.root/'tools/sdk', ndk_root=self.fixture.root/'tools/ndk',
                     gradle_root=self.fixture.root/'tools/gradle',
                     bundletool_jar=self.fixture.root/'tools/bundletool/bundletool_jar',
@@ -1047,6 +1049,11 @@ class AndroidCIJobTests(unittest.TestCase):
         # Use the same already-checked ordinary Git launcher as the driver fixture.
         with patch.dict(os.environ, {'PATH':str(Path(self.fixture.git).parent)+os.pathsep+os.environ.get('PATH','')}):
             return self.adapter.run_ci_android_package(**args)
+
+    def prepared_jdk(self):
+        import ci_jdk_inputs
+        number=getattr(self,'jdk_preparation_count',0)+1;self.jdk_preparation_count=number
+        return ci_jdk_inputs.prepare_jdk_inputs(self.fixture.root/'tools/jdk',self.fixture.root/('jdk-prepared-'+str(number)))
 
     def linked_jdk_input(self):
         root=self.fixture.root/'tools/jdk'
@@ -1057,25 +1064,23 @@ class AndroidCIJobTests(unittest.TestCase):
         return root,link
 
     def tool_arguments(self):
-        return dict(jdk_root=self.fixture.root/'tools/jdk',sdk_root=self.fixture.root/'tools/sdk',
+        prepared=self.prepared_jdk()
+        return dict(jdk_root=Path(prepared['mirror_root']),jdk_input_receipt=prepared['receipt_path'],
+                    jdk_input_sha256=prepared['receipt_sha256'],sdk_root=self.fixture.root/'tools/sdk',
                     ndk_root=self.fixture.root/'tools/ndk',gradle_root=self.fixture.root/'tools/gradle',
                     bundletool_jar=self.fixture.root/'tools/bundletool/bundletool_jar')
 
-    def test_jdk_link_rejection_retains_exact_path_without_running_tools(self):
+    def test_raw_jdk_link_rejection_retains_exact_path_without_running_tools(self):
         root,link=self.linked_jdk_input()
-        with self.assertRaisesRegex(ValueError,'Evidence path must not traverse a link'):
-            self.call()
-        report=json.loads((self.fixture.work/'ci-android-package.json').read_bytes())
-        self.assertEqual(report['stage'],'tool-selection')
-        failure=report['tool_selection_failure']
+        with self.assertRaisesRegex(ValueError,'Evidence path must not traverse a link') as caught:
+            self.adapter._component(root,['bin','lib','conf','release'],'jdk')
+        failure=caught.exception.tool_selection_failure
         self.assertEqual(failure['component'],'jdk')
         self.assertEqual(failure['path_check']['requested_path'],str(link))
         selected=next(x for x in failure['path_check']['ancestors'] if x['path']==str(link))
         self.assertTrue(selected['is_symlink'])
         self.assertEqual(selected['link_target'],os.readlink(link))
         self.assertEqual(selected['resolved_target'],str((root/'lib/libjsig.so').resolve()))
-        self.assertEqual(report['commands'],[])
-        self.assertEqual(report['private_cleanup'],'NOT_CREATED')
         self.assertFalse(self.fixture.calls)
 
     def test_preflight_reuses_tools_and_never_waives_postbuild_sdl(self):
@@ -1093,19 +1098,40 @@ class AndroidCIJobTests(unittest.TestCase):
             self.call()
         self.assertFalse(self.fixture.calls)
 
-    def test_preflight_cli_prints_original_link_rejection_and_fails(self):
-        _,link=self.linked_jdk_input()
+    def test_preflight_cli_refuses_host_root_without_matching_mirror(self):
+        arguments=self.tool_arguments();arguments['jdk_root']=self.fixture.root/'tools/jdk'
         args=['preflight']
-        for key,value in self.tool_arguments().items():args.extend(['--'+key.replace('_','-'),str(value)])
+        for key,value in arguments.items():args.extend(['--'+key.replace('_','-'),str(value)])
         output=io.StringIO()
         with redirect_stdout(output):code=self.adapter.main(args)
         self.assertEqual(code,1)
         report=json.loads(output.getvalue())
         self.assertEqual(report['status'],'FAIL')
-        self.assertEqual(report['error'],'Evidence path must not traverse a link')
-        self.assertEqual(report['tool_selection_failure']['component'],'jdk')
-        self.assertEqual(report['tool_selection_failure']['path_check']['requested_path'],str(link))
+        self.assertIn('differs from prepared ordinary mirror',report['error'])
         self.assertFalse(self.fixture.calls)
+
+    def test_final_and_preflight_refuse_fixture_jdk_receipt_without_fixture_runner(self):
+        import ci_jdk_inputs
+        ca=put(self.fixture.root/'external/cacerts',b'fixture CA')
+        link=self.fixture.root/'tools/jdk/lib/security/cacerts';link.parent.mkdir(parents=True)
+        link.symlink_to(ca)
+        selected=ci_jdk_inputs.select_cacerts(ca,self.fixture.root/'ca-selection',_fixture_path=ca)
+        prepared=ci_jdk_inputs.prepare_jdk_inputs(self.fixture.root/'tools/jdk',self.fixture.root/'fixture-jdk',
+            external_receipt=selected['receipt_path'],external_receipt_sha256=selected['receipt_sha256'],_allow_fixture=True)
+        args=dict(jdk_root=Path(prepared['mirror_root']),jdk_input_receipt=prepared['receipt_path'],
+                  jdk_input_sha256=prepared['receipt_sha256'],sdk_root=self.fixture.root/'tools/sdk',
+                  ndk_root=self.fixture.root/'tools/ndk',gradle_root=self.fixture.root/'tools/gradle',
+                  bundletool_jar=self.fixture.root/'tools/bundletool/bundletool_jar')
+        with self.assertRaisesRegex(ValueError,'Fixture'):
+            self.adapter.preflight_toolchain(**args)
+        with self.assertRaisesRegex(ValueError,'Fixture'):
+            self.adapter.run_ci_android_package(**args,repo=self.fixture.repo,source_sha=self.fixture.head,
+                native_library=self.native,sdl_root=self.fixture.root/'tools/sdl',work_dir=self.fixture.root/'real-final')
+        self.assertFalse(self.fixture.calls)
+        output=io.StringIO()
+        with redirect_stdout(output):code=ci_jdk_inputs.main(['verify','--receipt',prepared['receipt_path'],'--sha256',prepared['receipt_sha256']])
+        self.assertEqual(code,1);self.assertIn('Fixture',json.loads(output.getvalue())['error'])
+
 
     def test_existing_jni_unsigned_sign_verify_without_native_rebuild(self):
         with patch.dict(os.environ, {'CAESURA_ANDROID_KEYSTORE':'must-not-pass',
@@ -1129,6 +1155,7 @@ class AndroidCIJobTests(unittest.TestCase):
             for key in ('CAESURA_ANDROID_KEYSTORE','CAESURA_KEYSTORE_PATH','JAVA_TOOL_OPTIONS'):
                 self.assertNotIn(key, env)
         self.assertEqual(self.adapter.verify_ci_android_package_stable(report)['status'], 'CI_ANDROID_PACKAGE_STABLE')
+        self.assertTrue((self.fixture.work/'proof/jdk-source-receipt.json').is_file())
         proof = self.fixture.work/'proof/ci-android-package.json'
         original = proof.read_bytes();proof.write_bytes(b'changed proof copy')
         with self.assertRaises((ValueError, RuntimeError)):
@@ -1173,6 +1200,226 @@ class AndroidCIJobTests(unittest.TestCase):
         with patch.object(self.adapter, 'BUNDLETOOL_SHA256', '0'*64):
             with self.assertRaisesRegex(ValueError, 'bundletool'):
                 self.adapter.verify_bundletool(self.fixture.root/'tools/bundletool/bundletool_jar')
+
+
+class CIJdkInputsTests(unittest.TestCase):
+    """Actual files and links; no Java, Gradle or native build is invoked."""
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory(prefix='jdk inputs 中文 ')
+        self.addCleanup(self.temp.cleanup);self.root=Path(self.temp.name).resolve()
+        self.jdk=self.root/'jdk';self.ca=put(self.root/'external/cacerts',b'host CA fixture')
+        for path,data in {'bin/java':b'java','bin/keytool':b'keytool','bin/jarsigner':b'jarsigner',
+                'lib/modules':b'modules','lib/libjsig.so':b'jsig','conf/security/java.security':b'config',
+                'release':b'JAVA_VERSION="17.0.20"'}.items():put(self.jdk/path,data)
+        try:
+            import ci_jdk_inputs
+            self.subject=ci_jdk_inputs
+        except ModuleNotFoundError:self.subject=None
+        self.count=0
+
+    def call(self,**kw):
+        self.assertIsNotNone(self.subject,'Controlled JDK input preparation missing')
+        self.count+=1;self.work=self.root/('attempt-'+str(self.count))
+        return self.subject.prepare_jdk_inputs(self.jdk,self.work,**kw)
+
+    def link(self,name,target):
+        path=self.jdk/name;path.parent.mkdir(parents=True,exist_ok=True)
+        path.symlink_to(target);return path
+
+    def verify(self,result,**kw):
+        return self.subject.verify_jdk_inputs(result['receipt_path'],result['receipt_sha256'],**kw)
+
+    def test_plain_and_internal_alias_materialize_independent_ordinary_bytes(self):
+        link=self.link('lib/server/libjsig.so',Path('..')/'libjsig.so')
+        result=self.call();mirror=Path(result['mirror_root'])
+        self.assertEqual(result['status'],'JDK_INPUTS_PREPARED')
+        self.assertFalse((mirror/'lib/server/libjsig.so').is_symlink())
+        self.assertEqual((mirror/'lib/server/libjsig.so').stat().st_nlink,1)
+        self.assertEqual((mirror/'lib/server/libjsig.so').read_bytes(),b'jsig')
+        self.assertTrue(link.is_symlink());self.assertEqual(link.read_bytes(),b'jsig')
+        self.assertEqual(self.verify(result)['status'],'JDK_INPUTS_STABLE')
+        self.assertEqual(result['source']['requested_root'],str(self.jdk))
+        self.assertEqual(result['source']['resolved_root'],str(self.jdk))
+
+    def test_declared_external_cacerts_is_fixture_bound_and_not_real_acceptance(self):
+        self.assertIsNotNone(self.subject)
+        self.link('lib/security/cacerts',self.ca)
+        selected=self.subject.select_cacerts(self.ca,self.root/'ca-selection',_fixture_path=self.ca)
+        result=self.call(external_receipt=selected['receipt_path'],external_receipt_sha256=selected['receipt_sha256'],_allow_fixture=True)
+        self.assertEqual(result['status'],'FIXTURE_JDK_INPUTS')
+        self.assertEqual((Path(result['mirror_root'])/'lib/security/cacerts').read_bytes(),self.ca.read_bytes())
+        with self.assertRaises(ValueError):self.verify(result)
+        self.assertEqual(self.verify(result,allow_fixture=True)['status'],'JDK_INPUTS_STABLE')
+        self.ca.write_bytes(b'changed CA')
+        with self.assertRaises(ValueError):self.verify(result,allow_fixture=True)
+
+    def test_external_source_requires_exact_declared_role_and_path(self):
+        self.assertIsNotNone(self.subject)
+        with self.assertRaises(ValueError):self.subject.select_cacerts(self.ca,self.root/'real-selection')
+        selected=self.subject.select_cacerts(self.ca,self.root/'ca-selection',_fixture_path=self.ca)
+        self.link('lib/another-name',self.ca)
+        with self.assertRaises(ValueError):self.call(external_receipt=selected['receipt_path'],external_receipt_sha256=selected['receipt_sha256'],_allow_fixture=True)
+
+    def test_cacerts_lock_refuses_links_and_hardlinks_before_content_selection(self):
+        self.assertIsNotNone(self.subject)
+        alias=self.root/'external/alias';alias.symlink_to(self.ca)
+        with self.assertRaises(ValueError):self.subject.select_cacerts(alias,self.root/'alias-selection',_fixture_path=alias)
+        hard=self.root/'external/hard';os.link(self.ca,hard)
+        with self.assertRaises(ValueError):self.subject.select_cacerts(self.ca,self.root/'hard-selection',_fixture_path=self.ca)
+
+    def test_directory_chain_escape_and_parent_hop_links_are_rejected(self):
+        outside=put(self.root/'outside/value',b'outside')
+        directory=self.jdk/'lib/directory';directory.symlink_to(outside.parent,target_is_directory=True)
+        with self.assertRaises(ValueError):self.call()
+        directory.unlink()
+        first=self.link('lib/first',self.jdk/'lib/libjsig.so')
+        second=self.link('lib/second',first)
+        with self.assertRaises(ValueError):self.call()
+        first.unlink();second.unlink()
+        escaped=self.link('lib/escape',outside)
+        with self.assertRaises(ValueError):self.call()
+        escaped.unlink()
+        hop=self.jdk/'lib/hop';hop.symlink_to(outside.parent,target_is_directory=True)
+        self.link('lib/misleading',Path('hop')/'..'/'libjsig.so')
+        with self.assertRaises(ValueError):self.call()
+
+    def test_existing_or_overlapping_output_is_not_written(self):
+        self.assertIsNotNone(self.subject)
+        existing=self.root/'existing';existing.mkdir();keep=put(existing/'keep',b'original')
+        with self.assertRaises((ValueError,FileExistsError)):self.subject.prepare_jdk_inputs(self.jdk,existing)
+        self.assertEqual(keep.read_bytes(),b'original')
+        inside=self.jdk/'output'
+        with self.assertRaises(ValueError):self.subject.prepare_jdk_inputs(self.jdk,inside)
+        self.assertFalse(inside.exists())
+        with self.assertRaises(ValueError):self.subject.prepare_jdk_inputs(self.jdk,self.root)
+
+    def test_source_link_target_or_mirror_change_invalidates_receipt(self):
+        link=self.link('lib/server/libjsig.so',Path('..')/'libjsig.so')
+        result=self.call();self.verify(result)
+        original=os.readlink(link);link.unlink();link.symlink_to(Path('..')/'modules')
+        with self.assertRaises(ValueError):self.verify(result)
+        link.unlink();link.symlink_to(original)
+        with self.assertRaises(ValueError):self.verify(result)
+        other=self.call();(Path(other['mirror_root'])/'bin/java').write_bytes(b'changed')
+        with self.assertRaises(ValueError):self.verify(other)
+
+    def test_fd_path_replacement_during_copy_is_rejected_and_partial_retained(self):
+        self.assertIsNotNone(self.subject)
+        original=self.subject._copy_file;mutated=[]
+        def change(*args,**kw):
+            if not mutated:
+                target=self.jdk/'bin/java';data=target.read_bytes();target.unlink();target.write_bytes(data);mutated.append(True)
+            return original(*args,**kw)
+        with patch.object(self.subject,'_copy_file',side_effect=change):
+            with self.assertRaises(ValueError):self.call()
+        self.assertTrue(mutated)
+        self.assertEqual(json.loads((self.work/'jdk-inputs.json').read_bytes())['status'],'FAIL')
+        self.assertTrue(self.work.exists())
+
+    def test_mirror_replacement_between_copy_and_seal_is_rejected(self):
+        self.assertIsNotNone(self.subject)
+        original=self.subject._copy_file;changed=[]
+        def replace(source,destination,*args,**kwargs):
+            value=original(source,destination,*args,**kwargs)
+            if not changed:
+                data=destination.read_bytes();destination.unlink();destination.write_bytes(data);changed.append(True)
+            return value
+        with patch.object(self.subject,'_copy_file',side_effect=replace):
+            with self.assertRaisesRegex(ValueError,'Mirror replaced'):self.call()
+        self.assertEqual(json.loads((self.work/'jdk-inputs.json').read_bytes())['status'],'FAIL')
+
+    def test_declared_root_resolution_and_time_budget_remain_bound(self):
+        self.assertIsNotNone(self.subject)
+        alias=self.root/'jdk-alias';alias.symlink_to(self.jdk,target_is_directory=True)
+        result=self.subject.prepare_jdk_inputs(alias,self.root/'root-alias-work')
+        self.assertEqual(result['source']['requested_root'],str(alias))
+        self.assertEqual(result['source']['resolved_root'],str(self.jdk))
+        self.verify(result)
+        alias.unlink();alias.symlink_to(self.root,target_is_directory=True)
+        with self.assertRaises(ValueError):self.verify(result)
+        with patch.object(self.subject,'SECONDS',0):
+            with self.assertRaisesRegex(ValueError,'deadline'):self.call()
+        self.assertEqual(json.loads((self.work/'jdk-inputs.json').read_bytes())['status'],'FAIL')
+
+    def test_byte_limit_failure_retains_first_failure(self):
+        self.assertIsNotNone(self.subject)
+        with patch.object(self.subject,'MAX_BYTES',4):
+            with self.assertRaises(ValueError):self.call()
+        self.assertEqual(json.loads((self.work/'jdk-inputs.json').read_bytes())['status'],'FAIL')
+
+    def test_parent_swap_after_check_cannot_create_in_redirected_directory(self):
+        parent=self.root/'selected-parent';parent.mkdir()
+        foreign=self.root/'foreign-parent';foreign.mkdir()
+        saved=self.root/'saved-parent';destination=parent/'copy.bin'
+        original=self.subject._plain;changed=[]
+        def swap(path,directory=False):
+            result=original(path,directory)
+            if Path(path)==parent and directory and not changed:
+                parent.rename(saved);parent.symlink_to(foreign,target_is_directory=True);changed.append(True)
+            return result
+        with patch.object(self.subject,'_plain',side_effect=swap):
+            with self.assertRaises((ValueError,OSError)):
+                self.subject._read_file(self.jdk/'bin/java',self.subject.Budget(),destination)
+        self.assertTrue(changed)
+        self.assertFalse((foreign/'copy.bin').exists(),'Rejected operation created a file through redirected parent')
+
+    def test_real_parent_rename_at_os_mutation_boundary_never_redirects_outputs(self):
+        from package_verification import PackageVerificationError
+        for kind in ('copy','receipt','directory','output-new','output-append'):
+            with self.subTest(kind=kind):
+                area=self.root/kind;area.mkdir()
+                parent=area/'parent';parent.mkdir()
+                foreign=area/'foreign';foreign.mkdir()
+                destination=parent/'payload';saved=area/'saved'
+                if kind=='output-append':put(destination,b'original\n')
+                calls=[];denials=[];native=self.subject._native_relative
+                def swap(bound,name,kind):
+                    if bound.path==parent and name==destination.name and not calls:
+                        calls.append(True)
+                        try:
+                            parent.rename(saved);parent.symlink_to(foreign,target_is_directory=True)
+                        except OSError as error:
+                            denials.append((error.errno,getattr(error,'winerror',None)))
+                            if os.name!='nt':raise
+                    return native(bound,name,kind)
+                def invoke():
+                    if kind=='copy':self.subject._read_file(self.jdk/'bin/java',self.subject.Budget(),destination)
+                    elif kind=='receipt':self.subject._save(destination,{'value':'receipt'})
+                    elif kind=='directory':self.subject._mkdir(destination)
+                    else:self.subject._outputs(destination,{'receipt':'bound'})
+                with patch.object(self.subject,'_native_relative',side_effect=swap):
+                    try:invoke()
+                    except (ValueError,OSError,PackageVerificationError):
+                        self.assertFalse(denials)
+                    else:
+                        self.assertEqual(len(denials),1,'Success requires actual OS refusal of parent rename')
+                        self.assertIn(denials[0][1],(5,32))
+                self.assertEqual(len(calls),1,'Actual OS mutation hook must run exactly once')
+                if not denials:
+                    self.assertTrue(saved.is_dir())
+                    self.assertTrue(parent.is_symlink())
+                    self.assertTrue((saved/'payload').exists(),'Real relative syscall must target the originally bound directory')
+                    if kind=='output-append':self.assertEqual((saved/'payload').read_bytes(),b'original\n')
+                self.assertEqual(list(foreign.iterdir()),[],'No file or directory may be created in redirected target')
+                print(json.dumps(dict(control='output_parent_rename',kind=kind,platform=os.name,
+                    rename_attempts=len(calls),os_denials=denials,rename_succeeded=saved.exists(),
+                    foreign_entries=[p.name for p in foreign.iterdir()])))
+                if os.name=='nt':
+                    self.assertEqual(len(denials),1,'Windows read/list directory handle must refuse the actual rename')
+                    self.assertEqual(denials[0][1],32)
+
+    def test_github_output_leaf_swap_is_refused_before_append(self):
+        target=put(self.root/'outputs/value',b'original\n')
+        foreign=put(self.root/'foreign-value',b'untouched')
+        native=self.subject._native_relative;calls=[]
+        def swap(parent,name,kind):
+            if kind=='append' and not calls:
+                calls.append(True);target.unlink();target.symlink_to(foreign)
+            return native(parent,name,kind)
+        with patch.object(self.subject,'_native_relative',side_effect=swap):
+            with self.assertRaises((ValueError,OSError)):self.subject._outputs(target,{'value':'must not append'})
+        self.assertEqual(len(calls),1)
+        self.assertEqual(foreign.read_bytes(),b'untouched')
 
 
 if __name__ == '__main__':

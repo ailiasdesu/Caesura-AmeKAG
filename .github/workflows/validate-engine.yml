@@ -1657,12 +1657,38 @@ jobs:
         echo "GRADLE_ROOT=$RUNNER_TEMP/gradle-8.9" >> "$GITHUB_ENV"
         curl --fail --location --max-time 180 https://github.com/google/bundletool/releases/download/1.17.1/bundletool-all-1.17.1.jar -o "$RUNNER_TEMP/bundletool-all-1.17.1.jar"
         echo "45881ead13388872d82c4255b195488b7fc33f2cac5a9a977b0afc5e92367592  $RUNNER_TEMP/bundletool-all-1.17.1.jar" | sha256sum --check
-    - name: Preflight fixed Android tools before compilation
+    - name: Lock the explicitly declared host JDK CA input
+      id: jdk_cacerts
       timeout-minutes: 2
       shell: bash
       run: |
+        python -B scripts/ci_jdk_inputs.py select-cacerts \
+          --path /etc/ssl/certs/adoptium/cacerts \
+          --work "$RUNNER_TEMP/u24-jdk-cacerts-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+          --github-output "$GITHUB_OUTPUT"
+    - name: Prepare private ordinary JDK inputs
+      id: jdk_inputs
+      timeout-minutes: 3
+      shell: bash
+      env:
+        CA_RECEIPT: ${{ steps.jdk_cacerts.outputs.receipt }}
+        CA_RECEIPT_SHA256: ${{ steps.jdk_cacerts.outputs.receipt_sha256 }}
+      run: |
+        python -B scripts/ci_jdk_inputs.py prepare --jdk-root "$JAVA_HOME" \
+          --external-receipt "$CA_RECEIPT" --external-receipt-sha256 "$CA_RECEIPT_SHA256" \
+          --work "$RUNNER_TEMP/u24-jdk-inputs-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+          --github-output "$GITHUB_OUTPUT"
+    - name: Preflight fixed Android tools before compilation
+      timeout-minutes: 2
+      shell: bash
+      env:
+        JDK_INPUT_ROOT: ${{ steps.jdk_inputs.outputs.jdk_root }}
+        JDK_INPUT_RECEIPT: ${{ steps.jdk_inputs.outputs.receipt }}
+        JDK_INPUT_SHA256: ${{ steps.jdk_inputs.outputs.receipt_sha256 }}
+      run: |
         python -B scripts/ci_android_package.py preflight \
-          --jdk-root "$JAVA_HOME" --sdk-root "$ANDROID_SDK_ROOT" \
+          --jdk-root "$JDK_INPUT_ROOT" --sdk-root "$ANDROID_SDK_ROOT" \
+          --jdk-input-receipt "$JDK_INPUT_RECEIPT" --jdk-input-sha256 "$JDK_INPUT_SHA256" \
           --ndk-root "$NDK_DIR" --gradle-root "$GRADLE_ROOT" \
           --bundletool-jar "$RUNNER_TEMP/bundletool-all-1.17.1.jar"
     - name: Build SDL3 Android slice (arm64-v8a)
@@ -1711,11 +1737,16 @@ jobs:
     - name: Build controlled unsigned packages and verify final TEST-signed bytes
       id: android_package
       shell: bash
+      env:
+        JDK_INPUT_ROOT: ${{ steps.jdk_inputs.outputs.jdk_root }}
+        JDK_INPUT_RECEIPT: ${{ steps.jdk_inputs.outputs.receipt }}
+        JDK_INPUT_SHA256: ${{ steps.jdk_inputs.outputs.receipt_sha256 }}
       run: |
         python -B scripts/ci_android_package.py run \
           --repo "$GITHUB_WORKSPACE" --source-sha "$SOURCE_SHA" \
           --native-library "$GITHUB_WORKSPACE/build-android/libCaesuraAmeKAG.so" \
-          --sdl-root "$RUNNER_TEMP/sdl3-android" --jdk-root "$JAVA_HOME" \
+          --sdl-root "$RUNNER_TEMP/sdl3-android" --jdk-root "$JDK_INPUT_ROOT" \
+          --jdk-input-receipt "$JDK_INPUT_RECEIPT" --jdk-input-sha256 "$JDK_INPUT_SHA256" \
           --sdk-root "$ANDROID_SDK_ROOT" --ndk-root "$NDK_DIR" \
           --gradle-root "$GRADLE_ROOT" --bundletool-jar "$RUNNER_TEMP/bundletool-all-1.17.1.jar" \
           --work "$PACKAGE_WORK" --github-output "$GITHUB_OUTPUT"

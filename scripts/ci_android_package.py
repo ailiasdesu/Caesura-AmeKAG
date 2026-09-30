@@ -9,6 +9,7 @@ import argparse, hashlib, json, os, re, shutil, sys
 from pathlib import Path
 import run_android_validation as driver
 import android_package_contract as package
+import ci_jdk_inputs as jdk_inputs
 from ci_package_lane import _new_work, _outputs
 from verify_execution_bundle import _no_links
 
@@ -109,17 +110,35 @@ def _select_tools(jdk, sdk, ndk, gradle, sdl, bundletool, *, fixture):
     return result
 
 
-def preflight_toolchain(*,jdk_root,sdk_root,ndk_root,gradle_root,bundletool_jar,fixture=False):
+def _bind_jdk_inputs(root, receipt, digest, *, fixture):
+    need(receipt is not None and digest is not None,'Prepared JDK source receipt and SHA required')
+    verified=jdk_inputs.verify_jdk_inputs(receipt,digest,allow_fixture=fixture)
+    need(str(_no_links(root))==verified['mirror_root'],'Selected JDK root differs from prepared ordinary mirror')
+    binding=dict(receipt_path=str(receipt),receipt_sha256=digest,mirror_root=verified['mirror_root'])
+    original=driver.load(receipt,digest)
+    if original.get('external'):
+        binding['external_receipt']=dict(path=original['external']['receipt_path'],sha256=original['external']['receipt_sha256'])
+    return binding
+
+
+def preflight_toolchain(*,jdk_root,sdk_root,ndk_root,gradle_root,bundletool_jar,jdk_input_receipt=None,jdk_input_sha256=None,fixture=False):
+    binding=_bind_jdk_inputs(jdk_root,jdk_input_receipt,jdk_input_sha256,fixture=fixture)
     selected=_select_precompile_tools(jdk_root,sdk_root,ndk_root,gradle_root,bundletool_jar,fixture=fixture)
     return dict(status='FIXTURE_TOOLCHAIN_PREFLIGHT' if fixture else 'CI_TOOLCHAIN_PREFLIGHT_VERIFIED',
         release_ready=False,commands=[],sdl='REQUIRES_POST_BUILD_VALIDATION',
         scope='Selected precompile tool files only; no build, package, signature or device acceptance',
         components={name:dict(root=item['root'],paths=item['paths'],files=len(item['files']),
                     directories=len(item['directories'])) for name,item in selected['components'].items()},
-        tools=selected['tools'])
+        tools=selected['tools'],jdk_inputs=binding)
 
 
 def _stable(report):
+    binding=report['jdk_inputs']
+    verified=jdk_inputs.verify_jdk_inputs(binding['receipt_path'],binding['receipt_sha256'],allow_fixture=report.get('fixture') is True)
+    need(verified['mirror_root']==report['toolchain']['components']['jdk']['root'],'JDK provenance mirror differs')
+    package._file(binding['evidence_copy']['path'],binding['receipt_sha256'])
+    if binding.get('external_receipt'):
+        package._file(binding['external_evidence_copy']['path'],binding['external_receipt']['sha256'])
     for selected in [report['native']['library'], *report['outputs'].values(), *report['toolchain']['tools'].values()]:
         package._file(selected['path'], selected['sha256'])
     for component in report['toolchain']['components'].values():
@@ -159,6 +178,10 @@ def verify_ci_android_package_stable(result):
 def _proof_sources(report):
     work=Path(report['work'])
     selected=[Path(report['receipt_path'])]
+    if report.get('jdk_inputs',{}).get('evidence_copy'):
+        selected.append(Path(report['jdk_inputs']['evidence_copy']['path']))
+        if report['jdk_inputs'].get('external_evidence_copy'):
+            selected.append(Path(report['jdk_inputs']['external_evidence_copy']['path']))
     for command in report.get('commands',[]):
         selected.extend(Path(command[k]['path']) for k in ('stdout','stderr'))
         selected.extend(Path(v['path']) for v in command['process_files'])
@@ -191,7 +214,7 @@ def _proof(report):
 
 
 def run_ci_android_package(*,repo,source_sha,native_library,sdl_root,jdk_root,sdk_root,ndk_root,
-                           gradle_root,bundletool_jar,work_dir,runner=None):
+                           gradle_root,bundletool_jar,work_dir,jdk_input_receipt=None,jdk_input_sha256=None,runner=None):
     work=_new_work(work_dir); receipt=work/'ci-android-package.json'
     report=dict(schema=SCHEMA,status='FAIL',release_ready=False,device='NOT_RUN',runtime='NOT_RUN',install='NOT_RUN',
         work=str(work),repo=str(Path(repo).resolve(strict=True)),receipt_path=str(receipt),commands=[],errors=[],
@@ -204,6 +227,17 @@ def run_ci_android_package(*,repo,source_sha,native_library,sdl_root,jdk_root,sd
     try:
         for name in ('home','tmp','commands','gradle-home','unsigned','aligned','outputs'):(work/name).mkdir()
         need(re.fullmatch('[0-9a-f]{40}',source_sha or ''), 'Full source SHA required')
+        report['stage']='jdk-provenance'
+        report['fixture']=runner is not None
+        binding=_bind_jdk_inputs(jdk_root,jdk_input_receipt,jdk_input_sha256,fixture=runner is not None)
+        copied=work/'jdk-source-receipt.json'
+        driver._copy(binding['receipt_path'],copied,binding['receipt_sha256'])
+        binding['evidence_copy']=lock(copied)
+        if binding.get('external_receipt'):
+            external_copy=work/'jdk-cacerts-source-receipt.json';external=binding['external_receipt']
+            driver._copy(external['path'],external_copy,external['sha256'])
+            binding['external_evidence_copy']=lock(external_copy)
+        report['jdk_inputs']=binding
         report['stage']='tool-selection'
         tc=_select_tools(jdk_root,sdk_root,ndk_root,gradle_root,sdl_root,bundletool_jar,fixture=runner is not None)
         report['toolchain']=tc;env=driver._env(tc,work)
@@ -251,10 +285,10 @@ def run_ci_android_package(*,repo,source_sha,native_library,sdl_root,jdk_root,sd
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__);sub=parser.add_subparsers(dest='mode',required=True)
     preflight=sub.add_parser('preflight')
-    for name in ('jdk-root','sdk-root','ndk-root','gradle-root','bundletool-jar'):
+    for name in ('jdk-root','sdk-root','ndk-root','gradle-root','bundletool-jar','jdk-input-receipt','jdk-input-sha256'):
         preflight.add_argument('--'+name,required=True)
     run=sub.add_parser('run')
-    for name in ('repo','source-sha','native-library','sdl-root','jdk-root','sdk-root','ndk-root','gradle-root','bundletool-jar','work'):
+    for name in ('repo','source-sha','native-library','sdl-root','jdk-root','sdk-root','ndk-root','gradle-root','bundletool-jar','work','jdk-input-receipt','jdk-input-sha256'):
         run.add_argument('--'+name,required=True)
     run.add_argument('--github-output')
     verify=sub.add_parser('verify');verify.add_argument('--receipt',required=True);verify.add_argument('--sha256',required=True)
