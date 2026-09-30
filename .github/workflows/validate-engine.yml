@@ -1657,6 +1657,14 @@ jobs:
         echo "GRADLE_ROOT=$RUNNER_TEMP/gradle-8.9" >> "$GITHUB_ENV"
         curl --fail --location --max-time 180 https://github.com/google/bundletool/releases/download/1.17.1/bundletool-all-1.17.1.jar -o "$RUNNER_TEMP/bundletool-all-1.17.1.jar"
         echo "45881ead13388872d82c4255b195488b7fc33f2cac5a9a977b0afc5e92367592  $RUNNER_TEMP/bundletool-all-1.17.1.jar" | sha256sum --check
+    - name: Preflight fixed Android tools before compilation
+      timeout-minutes: 2
+      shell: bash
+      run: |
+        python -B scripts/ci_android_package.py preflight \
+          --jdk-root "$JAVA_HOME" --sdk-root "$ANDROID_SDK_ROOT" \
+          --ndk-root "$NDK_DIR" --gradle-root "$GRADLE_ROOT" \
+          --bundletool-jar "$RUNNER_TEMP/bundletool-all-1.17.1.jar"
     - name: Build SDL3 Android slice (arm64-v8a)
       shell: bash
       run: |

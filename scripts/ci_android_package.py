@@ -26,29 +26,97 @@ def verify_bundletool(path):
     return selected
 
 
-def _component(root, paths):
-    root = Path(root).resolve(strict=True)
-    return dict(root=str(root), paths=paths, **driver._tree(root, paths))
+def _tool_failure(error, component, root=None, paths=()):
+    """Add diagnostics to the original rejection; never replace its predicate."""
+    if hasattr(error, 'tool_selection_failure'):
+        return
+    details=dict(component=component, requested_root=str(root) if root is not None else None,
+                 selected_paths=list(paths), error_type=type(error).__name__, error=str(error))
+    try:
+        trace=error.__traceback__
+        while trace:
+            frame=trace.tb_frame
+            if frame.f_code is driver._no_links.__code__:
+                # Read only this known validator's path locals, never arbitrary
+                # frame/environment contents. Metadata is observed after rejection.
+                value=frame.f_locals.get('value')
+                refused=frame.f_locals.get('item')
+                path=Path(value);chain=[]
+                for item in (path,*path.parents):
+                    row=dict(path=str(item))
+                    try:
+                        info=item.lstat()
+                        row.update(mode=info.st_mode,nlink=info.st_nlink,
+                                   is_symlink=item.is_symlink(),is_junction=item.is_junction())
+                        if row['is_symlink']:
+                            row['link_target']=os.readlink(item)
+                            try:row['resolved_target']=str(item.resolve(strict=True))
+                            except OSError as resolution:row['resolution_error']=str(resolution)
+                    except OSError as inspection:row['inspection_error']=str(inspection)
+                    chain.append(row)
+                details['path_check']=dict(requested_path=str(value),rejected_ancestor=str(refused),
+                    ancestors=chain,metadata_timing='observed after the unchanged validator rejected the path')
+                break
+            trace=trace.tb_next
+    except Exception as diagnostic:
+        details['diagnostic_error']=type(diagnostic).__name__+': '+str(diagnostic)
+    error.tool_selection_failure=details
 
 
-def _select_tools(jdk, sdk, ndk, gradle, sdl, bundletool, *, fixture):
-    components = dict(jdk=_component(jdk, ['bin', 'lib', 'conf', 'release']),
-        sdk=_component(sdk, ['build-tools/34.0.0', 'platforms/android-35']),
-        ndk=_component(ndk, ['source.properties']), gradle=_component(gradle, ['lib']),
-        sdl=_component(sdl, ['lib/libSDL3.so']))
+def _component(root, paths, name='component'):
+    try:
+        root = Path(root).resolve(strict=True)
+        return dict(root=str(root), paths=paths, **driver._tree(root, paths))
+    except Exception as error:
+        _tool_failure(error,name,root,paths)
+        raise
+
+
+def _tool_lock(path, component):
+    try:return lock(path)
+    except Exception as error:
+        _tool_failure(error,component,path)
+        raise
+
+
+def _select_precompile_tools(jdk, sdk, ndk, gradle, bundletool, *, fixture):
+    # Used by both the early diagnostic and the final package lane. SDL is not
+    # fabricated here: the final lane separately requires its real built slice.
+    components = dict(jdk=_component(jdk, ['bin', 'lib', 'conf', 'release'], 'jdk'),
+        sdk=_component(sdk, ['build-tools/34.0.0', 'platforms/android-35'], 'sdk'),
+        ndk=_component(ndk, ['source.properties'], 'ndk'), gradle=_component(gradle, ['lib'], 'gradle'))
     need(re.search(r'^JAVA_VERSION="17(?:\.|\")', (Path(components['jdk']['root'])/'release').read_text(), re.M), 'JDK17 required')
     for role, rel, pattern in [('ndk','source.properties',r'Pkg.Revision\s*=\s*27\.3\.13750724'),
             ('sdk','build-tools/34.0.0/source.properties',r'Pkg.Revision\s*=\s*34\.0\.0')]:
         need(re.search(pattern, (Path(components[role]['root'])/rel).read_text()), 'Wrong selected '+role)
     suffix = '.exe' if os.name == 'nt' and not fixture else ''
     jdk = Path(components['jdk']['root']); bt = Path(components['sdk']['root'])/'build-tools/34.0.0'
-    tools = {name:lock(jdk/'bin'/(name+suffix)) for name in ('java','keytool','jarsigner')}
-    tools.update({name:lock(bt/(name+suffix)) for name in ('aapt2','zipalign')})
-    tools['apksigner_jar'] = lock(bt/'lib/apksigner.jar')
-    tools['bundletool_jar'] = lock(bundletool) if fixture else verify_bundletool(bundletool)
+    tools = {name:_tool_lock(jdk/'bin'/(name+suffix),'jdk') for name in ('java','keytool','jarsigner')}
+    tools.update({name:_tool_lock(bt/(name+suffix),'sdk') for name in ('aapt2','zipalign')})
+    tools['apksigner_jar'] = _tool_lock(bt/'lib/apksigner.jar','sdk')
+    try:tools['bundletool_jar'] = lock(bundletool) if fixture else verify_bundletool(bundletool)
+    except Exception as error:
+        _tool_failure(error,'bundletool',bundletool)
+        raise
     git = shutil.which('git'); need(git, 'Git required')
-    tools['git'] = lock(Path(git).resolve(strict=True))
+    tools['git'] = _tool_lock(Path(git).resolve(strict=True),'git')
     return dict(components=components, tools=tools)
+
+
+def _select_tools(jdk, sdk, ndk, gradle, sdl, bundletool, *, fixture):
+    result=_select_precompile_tools(jdk,sdk,ndk,gradle,bundletool,fixture=fixture)
+    result['components']['sdl']=_component(sdl,['lib/libSDL3.so'],'sdl')
+    return result
+
+
+def preflight_toolchain(*,jdk_root,sdk_root,ndk_root,gradle_root,bundletool_jar,fixture=False):
+    selected=_select_precompile_tools(jdk_root,sdk_root,ndk_root,gradle_root,bundletool_jar,fixture=fixture)
+    return dict(status='FIXTURE_TOOLCHAIN_PREFLIGHT' if fixture else 'CI_TOOLCHAIN_PREFLIGHT_VERIFIED',
+        release_ready=False,commands=[],sdl='REQUIRES_POST_BUILD_VALIDATION',
+        scope='Selected precompile tool files only; no build, package, signature or device acceptance',
+        components={name:dict(root=item['root'],paths=item['paths'],files=len(item['files']),
+                    directories=len(item['directories'])) for name,item in selected['components'].items()},
+        tools=selected['tools'])
 
 
 def _stable(report):
@@ -136,6 +204,7 @@ def run_ci_android_package(*,repo,source_sha,native_library,sdl_root,jdk_root,sd
     try:
         for name in ('home','tmp','commands','gradle-home','unsigned','aligned','outputs'):(work/name).mkdir()
         need(re.fullmatch('[0-9a-f]{40}',source_sha or ''), 'Full source SHA required')
+        report['stage']='tool-selection'
         tc=_select_tools(jdk_root,sdk_root,ndk_root,gradle_root,sdl_root,bundletool_jar,fixture=runner is not None)
         report['toolchain']=tc;env=driver._env(tc,work)
         source=driver._source(Path(report['repo']),tc['tools']['git']['path'],env)
@@ -166,7 +235,9 @@ def run_ci_android_package(*,repo,source_sha,native_library,sdl_root,jdk_root,sd
         driver._cleanup_private(work,report);_stable(report)
         report['status']='FIXTURE_ONLY' if runner is not None else 'CI_ANDROID_PACKAGE_VERIFIED'
     except Exception as error:
-        report['errors'].append(str(error));raise
+        report['errors'].append(str(error))
+        if hasattr(error,'tool_selection_failure'):report['tool_selection_failure']=error.tool_selection_failure
+        raise
     finally:
         try:
             if (work/'private-signing').exists() and report['private_cleanup']!='FAILED':driver._cleanup_private(work,report)
@@ -179,6 +250,9 @@ def run_ci_android_package(*,repo,source_sha,native_library,sdl_root,jdk_root,sd
 
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__);sub=parser.add_subparsers(dest='mode',required=True)
+    preflight=sub.add_parser('preflight')
+    for name in ('jdk-root','sdk-root','ndk-root','gradle-root','bundletool-jar'):
+        preflight.add_argument('--'+name,required=True)
     run=sub.add_parser('run')
     for name in ('repo','source-sha','native-library','sdl-root','jdk-root','sdk-root','ndk-root','gradle-root','bundletool-jar','work'):
         run.add_argument('--'+name,required=True)
@@ -186,6 +260,9 @@ def main(argv=None):
     verify=sub.add_parser('verify');verify.add_argument('--receipt',required=True);verify.add_argument('--sha256',required=True)
     args=parser.parse_args(argv)
     try:
+        if args.mode=='preflight':
+            values=vars(args).copy();values.pop('mode')
+            print(json.dumps(preflight_toolchain(**values)));return 0
         if args.mode=='verify':
             result=driver.load(args.receipt,args.sha256);result['receipt_sha256']=args.sha256
             need(result.get('status')=='CI_ANDROID_PACKAGE_VERIFIED','Real CI package evidence required')
@@ -197,7 +274,9 @@ def main(argv=None):
             upload_files='\n'.join(result['outputs'][kind]['path'] for kind in ('apk','aab')),proof=str(Path(result['work'])/'proof')))
         print(json.dumps({k:result[k] for k in ('status','receipt_path','receipt_sha256','release_ready')}));return 0
     except Exception as error:
-        print(json.dumps(dict(status='FAIL',release_ready=False,error=str(error))));return 1
+        failure=dict(status='FAIL',release_ready=False,error=str(error),error_type=type(error).__name__)
+        if hasattr(error,'tool_selection_failure'):failure['tool_selection_failure']=error.tool_selection_failure
+        print(json.dumps(failure));return 1
 
 if __name__=='__main__':
     sys.dont_write_bytecode=True

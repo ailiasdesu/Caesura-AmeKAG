@@ -1048,6 +1048,65 @@ class AndroidCIJobTests(unittest.TestCase):
         with patch.dict(os.environ, {'PATH':str(Path(self.fixture.git).parent)+os.pathsep+os.environ.get('PATH','')}):
             return self.adapter.run_ci_android_package(**args)
 
+    def linked_jdk_input(self):
+        root=self.fixture.root/'tools/jdk'
+        target=put(root/'lib/libjsig.so',b'fixture shared library')
+        link=root/'lib/server/libjsig.so';link.parent.mkdir()
+        link.symlink_to(Path('..')/'libjsig.so')
+        self.assertEqual(link.read_bytes(),target.read_bytes())
+        return root,link
+
+    def tool_arguments(self):
+        return dict(jdk_root=self.fixture.root/'tools/jdk',sdk_root=self.fixture.root/'tools/sdk',
+                    ndk_root=self.fixture.root/'tools/ndk',gradle_root=self.fixture.root/'tools/gradle',
+                    bundletool_jar=self.fixture.root/'tools/bundletool/bundletool_jar')
+
+    def test_jdk_link_rejection_retains_exact_path_without_running_tools(self):
+        root,link=self.linked_jdk_input()
+        with self.assertRaisesRegex(ValueError,'Evidence path must not traverse a link'):
+            self.call()
+        report=json.loads((self.fixture.work/'ci-android-package.json').read_bytes())
+        self.assertEqual(report['stage'],'tool-selection')
+        failure=report['tool_selection_failure']
+        self.assertEqual(failure['component'],'jdk')
+        self.assertEqual(failure['path_check']['requested_path'],str(link))
+        selected=next(x for x in failure['path_check']['ancestors'] if x['path']==str(link))
+        self.assertTrue(selected['is_symlink'])
+        self.assertEqual(selected['link_target'],os.readlink(link))
+        self.assertEqual(selected['resolved_target'],str((root/'lib/libjsig.so').resolve()))
+        self.assertEqual(report['commands'],[])
+        self.assertEqual(report['private_cleanup'],'NOT_CREATED')
+        self.assertFalse(self.fixture.calls)
+
+    def test_preflight_reuses_tools_and_never_waives_postbuild_sdl(self):
+        self.assertTrue(hasattr(self.adapter,'preflight_toolchain'))
+        args=self.tool_arguments()
+        with patch.dict(os.environ,{'PATH':str(Path(self.fixture.git).parent)+os.pathsep+os.environ.get('PATH','')}):
+            result=self.adapter.preflight_toolchain(**args,fixture=True)
+        self.assertEqual(result['status'],'FIXTURE_TOOLCHAIN_PREFLIGHT')
+        self.assertEqual(set(result['components']),{'jdk','sdk','ndk','gradle'})
+        self.assertEqual(result['sdl'],'REQUIRES_POST_BUILD_VALIDATION')
+        self.assertFalse(result['release_ready'])
+        self.assertFalse(self.fixture.calls)
+        (self.fixture.root/'tools/sdl/lib/libSDL3.so').unlink()
+        with self.assertRaises((ValueError,OSError)):
+            self.call()
+        self.assertFalse(self.fixture.calls)
+
+    def test_preflight_cli_prints_original_link_rejection_and_fails(self):
+        _,link=self.linked_jdk_input()
+        args=['preflight']
+        for key,value in self.tool_arguments().items():args.extend(['--'+key.replace('_','-'),str(value)])
+        output=io.StringIO()
+        with redirect_stdout(output):code=self.adapter.main(args)
+        self.assertEqual(code,1)
+        report=json.loads(output.getvalue())
+        self.assertEqual(report['status'],'FAIL')
+        self.assertEqual(report['error'],'Evidence path must not traverse a link')
+        self.assertEqual(report['tool_selection_failure']['component'],'jdk')
+        self.assertEqual(report['tool_selection_failure']['path_check']['requested_path'],str(link))
+        self.assertFalse(self.fixture.calls)
+
     def test_existing_jni_unsigned_sign_verify_without_native_rebuild(self):
         with patch.dict(os.environ, {'CAESURA_ANDROID_KEYSTORE':'must-not-pass',
                 'CAESURA_KEYSTORE_PATH':'must-not-pass','JAVA_TOOL_OPTIONS':'must-not-pass'}):
@@ -1097,7 +1156,7 @@ class AndroidCIJobTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'business'):
             self.call()
         self.assertFalse((self.fixture.work/'private-signing').exists())
-        report = json.loads((self.fixture.work/'ci-android-package.json').read_text())
+        report = json.loads((self.fixture.work/'ci-android-package.json').read_bytes())
         self.assertEqual(report['status'], 'FAIL')
         self.assertEqual(report['private_cleanup'], 'COMPLETE')
 

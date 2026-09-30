@@ -405,6 +405,21 @@ class WorkflowContractTests(unittest.TestCase):
                                       "Unset work path after a guard failure must never resolve to runner root")
         self.assertEqual(selected, 12)
 
+    def test_android_tool_preflight_precedes_compilation_without_replacing_package_gate(self):
+        job=self.jobs['android-compile'];steps=job['steps']
+        pre=[i for i,s in enumerate(steps) if 'ci_android_package.py preflight' in s.get('run','')]
+        self.assertEqual(len(pre),1)
+        index=pre[0]
+        self.assertNotIn('continue-on-error',steps[index])
+        self.assertEqual(steps[index]['timeout-minutes'],2)
+        selected=next(i for i,s in enumerate(steps) if s.get('name')=='Select fixed Android package tools')
+        native=next(i for i,s in enumerate(steps) if s.get('name')=='Build SDL3 Android slice (arm64-v8a)')
+        package=next(i for i,s in enumerate(steps) if s.get('id')=='android_package')
+        self.assertLess(selected,index);self.assertLess(index,native);self.assertLess(native,package)
+        self.assertNotIn('--sdl-root',steps[index]['run'])
+        self.assertIn('--sdl-root',steps[package]['run'])
+        self.assertNotIn('continue-on-error',job)
+
     def test_android_release_uses_strict_package_adapter_and_exact_final_outputs(self):
         steps = self.jobs["android-compile"]["steps"]
         commands = [s.get("run", "") for s in steps]
