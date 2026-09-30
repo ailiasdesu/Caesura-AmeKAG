@@ -29,6 +29,8 @@ c68 CI 的 Linux `Platform Matrix Freshness & Validation` 已失败。原日志 
 
 本次仅把平台矩阵的**文档同步锚**改为 c68，并通过标准生成器重建[平台状态文档](../status/platform-status.md)。生成器的自动有效 HEAD 排除 `docs/`，因此后续正常 docs-only 提交仍锚定这次代码提交。没有使用 `--head` 覆盖，也没有修改能力行的原 commit、日期、状态或范围，更没有提升设备／发布等级。原 CI 失败日志、先前 SDK FTK1011 和测试前提失败均保留。
 
+新 CI 前的后续标准检查还发现闭环矩阵的源指纹、保存模块行号和新增回归引用数量过期。已使用原 `capability_closure.py` 正规生成并逐行核对；能力状态与覆写未提升，引用数量属于结构扫描，不是覆盖率或运行通过。Android 静态回归检查为 88/88，仅证明源码合同，不是设备、渲染或签名执行。
+
 ## 尚待完成
 
 - 新的正常候选 CI、必需 Verify / aggregate 及最终包须绑定其实际 source/run/attempt/artifact/digest。不能把旧包或旧运行改名为当前候选，也不能以文档同步代替新 CI。
