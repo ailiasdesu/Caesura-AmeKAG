@@ -96,12 +96,37 @@ class Lane:
             json.dumps(self.receipt, indent=2) + "\n", encoding="utf-8")
 
     def source_snapshot(self):
-        spec = importlib.util.spec_from_file_location("pinned_runner", self.source / "scripts/run_validation.py")
-        runner = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(runner)
-        profile = json.loads((self.source / "scripts/validation_profiles.json").read_text(encoding="utf-8-sig"))
-        return {**runner._source_identity(self.source),
-                "fixture_sha256": runner.fingerprint_paths(self.source, profile["fixture_paths"])}
+        scripts = self.source / "scripts"
+        dependencies = ("validation_process", "validation_sanitizer")
+        # The uploaded bootstrap and fetched engine are separate source roots.
+        # Even an already imported bootstrap helper must not satisfy this runner.
+        for name in dependencies:
+            if not (scripts / (name + ".py")).is_file():
+                raise FileNotFoundError(scripts / (name + ".py"))
+        previous_path = sys.path[:]
+        missing = object()
+        previous_modules = {name: sys.modules.get(name, missing) for name in dependencies}
+        previous_finder = sys.path_importer_cache.get(str(scripts), missing)
+        try:
+            sys.path_importer_cache.pop(str(scripts), None)
+            sys.path.insert(0, str(scripts))
+            for name in dependencies:
+                sys.modules.pop(name, None)
+            spec = importlib.util.spec_from_file_location("pinned_runner", scripts / "run_validation.py")
+            runner = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(runner)
+            profile = json.loads((scripts / "validation_profiles.json").read_text(encoding="utf-8-sig"))
+            return {**runner._source_identity(self.source),
+                    "fixture_sha256": runner.fingerprint_paths(self.source, profile["fixture_paths"])}
+        finally:
+            sys.path[:] = previous_path
+            for name, previous in previous_modules.items():
+                sys.modules.pop(name, None)
+                if previous is not missing:
+                    sys.modules[name] = previous
+            sys.path_importer_cache.pop(str(scripts), None)
+            if previous_finder is not missing:
+                sys.path_importer_cache[str(scripts)] = previous_finder
 
     def run(self, name, argv, *, cwd=None, timeout=600, allow_failure=False, env=None):
         argv = [str(part) for part in argv]
