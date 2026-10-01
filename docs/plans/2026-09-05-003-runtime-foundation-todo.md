@@ -1,5 +1,17 @@
 # 当前待办与进度
 
+## 2026-10-01 候选失败与 UI 读档修复接续
+
+完整目标仍为 U1–U29，详见[本次执行记录](2026-10-01-003-candidate-validation-repair-followup.md)。以下新增事实接续前文时点；旧段落与原验收范围保留，不将后续修复改写成旧候选通过。
+
+- [x] SMA实际保存新字节GREEN和UI真实Chrome hot-load限定GREEN；完整Web644通过。SMA整体sanitizer FAIL及旧Web cold失败均保留。
+- [x] f2cf GitHub CI与EAS终态、三OS uuid失败、模拟器collector失败分别取回；iOS device只接受未签名编译，模拟器1536实际通过不改原lane FAIL。
+- [x] uuid最小补丁与collector真实导入/解析修复已本地提交并审查；collector本地20项工具测试通过，不代表Apple新lane通过。
+- [x] owner可信通知修复及完整87项本地验证已限定接受，整合代码锚已绑定；旧Mac瞬时时序未还原，完整新候选门禁继续。
+- [ ] 根据最终源/配置/工具差异完成必要CI/EAS与精确最终包绑定；复用匹配作者来源，不改标旧包。
+- [ ] 完成原双模板、双origin、三进程cold合同，保持原断言、时限和owned退出要求。
+- [ ] U28声明与U29完整逐项核对；原29单元、设备/账号/物理输出条件和既有失败/不确定结论全部保留。
+
 ## 2026-10-01 c41 验收与修复接续
 
 完整目标仍为 U1–U29。冻结产品 c41 与后续验证修复整合版本分别记录，详见[c41 执行记录](2026-10-01-002-c41-candidate-and-validation-repairs.md)。
