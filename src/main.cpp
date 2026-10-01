@@ -466,11 +466,7 @@ private:
                     lua_settop(L, stackTop);
                 }
                 if (saveRes.ok) {
-                    std::string writePath = operation.path;
-                    for (char& ch : writePath) {
-                        if (ch == '/') ch = '\\';
-                    }
-                    std::ofstream out(writePath, std::ios::binary);
+                    std::ofstream out(operation.path, std::ios::binary);
                     if (!out) {
                         saveRes.ok = false;
                         saveRes.errors.push_back("cannot open file for writing");

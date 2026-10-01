@@ -224,11 +224,33 @@ def main():
         hero_text = ""
     check("sma-save-source-readable", bool(hero_text.strip()), "reading %s: %r" % (hero_path, hero_text[:60]))
 
-    st, resp = request("/api/sma/save",
-                       data=json.dumps({"path": "demo/assets/sma/hero.json",
-                                        "content": hero_text}).encode())
-    check("sma-save-ok", st == 200 and resp.get("status") == "ok"
-          and resp.get("ok") is True and resp.get("errors") == [], "%s %s" % (st, resp))
+    # A successful response must update the requested file. Saving identical
+    # bytes used to hide a POSIX path bug that wrote a backslash-named file.
+    save_relative = "demo/assets/sma/smoke-save-" + uuid.uuid4().hex + ".json"
+    save_target = Path(cwd) / save_relative
+    flat_target = Path(cwd) / save_relative.replace("/", "\\")
+    if os.name != "nt" and os.path.lexists(flat_target):
+        raise RuntimeError("SMA save probe flat path already exists")
+    original_bytes = Path(hero_path).read_bytes()
+    changed_text = hero_text + "\n \t\n"
+    with save_target.open("xb") as probe:
+        probe.write(hero_text.encode("utf-8"))
+    try:
+        st, resp = request("/api/sma/save",
+                           data=json.dumps({"path": save_relative,
+                                            "content": changed_text}).encode())
+        check("sma-save-ok", st == 200 and resp.get("status") == "ok"
+              and resp.get("ok") is True and resp.get("errors") == [], "%s %s" % (st, resp))
+        check("sma-save-content-persisted",
+              save_target.read_bytes() == changed_text.encode("utf-8"), save_relative)
+        check("sma-save-source-unchanged", Path(hero_path).read_bytes() == original_bytes)
+        if os.name != "nt":
+            check("sma-save-no-backslash-file", not os.path.lexists(flat_target), str(flat_target))
+    finally:
+        # Both names were absent before this probe and belong to this request.
+        save_target.unlink(missing_ok=True)
+        if os.name != "nt":
+            flat_target.unlink(missing_ok=True)
 
     st, resp = request("/api/sma/save",
                        data=json.dumps({"path": "demo/assets/sma/hero.json",
