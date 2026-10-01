@@ -6,7 +6,7 @@ Diagnostics never report soak acceptance. Long mode requires same-source cold,
 fault and short evidence and one continuously observed native process.
 """
 import argparse
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import asdict
 from functools import lru_cache
 import hashlib
@@ -61,10 +61,27 @@ def run_observed_command(argv, cwd, env, evidence, ready, progress, *,
     started = time.monotonic()
     result = dict(status='FAIL', inspection=None, ready_observed=False)
     error = None
+    work_exit = Future()
+
+    def work_terminated(observation):
+        # This callback comes from the parent's retained-launcher wait, never
+        # from ready/progress/done files or from an unavailable PID query.
+        work_exit.set_result(observation)
+
+    def work_is_terminal():
+        if not work_exit.done():
+            return False
+        terminal = work_exit.result()
+        require(asdict(terminal.process) == result.get('observed_process'),
+                'Work terminal owner differs from the observed process')
+        result['work_terminal'] = dict(process=asdict(terminal.process),
+                                       actual_exit_code=terminal.actual_exit_code)
+        return True
     with (evidence/'stdout').open('xb') as stdout, (evidence/'stderr').open('xb') as stderr:
         with ThreadPoolExecutor(max_workers=1) as pool:
             future = pool.submit(run_runtime_command, argv, cwd, env, control,
-                                 stdout, stderr, timeout, stop_request=stop)
+                                 stdout, stderr, timeout, stop_request=stop,
+                                 on_work_exit=work_terminated)
             try:
                 last_progress, last_size = started, None
                 while not future.done():
@@ -95,7 +112,8 @@ def run_observed_command(argv, cwd, env, evidence, ready, progress, *,
                                 'Progress stream was removed or truncated')
                         if size is not None and size != last_size:
                             last_progress, last_size = time.monotonic(), size
-                        if time.monotonic()-last_progress >= progress_seconds:
+                        if (time.monotonic()-last_progress >= progress_seconds
+                                and not work_is_terminal()):
                             raise ValueError('Progress deadline expired after readiness')
                     time.sleep(.02)
             except BaseException as problem:
@@ -114,8 +132,17 @@ def run_observed_command(argv, cwd, env, evidence, ready, progress, *,
                         result['receipt'] = json.loads(receipt_file.read_text(encoding='utf-8'))
     result['owner_observed_seconds'] = time.monotonic()-started
     receipt = result.get('receipt', {})
+    terminal_verified = False
+    if result['ready_observed']:
+        try:
+            terminal_verified = work_is_terminal()
+        except BaseException as problem:
+            if error is None:
+                error = f'{type(problem).__name__}: {problem}'
     good = (error is None and result['ready_observed']
+            and terminal_verified
             and receipt.get('process') == result.get('observed_process')
+            and receipt.get('actual_exit_code') == result['work_terminal']['actual_exit_code']
             and receipt.get('actual_exit_code') == 0 and receipt.get('status') == 'EXITED'
             and receipt.get('owned_tree_cleanup') == 'COMPLETE'
             and receipt.get('timed_out') is False and receipt.get('forced_kill') is False)

@@ -28,9 +28,10 @@ class ValidationProcessTests(unittest.TestCase):
         self.release = self.root / "release-child"
         self.escaped = self.root / "escaped-child"
 
-    def invoke(self, argv, timeout=5):
+    def invoke(self, argv, timeout=5, on_process_exit=None):
         with self.stdout_path.open("wb") as out, self.stderr_path.open("wb") as err:
-            return run_owned_command(argv, self.root, out, err, timeout)
+            return run_owned_command(argv, self.root, out, err, timeout,
+                                     on_process_exit=on_process_exit)
 
     def parent_with_child(self, *, stay_alive=False, exit_code=0):
         # The child waits for a signal created only AFTER the API returns, so
@@ -76,6 +77,43 @@ class ValidationProcessTests(unittest.TestCase):
         self.assertEqual(result, 23)
         self.assertIn(b"stdout", self.stdout_path.read_bytes())
         self.assertIn(b"stderr", self.stderr_path.read_bytes())
+
+    def test_parent_local_exit_notification_precedes_real_cleanup(self):
+        events = []
+        if os.name == "nt":
+            original = validation_process._WindowsJob.terminate_and_wait
+            def cleanup(job):
+                events.append('cleanup')
+                return original(job)
+            patch = mock.patch.object(validation_process._WindowsJob, 'terminate_and_wait', cleanup)
+        else:
+            original = validation_process._cleanup_posix_group
+            def cleanup(process):
+                events.append('cleanup')
+                return original(process)
+            patch = mock.patch.object(validation_process, '_cleanup_posix_group', cleanup)
+        with patch:
+            code = self.invoke(self.parent_with_child(exit_code=17),
+                               on_process_exit=lambda value: events.append(('exit', value)))
+        self.assertEqual(code, 17)
+        self.assertEqual(events[0], ('exit', 17))
+        self.assertIn('cleanup', events[1:])
+        self.assert_child_gone_and_logs_stable()
+
+    def test_notification_exception_still_reclaims_real_descendants(self):
+        def reject(_code):
+            raise ValueError('declared notification failure')
+        with self.assertRaisesRegex(ValueError, 'declared notification failure'):
+            self.invoke(self.parent_with_child(), on_process_exit=reject)
+        self.assert_child_gone_and_logs_stable()
+
+    def test_timeout_never_notifies_work_exit(self):
+        notifications = []
+        with self.assertRaises(subprocess.TimeoutExpired):
+            self.invoke(self.parent_with_child(stay_alive=True), timeout=1,
+                        on_process_exit=notifications.append)
+        self.assertEqual(notifications, [])
+        self.assert_child_gone_and_logs_stable()
 
     def test_explicit_environment_reaches_owned_target_and_descendant_only(self):
         child = "import json,os; print(json.dumps({'value':os.environ.get('OWNED_ENV_FIXTURE')}))"

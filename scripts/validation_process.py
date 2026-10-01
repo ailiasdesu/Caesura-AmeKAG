@@ -8,7 +8,7 @@ import signal
 import subprocess
 import sys
 import time
-from typing import BinaryIO, Mapping, Sequence
+from typing import BinaryIO, Callable, Mapping, Sequence
 
 
 class _WindowsJob:
@@ -214,19 +214,26 @@ def _cleanup_posix_group(process: subprocess.Popen) -> None:
 
 def run_owned_command(argv: Sequence[str], cwd: str | Path, stdout: BinaryIO,
                       stderr: BinaryIO, timeout: float, *,
-                      env: Mapping[str, str] | None = None) -> int:
+                      env: Mapping[str, str] | None = None,
+                      on_process_exit: Callable[[int], None] | None = None) -> int:
     """Return the command's exit code only after its remaining children stop.
 
     TimeoutExpired names the original argv. KeyboardInterrupt is propagated
     after cleanup. No shell, global process search, or port-based cleanup is
     used. Commands are non-interactive (stdin is DEVNULL). An explicit env is
     passed to this owned tree only; the controller's environment is unchanged.
+
+    An optional parent-local notification follows the retained Popen wait and
+    precedes cleanup. It is not passed to the child, does not assert cleanup,
+    and exceptions from it still unwind through the original cleanup below.
     """
     command = list(argv)
     if not command or not all(isinstance(arg, str) for arg in command):
         raise ValueError("argv must be a non-empty sequence of strings")
     if isinstance(timeout, bool) or not math.isfinite(timeout) or timeout <= 0:
         raise ValueError("timeout must be positive")
+    if on_process_exit is not None and not callable(on_process_exit):
+        raise ValueError("on_process_exit must be callable")
     if os.name == "nt" and Path(command[0]).suffix.lower() in {".cmd", ".bat"}:
         raise ValueError("Use an executable rather than a Windows shell wrapper")
 
@@ -250,7 +257,10 @@ def run_owned_command(argv: Sequence[str], cwd: str | Path, stdout: BinaryIO,
                 shell=False, start_new_session=True, env=env,
             )
         try:
-            return process.wait(timeout=max(0, timeout - (time.monotonic() - started)))
+            exit_code = process.wait(timeout=max(0, timeout - (time.monotonic() - started)))
+            if on_process_exit is not None:
+                on_process_exit(exit_code)
+            return exit_code
         except subprocess.TimeoutExpired:
             raise subprocess.TimeoutExpired(command, timeout) from None
     finally:

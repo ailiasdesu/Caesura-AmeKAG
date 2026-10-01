@@ -5,11 +5,18 @@ import json
 import os
 import sys
 import tempfile
+import threading
+import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
+from unittest import mock
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'scripts'))
 from package_runtime import process_identity, RuntimeContractError
 from run_engine_soak import run_observed_command, verify_images, verify_prerequisites, sha
+import run_engine_soak as soak_driver
+import validation_process
 from test_render_contracts_driver import png
 
 
@@ -50,6 +57,220 @@ class OwnerTests(unittest.TestCase):
         self.assertEqual(result['receipt']['actual_exit_code'],0)
         self.assertEqual(result['inspection']['observed_pid'],result['receipt']['process']['pid'])
         self.retired(result)
+
+    def _observe_controlled_publication_boundary(self, *, complete_child, forge_done=False):
+        """Real child/launcher/cleanup; control only the observer clock and publication.
+
+        No heartbeat is added. The fixture still writes exactly one progress line.
+        The owned runner keeps its real clock and the original 8-second bound.
+        """
+        inspected = threading.Event()
+        terminal = threading.Event()
+        publish = threading.Event()
+        captured = {}
+        real_owned = validation_process.run_owned_command
+        real_started = time.monotonic()
+        progress_step = .401
+
+        def hold_completed_owned_return(*args, **kwargs):
+            # Run the actual owned helper first, including its process-tree cleanup.
+            code = real_owned(*args, **kwargs)
+            captured['launcher_exit'] = code
+            captured['result'] = json.loads(
+                (self.root/'evidence/process/result.json').read_text(encoding='utf-8'))
+            terminal.set()
+            if not publish.wait(6):
+                raise AssertionError('Fixture publication barrier was not released')
+            return code
+
+        class ObserverClock:
+            value = real_started
+            advanced = False
+
+            def monotonic(clock):
+                return clock.value
+
+            def sleep(clock, _seconds):
+                if time.monotonic()-real_started > 7:
+                    publish.set()
+                    raise AssertionError('Fixture did not reach its controlled boundary')
+                eligible = inspected.is_set() and (
+                    terminal.is_set() if complete_child else True)
+                if eligible:
+                    if clock.advanced:
+                        publish.set()
+                    else:
+                        # A loop-end hook follows the first progress-size reset.
+                        # Advance only this module's clock beyond the unchanged .4.
+                        clock.value += progress_step
+                        clock.advanced = True
+                # Yield to the real owned thread; elapsed sleep is not the oracle.
+                publish.wait(.001)
+
+        clock = ObserverClock()
+
+        class PublicationExecutor(ThreadPoolExecutor):
+            def submit(executor, function, *args, **kwargs):
+                future = super().submit(function, *args, **kwargs)
+
+                class PublicationFuture:
+                    def done(_self):
+                        return future.done()
+
+                    def result(_self):
+                        # The observer's final join releases publication even on RED.
+                        publish.set()
+                        return future.result()
+
+                return PublicationFuture()
+
+        def inspect(identity):
+            self.assertEqual(process_identity(identity.pid), identity)
+            captured['inspected_owner'] = identity
+            if forge_done:
+                (self.root/'done').write_text('done', encoding='utf-8')
+                (self.root/'evidence/process/result.json').write_text(json.dumps({
+                    'process': identity.__dict__, 'status': 'EXITED',
+                    'actual_exit_code': 0, 'stop_requested': False, 'forced_kill': False,
+                }), encoding='utf-8')
+                captured['forged_done'] = True
+            if complete_child:
+                (self.root/'release').write_text('release', encoding='utf-8')
+            inspected.set()
+            return {'observed_pid': identity.pid}
+
+        try:
+            with mock.patch.object(soak_driver, 'time', clock), \
+                 mock.patch.object(soak_driver, 'ThreadPoolExecutor', PublicationExecutor):
+                if complete_child:
+                    with mock.patch.object(validation_process, 'run_owned_command',
+                                           hold_completed_owned_return):
+                        result = self.run_child(self.ready+self.hold, inspect=inspect)
+                else:
+                    result = self.run_child(self.ready+self.hold, inspect=inspect)
+        finally:
+            publish.set()
+        self.assertTrue(clock.advanced, result)
+        self.assertEqual((self.root/'events.jsonl').read_text(encoding='utf-8'), '{}\n')
+        return result, captured, terminal.is_set()
+
+    def test_completed_owned_child_pending_publication_is_not_missing_progress(self):
+        result, captured, terminal = self._observe_controlled_publication_boundary(
+            complete_child=True)
+        self.assertTrue(terminal, result)
+        self.assertEqual(captured['launcher_exit'], 0)
+        self.assertEqual(captured['result']['status'], 'EXITED')
+        self.assertEqual(captured['result']['actual_exit_code'], 0)
+        self.assertFalse(captured['result']['stop_requested'])
+        self.assertEqual(result['receipt']['actual_exit_code'], 0)
+        self.assertEqual(result['receipt']['owned_tree_cleanup'], 'COMPLETE')
+        self.assertEqual(result['receipt']['process'], result['observed_process'])
+        self.retired(result)
+        # Existing production should RED here while preserving the real zero exit.
+        self.assertEqual(result['status'], 'OBSERVED', msg=result)
+
+    def test_live_owned_child_still_fails_unchanged_progress_deadline(self):
+        result, captured, terminal = self._observe_controlled_publication_boundary(
+            complete_child=False)
+        self.assertFalse(terminal)
+        self.assertIn('inspected_owner', captured)
+        self.assertEqual(result['status'], 'FAIL')
+        self.assertIn('Progress deadline expired after readiness', result['error'])
+        self.assertTrue(result['receipt']['stop_requested'])
+        self.assertEqual(result['receipt']['status'], 'STOPPED')
+        self.retired(result)
+
+    def test_live_child_forged_done_and_result_do_not_stop_watchdog(self):
+        from hashlib import sha256
+        result, captured, terminal = self._observe_controlled_publication_boundary(
+            complete_child=False, forge_done=True)
+        control = self.root/'evidence/process'
+        diagnostics = {}
+        for name, path in (
+                ('forged_result', control/'result.json'),
+                ('unpublished_terminal', control/'.result.json.writing'),
+                ('parent_receipt', control/'run.json'),
+                ('launcher_stderr', self.root/'evidence/stderr')):
+            if not path.is_file():
+                diagnostics[name] = {'missing': True}
+                continue
+            with path.open('rb') as stream:
+                raw = stream.read(65537)
+            self.assertLessEqual(len(raw), 65536)
+            diagnostics[name] = {'bytes': len(raw), 'sha256': sha256(raw).hexdigest(),
+                                 'text': raw.decode('utf-8')}
+        # TemporaryDirectory cleans the fixture after this test. Preserve the
+        # original rejection chain in captured output even if an assertion fails.
+        print('FORGED_TERMINAL_REJECTION ' + json.dumps({
+            'observation': result, 'files': diagnostics,
+            'unpublished_terminal_is_diagnostic_only': True,
+        }, sort_keys=True))
+        self.assertTrue(captured['forged_done'])
+        self.assertFalse(terminal)
+        self.assertEqual(result['status'], 'FAIL')
+        self.assertIn('Progress deadline expired after readiness', result['error'])
+        self.assertNotIn('work_terminal', result)
+        self.assertNotEqual(result['receipt']['launcher_exit_code'], 0)
+        self.assertIn('Runtime launcher failed', result['receipt']['error'])
+        self.assertIn('Refusing existing control result:',
+                      diagnostics['launcher_stderr']['text'])
+        forged = {'process': captured['inspected_owner'].__dict__, 'status': 'EXITED',
+                  'actual_exit_code': 0, 'stop_requested': False, 'forced_kill': False}
+        self.assertEqual(diagnostics['forged_result']['text'], json.dumps(forged))
+        unpublished = json.loads(diagnostics['unpublished_terminal']['text'])
+        self.assertEqual(unpublished['process'], result['observed_process'])
+        self.assertEqual(unpublished['status'], 'STOPPED')
+        self.assertTrue(unpublished['stop_requested'])
+        self.assertFalse(unpublished['forced_kill'])
+        self.assertIs(type(unpublished['actual_exit_code']), int)
+        self.assertNotEqual(unpublished['actual_exit_code'], 0)
+        self.assertEqual(json.loads(diagnostics['parent_receipt']['text']), result['receipt'])
+        # The forged public EXITED/0 fields are not acceptance evidence. The
+        # trusted launcher failure and parent cleanup remain mandatory.
+        self.retired(result)
+
+    def test_owner_query_error_cannot_become_normal_completion(self):
+        with mock.patch.object(soak_driver, 'process_identity',
+                               side_effect=RuntimeContractError('declared query unavailable')):
+            result = self.run_child(self.ready+self.hold)
+        self.assertEqual(result['status'], 'FAIL')
+        self.assertIn('declared query unavailable', result['error'])
+        self.assertFalse(result['ready_observed'])
+        self.assertTrue(result['receipt']['stop_requested'])
+        self.retired(result)
+
+    def test_terminal_notification_owner_mismatch_cannot_accept_actual_zero(self):
+        original = soak_driver.run_runtime_command
+        def mismatched(*args, on_work_exit=None, **kwargs):
+            def notify(value):
+                on_work_exit(replace(value, process=replace(
+                    value.process, created=value.process.created+'-different')))
+            return original(*args, on_work_exit=notify, **kwargs)
+        with mock.patch.object(soak_driver, 'run_runtime_command', mismatched):
+            result = self.run_child(self.ready+self.hold, inspect=self.inspect_release)
+        self.assertEqual(result['receipt']['actual_exit_code'], 0)
+        self.assertEqual(result['status'], 'FAIL')
+        self.assertIn('Work terminal owner differs', result['error'])
+        self.retired(result)
+
+    def test_reported_cleanup_failure_after_terminal_cannot_accept_actual_zero(self):
+        original = validation_process.run_owned_command
+        captured = {}
+        def reject_after_real_cleanup(*args, **kwargs):
+            code = original(*args, **kwargs)
+            captured['code'] = code
+            captured['result'] = json.loads(
+                (self.root/'evidence/process/result.json').read_text(encoding='utf-8'))
+            raise RuntimeError('declared cleanup completion failure')
+        with mock.patch.object(validation_process, 'run_owned_command', reject_after_real_cleanup):
+            result = self.run_child(self.ready+self.hold, inspect=self.inspect_release)
+        self.assertEqual(captured['code'], 0)
+        self.assertEqual(captured['result']['actual_exit_code'], 0)
+        self.assertEqual(result['status'], 'FAIL')
+        self.assertIn('declared cleanup completion failure', result['error'])
+        self.assertNotEqual(result['receipt']['owned_tree_cleanup'], 'COMPLETE')
+        with self.assertRaises(RuntimeContractError):
+            process_identity(captured['result']['process']['pid'])
 
     def test_nonzero_exit_is_preserved_as_failure(self):
         result=self.run_child(self.ready+self.hold+'raise SystemExit(7)\n',inspect=self.inspect_release)

@@ -22,7 +22,7 @@ import struct
 import subprocess
 import sys
 import time
-from typing import BinaryIO, Mapping, Sequence
+from typing import BinaryIO, Callable, Mapping, Sequence
 
 
 class RuntimeContractError(RuntimeError):
@@ -39,6 +39,13 @@ class ProcessIdentity:
     created: str
     executable: str
     source: str
+
+
+@dataclass(frozen=True)
+class WorkProcessExit:
+    """Parent-local work terminal observation; not a cleanup/acceptance receipt."""
+    process: ProcessIdentity
+    actual_exit_code: int
 
 
 def _directory(path: str | Path) -> Path:
@@ -615,7 +622,8 @@ def run_runtime_command(argv: Sequence[str], cwd: str | Path, env: Mapping[str, 
                         timeout: float, *, identity_path: str | Path | None = None,
                         stop_request: str | Path | None = None,
                         expected_final_executable: str | Path | None = None,
-                        exec_observation_timeout: float = 5) -> dict:
+                        exec_observation_timeout: float = 5,
+                        on_work_exit: Callable[[WorkProcessExit], None] | None = None) -> dict:
     """Run with explicit env under the existing owned-tree runner.
 
     control_dir must not exist, and its parent must exist. stdout/stderr are
@@ -641,6 +649,12 @@ def run_runtime_command(argv: Sequence[str], cwd: str | Path, env: Mapping[str, 
     and four fixed sanitizer OPTIONS are added to the explicit environment.
     This preserves capture through clean environments without copying unrelated
     controller variables or accepting caller-supplied sanitizer options.
+
+    on_work_exit is optional and parent-local. Only a successful retained wait
+    for the trusted runtime launcher can trigger it, followed by matching that
+    launcher's terminal result to its published process identity. File presence
+    or a process-query exception alone never triggers it. Cleanup and the final
+    receipt remain mandatory and may still fail after this notification.
     """
     from validation_process import run_owned_command
     from validation_sanitizer import capture_environment
@@ -652,6 +666,8 @@ def run_runtime_command(argv: Sequence[str], cwd: str | Path, env: Mapping[str, 
         raise RuntimeContractError("Windows shell wrappers cannot be runtime executables")
     if isinstance(timeout, bool) or not math.isfinite(timeout) or timeout <= 0:
         raise RuntimeContractError("Timeout must be positive and finite")
+    if on_work_exit is not None and not callable(on_work_exit):
+        raise RuntimeContractError("on_work_exit must be callable")
     contract = _exec_contract(command, expected_final_executable, exec_observation_timeout, timeout)
     environment = capture_environment(dict(env))
     if not all(isinstance(key, str) and key and "=" not in key and "\0" not in key
@@ -688,15 +704,68 @@ def run_runtime_command(argv: Sequence[str], cwd: str | Path, env: Mapping[str, 
                   status="LAUNCH_FAILED", actual_exit_code=None, process=None,
                   stop_requested=False, forced_kill=False, timed_out=False,
                   owned_tree_cleanup="NOT_COMPLETED")
+    terminal_snapshot = None
+
+    def terminal_json(path):
+        if path.is_symlink() or not path.is_file():
+            raise RuntimeContractError("Work terminal metadata must be a regular control file")
+        with path.open("rb") as stream:
+            data = stream.read(65537)
+        if len(data) > 65536:
+            raise RuntimeContractError("Work terminal metadata exceeds its bound")
+        return data, json.loads(data)
+
+    def launcher_exited(exit_code):
+        nonlocal terminal_snapshot
+        if exit_code != 0:
+            return  # Never reinterpret launcher failure as a work-terminal proof.
+        completed_bytes, completed = terminal_json(control / "result.json")
+        if completed.get("process") is None:
+            return  # A fast child may have no verified live identity.
+        _, published_identity = terminal_json(identity_file)
+        identity = ProcessIdentity(**published_identity)
+        expected_image = contract["final_executable"]["path"] if contract else command[0]
+        if (type(identity.pid) is not int or identity.pid <= 0
+                or not identity.created or Path(identity.executable) != Path(expected_image)
+                or not isinstance(completed.get("process"), dict)
+                or type(completed["process"].get("pid")) is not int
+                or completed.get("process") != asdict(identity)
+                or type(completed.get("actual_exit_code")) is not int
+                or completed.get("status") not in ("EXITED", "STOPPED")
+                or completed.get("stop_requested") is not (completed["status"] == "STOPPED")
+                or completed.get("forced_kill") is not False
+                or completed.get("error")):
+            raise RuntimeContractError("Owned launcher terminal identity/result is invalid")
+        if contract is not None:
+            transition = completed.get("exec_transition", {})
+            if (transition.get("status") != "VERIFIED"
+                    or transition.get("inputs_stable") is not True
+                    or transition.get("final_process") != asdict(identity)):
+                raise RuntimeContractError("Work terminal lacks verified final executable")
+        terminal_snapshot = completed_bytes
+        on_work_exit(WorkProcessExit(identity, completed["actual_exit_code"]))
+
     try:
         launch = [sys.executable, "-I", "-S", str(Path(__file__).resolve()),
                   "--runtime-launcher", str(request_file)]
-        report["launcher_exit_code"] = run_owned_command(launch, cwd_path, stdout, stderr, timeout)
+        options = {"on_process_exit": launcher_exited} if on_work_exit is not None else {}
+        report["launcher_exit_code"] = run_owned_command(launch, cwd_path, stdout, stderr, timeout,
+                                                        **options)
         report["owned_tree_cleanup"] = "COMPLETE"
         result_file = control / "result.json"
         if not result_file.is_file():
             raise RuntimeContractError("Runtime launcher exited without a completion receipt")
-        report.update(json.loads(result_file.read_text(encoding="utf-8")))
+        if terminal_snapshot is not None:
+            completed_bytes, completed = terminal_json(result_file)
+            if completed_bytes != terminal_snapshot:
+                raise RuntimeContractError("Work terminal changed before owned cleanup completed")
+            if (type(completed.get("actual_exit_code")) is not int
+                    or not isinstance(completed.get("process"), dict)
+                    or type(completed["process"].get("pid")) is not int):
+                raise RuntimeContractError("Work terminal requires integer exit and process identity")
+        else:
+            completed = json.loads(result_file.read_text(encoding="utf-8"))
+        report.update(completed)
         if report["launcher_exit_code"] != 0 or report["status"] == "LAUNCH_FAILED":
             raise RuntimeContractError(report.get("error", "Runtime launcher failed"))
         return report

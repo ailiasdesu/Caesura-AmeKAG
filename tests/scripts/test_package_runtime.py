@@ -289,14 +289,140 @@ class PackageRuntimeTests(unittest.TestCase):
                                   work=self.root / "work", home=self.root / "home",
                                   temp=self.root / "temp")
 
-    def invoke(self, code, *, timeout=8, control="control", stop=False):
+    def invoke(self, code, *, timeout=8, control="control", stop=False, on_work_exit=None):
         directory = self.root / control
         with (self.root / (control + "-out.log")).open("wb") as out, \
                 (self.root / (control + "-err.log")).open("wb") as err:
             return run_runtime_command(
                 [sys.executable, "-I", "-c", code], self.root / "work", self.environ,
                 directory, out, err, timeout,
-                stop_request=directory / "stop" if stop else None)
+                stop_request=directory / "stop" if stop else None,
+                on_work_exit=on_work_exit)
+
+    def invoke_held_notification(self, notification, *, exit_code=0, before_release=None):
+        release = self.root / 'release-work'
+        code = ("from pathlib import Path; import time,sys\n"
+                f"release=Path({str(release)!r})\n"
+                "while not release.exists():time.sleep(.01)\n"
+                f"sys.exit({exit_code})\n")
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(self.invoke, code, on_work_exit=notification)
+            try:
+                identity = ProcessIdentity(**self.await_json(
+                    self.root/'control/process.json', future=future))
+                self.assertEqual(process_identity(identity.pid), identity)
+                if before_release:
+                    before_release(identity)
+            finally:
+                release.write_text('release', encoding='utf-8')
+            return future.result(timeout=10), identity
+
+    def test_work_exit_notification_is_parent_local_and_preserves_nonzero(self):
+        notifications = []
+        def before_release(_identity):
+            request = json.loads((self.root/'control/request.json').read_text(encoding='utf-8'))
+            self.assertNotIn('on_work_exit', request)
+            self.assertNotIn('on_process_exit', request)
+            self.assertEqual(notifications, [])
+        report, identity = self.invoke_held_notification(
+            notifications.append, exit_code=23, before_release=before_release)
+        self.assertEqual(len(notifications), 1)
+        self.assertEqual(notifications[0].process, identity)
+        self.assertEqual(notifications[0].actual_exit_code, 23)
+        self.assertEqual(report['actual_exit_code'], 23)
+        self.assertEqual(report['owned_tree_cleanup'], 'COMPLETE')
+        with self.assertRaises(FrozenInstanceError):
+            notifications[0].actual_exit_code = 0
+
+    def test_work_exit_notification_exception_is_failure_after_real_child_exit(self):
+        seen = []
+        def reject(value):
+            seen.append(value)
+            raise ValueError('declared work notification failure')
+        with self.assertRaisesRegex(ValueError, 'declared work notification failure'):
+            self.invoke_held_notification(reject)
+        self.assertEqual(len(seen), 1)
+        with self.assertRaises(RuntimeContractError):
+            process_identity(seen[0].process.pid)
+        report = json.loads((self.root/'control/run.json').read_text(encoding='utf-8'))
+        self.assertNotEqual(report['status'], 'EXITED')
+        self.assertIn('declared work notification failure', report['error'])
+
+    def test_terminal_result_changed_after_notification_cannot_be_accepted(self):
+        seen = []
+        def alter(value):
+            seen.append(value)
+            path = self.root/'control/result.json'
+            result = json.loads(path.read_text(encoding='utf-8'))
+            result['actual_exit_code'] = 17
+            path.write_text(json.dumps(result), encoding='utf-8')
+        with self.assertRaisesRegex(RuntimeContractError, 'Work terminal changed'):
+            self.invoke_held_notification(alter)
+        self.assertEqual(len(seen), 1)
+        self.assertEqual(seen[0].actual_exit_code, 0)
+        with self.assertRaises(RuntimeContractError):
+            process_identity(seen[0].process.pid)
+
+    def _reject_post_notification_type_change(self, field, replacement):
+        seen = []
+        def alter(value):
+            seen.append(value)
+            path = self.root/'control/result.json'
+            original_bytes = path.read_bytes()
+            before = json.loads(original_bytes)
+            changed = json.loads(original_bytes)
+            if field == 'pid':
+                self.assertIs(type(before['process']['pid']), int)
+                changed['process']['pid'] = float(before['process']['pid'])
+            else:
+                self.assertIs(type(before['actual_exit_code']), int)
+                self.assertEqual(before['actual_exit_code'], 0)
+                changed['actual_exit_code'] = replacement
+            # These substitutions defeated the old ordinary dict comparison.
+            self.assertEqual(before, changed)
+            changed_bytes = json.dumps(changed).encode('utf-8')
+            self.assertNotEqual(original_bytes, changed_bytes)
+            path.write_bytes(changed_bytes)
+        with self.assertRaisesRegex(RuntimeContractError, 'Work terminal changed'):
+            self.invoke_held_notification(alter)
+        self.assertEqual(len(seen), 1)
+        self.assertIs(type(seen[0].actual_exit_code), int)
+        self.assertEqual(seen[0].actual_exit_code, 0)
+        with self.assertRaises(RuntimeContractError):
+            process_identity(seen[0].process.pid)
+        report = json.loads((self.root/'control/run.json').read_bytes())
+        self.assertEqual(report['owned_tree_cleanup'], 'COMPLETE')
+        self.assertNotEqual(report['status'], 'EXITED')
+
+    def test_terminal_exit_bool_after_notification_is_rejected(self):
+        self._reject_post_notification_type_change('exit', False)
+
+    def test_terminal_exit_float_after_notification_is_rejected(self):
+        self._reject_post_notification_type_change('exit', 0.0)
+
+    def test_terminal_pid_float_after_notification_is_rejected(self):
+        self._reject_post_notification_type_change('pid', None)
+
+    def test_work_terminal_owner_mismatch_is_rejected_before_notification(self):
+        import validation_process
+        original = validation_process.run_owned_command
+        notifications = []
+        def corrupt_terminal(*args, on_process_exit=None, **kwargs):
+            def after_real_wait(code):
+                path = self.root/'control/result.json'
+                result = json.loads(path.read_text(encoding='utf-8'))
+                result['process']['created'] += '-different'
+                path.write_text(json.dumps(result), encoding='utf-8')
+                on_process_exit(code)
+            return original(*args, on_process_exit=after_real_wait, **kwargs)
+        with mock.patch.object(validation_process, 'run_owned_command', corrupt_terminal):
+            with self.assertRaisesRegex(RuntimeContractError, 'terminal identity/result is invalid'):
+                self.invoke_held_notification(notifications.append)
+        self.assertEqual(notifications, [])
+        identity = ProcessIdentity(**json.loads(
+            (self.root/'control/process.json').read_text(encoding='utf-8')))
+        with self.assertRaises(RuntimeContractError):
+            process_identity(identity.pid)
 
     def retain_wait_diagnostics(self, path, future):
         # Never retain request.json: it contains the complete effective env.
