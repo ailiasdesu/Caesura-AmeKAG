@@ -649,7 +649,6 @@ def main():
     if os.environ.get("CAESURA_SMOKE_FORCE_NO_WEB") == "1":
         _web_ready = False
     if _web_ready:
-        import uuid
         # Inspect only this invocation's output, never a prior smoke package.
         _pkg_name = "smoke_pkg_" + uuid.uuid4().hex
         st, resp = request("/api/package/web",
