@@ -46,7 +46,7 @@ class OwnerTests(unittest.TestCase):
 
     def test_success_requires_live_owner_inspection_and_actual_zero_exit(self):
         result=self.run_child(self.ready+self.hold,inspect=self.inspect_release)
-        self.assertEqual(result['status'],'OBSERVED')
+        self.assertEqual(result['status'],'OBSERVED',msg=result)
         self.assertEqual(result['receipt']['actual_exit_code'],0)
         self.assertEqual(result['inspection']['observed_pid'],result['receipt']['process']['pid'])
         self.retired(result)
