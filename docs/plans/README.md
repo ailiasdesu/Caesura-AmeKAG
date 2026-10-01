@@ -1,5 +1,7 @@
 # 当前迭代计划
 
+2026-10-01 最新接续：[c41 候选分项验收与验证入口修复](2026-10-01-002-c41-candidate-and-validation-repairs.md)。c41 的12项托管 CI、完整 Release、一小时长跑、原生35步作者/恢复和选定效果矩阵已接受；CPU 保持 INCONCLUSIVE。Web author12通过，cold2因探针语法错误待修复后继续。Linux sanitizer 严格失败及 EAS 三 lane 原失败保留，sanitizer已有具体限制与替代验证记录；SMA改内容保存回归和整合修复后的必要验证继续，完整 U1–U29 尚未完成。
+
 2026-10-01 最新接续：[c68 运行时、验证夹具修复与当前证据接续](2026-10-01-001-candidate-runtime-fixture-validation.md)。locale 错误域、首条 callee save、CRT 与 clean-checkout/CrossFS 夹具修复已取得分项真实证据；当前 SDK-ON Debug 完整11项与 strict 已通过，Linux CrossFS30、Windows27、Web642及AE4分别按源绑定接受。当前 CI 因平台文档 freshness 失败，P6、当前 Release/long、最终包与作者恢复验收继续；本次仅同步文档锚，不提升能力行或宣布 U1–U29 完成。
 
 2026-09-30 最新接续：[托管 JDK 输入隔离与来源闭包](2026-09-30-004-controlled-jdk-inputs.md)。已实测拒绝项是指向根外系统信任库的 cacerts 链接；新输入准备器保持严格路径和签名规则，单独锁定明确依赖并生成普通文件镜像。输出目录约束采用真实验证的普通读取句柄方案；当前完整复验与新版独审均通过，真实 hosted 链继续，旧候选失败不改记。

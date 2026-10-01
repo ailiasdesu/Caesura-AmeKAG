@@ -1,6 +1,19 @@
 # 当前待办与进度
 
-## 2026-10-01 当前接续
+## 2026-10-01 c41 验收与修复接续
+
+完整目标仍为 U1–U29。冻结产品 c41 与后续验证修复整合版本分别记录，详见[c41 执行记录](2026-10-01-002-c41-candidate-and-validation-repairs.md)。
+
+- [x] c41 托管 CI12项、必需 producer/aggregate 输入身份核对；只接受 dry-run 输入，不授予发布许可。
+- [x] 当前 Foundation Release11项及 strict、一小时真实后端 long；CPU结果保留 INCONCLUSIVE。
+- [x] 当前原生35步作者/冷热恢复、加密正负控与旧包回退；选定 U16 18场景/82图及 c68 SDK/P6 范围分别接受。
+- [ ] Web author12实际通过；basic cold首阶段因探针表达式语法错误失败、kag3 cold未运行。修正探针后完成原cold2合同，保留首次失败。
+- [x] 完成当前 Linux sanitizer 的具体第三方诊断、第一方与替代验证限定处置及 TSan 基本可行性记录；strict 仍 FAIL，不改写失败或事后缩减 required 集合。
+- [ ] SMA 保存真实 RED 已复现，最小路径修复与持久字节回归已实现；GREEN及整合构建待验。
+- [ ] EAS 原三 lane 失败保留；iOS 编译修复及整合代码需实际 Apple 复验，Mac 单次诊断成功不解释原失败。
+- [ ] U28 公开声明和完整 U1–U29 最终核对；设备、账号、物理输出及最终整合候选继续按实际证据限定范围。
+
+## 2026-10-01 c68 历史接续
 
 当前代码为 `c68ffbc02cccda227a85b104013124b55d415326`，详情见[c68 执行记录](2026-10-01-001-candidate-runtime-fixture-validation.md)。locale/首条 save/CRT/验证夹具修复、当前 SDK11＋strict、CrossFS30、Windows27、Web642与AE4各有实际原件或明确源码复用桥；它们不是全平台或完整交付通过。原 bef1 SDK FAIL、当前 CI 平台文档 freshness FAIL、早期长跑失败与 CPU INCONCLUSIVE 均保留。
 
