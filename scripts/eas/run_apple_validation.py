@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 from datetime import datetime, timezone
 import hashlib
 import importlib.util
@@ -95,7 +96,8 @@ class Lane:
         (self.evidence / "eas-execution.json").write_text(
             json.dumps(self.receipt, indent=2) + "\n", encoding="utf-8")
 
-    def source_snapshot(self):
+    @contextlib.contextmanager
+    def _fetched_scripts(self):
         scripts = self.source / "scripts"
         dependencies = ("validation_process", "validation_sanitizer")
         # The uploaded bootstrap and fetched engine are separate source roots.
@@ -112,12 +114,7 @@ class Lane:
             sys.path.insert(0, str(scripts))
             for name in dependencies:
                 sys.modules.pop(name, None)
-            spec = importlib.util.spec_from_file_location("pinned_runner", scripts / "run_validation.py")
-            runner = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(runner)
-            profile = json.loads((scripts / "validation_profiles.json").read_text(encoding="utf-8-sig"))
-            return {**runner._source_identity(self.source),
-                    "fixture_sha256": runner.fingerprint_paths(self.source, profile["fixture_paths"])}
+            yield scripts
         finally:
             sys.path[:] = previous_path
             for name, previous in previous_modules.items():
@@ -127,6 +124,15 @@ class Lane:
             sys.path_importer_cache.pop(str(scripts), None)
             if previous_finder is not missing:
                 sys.path_importer_cache[str(scripts)] = previous_finder
+
+    def source_snapshot(self):
+        with self._fetched_scripts() as scripts:
+            spec = importlib.util.spec_from_file_location("pinned_runner", scripts / "run_validation.py")
+            runner = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(runner)
+            profile = json.loads((scripts / "validation_profiles.json").read_text(encoding="utf-8-sig"))
+            return {**runner._source_identity(self.source),
+                    "fixture_sha256": runner.fingerprint_paths(self.source, profile["fixture_paths"])}
 
     def run(self, name, argv, *, cwd=None, timeout=600, allow_failure=False, env=None):
         argv = [str(part) for part in argv]
@@ -433,16 +439,17 @@ class Lane:
         before = sha256(binary)
         code, text = self.run("simulator-cpp", ["xcrun", "simctl", "spawn", udid, binary, "--no-colors"],
                               cwd=test_cwd, timeout=900, allow_failure=True)
-        module_spec = importlib.util.spec_from_file_location("pinned_collector",
-            self.source / "scripts/collect_validation_evidence.py")
-        collector = importlib.util.module_from_spec(module_spec)
-        module_spec.loader.exec_module(collector)
+        with self._fetched_scripts() as scripts:
+            module_spec = importlib.util.spec_from_file_location("pinned_collector",
+                scripts / "collect_validation_evidence.py")
+            collector = importlib.util.module_from_spec(module_spec)
+            module_spec.loader.exec_module(collector)
+            counts, _ = collector.parse_doctest(text)
         # Use the existing conservative native Apple discovery floor; never lower it after a failure.
         profile_path = self.source / "scripts/validation_profiles.json"
         profile = json.loads(profile_path.read_text(encoding="utf-8-sig"))
         shutil.copyfile(profile_path, self.evidence / "simulator-discovery-profile.json")
         minimum = next(c["min_discovered"] for c in profile["profiles"]["macos-debug"]["checks"] if c["id"] == "cpp")
-        counts, _ = collector.parse_doctest(text)
         passed = code == 0 and counts["discovered"] >= minimum and counts["failed"] == 0 and counts["skipped"] == 0 and sha256(binary) == before
         self.receipt["simulator_cpp"] = {"status": "PASS" if passed else "FAIL", "exit_code": code,
             "counts": counts, "minimum_discovered": minimum, "minimum_source": "macos-debug/cpp",
