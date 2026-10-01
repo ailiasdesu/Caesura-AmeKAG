@@ -1,5 +1,18 @@
 # 当前待办与进度
 
+## 2026-10-01 b533 最终字节与范围接续
+
+完整目标仍为U1–U29，详见[b533记录](2026-10-01-004-b533-final-package-validation.md)。003及以下旧段落保留原时点，不能把旧未勾选项机械解释为新增当前门禁。
+
+- [x] b533 CI36826420478/attempt1全部12job成功，10必需producer／11role同源闭合；仅dry-run输入接受。
+- [x] Web／Windows最终字节按API、manifest和hosted receipt摘要绑定；原下载超时与collector预期失败保留。
+- [x] Native33当前操作＋2历史create获PASS_NATIVE35_SCOPE_ONLY及root接受，24PNG/state/nextchoice/ending与负控按选定范围核验；actualframes等未测字段和旧来源保留。
+- [x] Web当前basic package/static与短根六步均已逐步接受，最终Web独审及root范围接受完成；4个cold场景共12次独立Chrome自然退出，不把UI槽／AB结果外推完整AE3 nextchoice/像素。
+- [ ] EAS三lane因Free CI/CD额度在worker前被拒，取源／编译／测试NOT_RUN；保留实际原因，不以GitHub替代或重复提交同一条件。
+- [x] U28当前声明与原件索引同步；SAN strictFAIL、CPU INCONCLUSIVE、设备／账号／物理输出条件与历史SDK/P6 scope保持。
+- [ ] U29完整目标仍未完成：用户指定EAS三lane因外部额度未执行；当前Native/Web范围通过不能替代该要求。
+- [x] U23按计划允许的dry-run范围核对；正向hosted tag仍NOT_RUN，是范围披露，不追加为新必需门禁或远端tag操作授权。
+
 ## 2026-10-01 候选失败与 UI 读档修复接续
 
 完整目标仍为 U1–U29，详见[本次执行记录](2026-10-01-003-candidate-validation-repair-followup.md)。以下新增事实接续前文时点；旧段落与原验收范围保留，不将后续修复改写成旧候选通过。

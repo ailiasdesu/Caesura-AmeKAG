@@ -1,5 +1,7 @@
 # 当前迭代计划
 
+2026-10-01 最新接续：[b533最终包、托管终态与作者恢复](2026-10-01-004-b533-final-package-validation.md)。b533的12项GitHub CI成功，10producer／11role dry-run闭合，release_ready仍false；EAS因实际CI/CD额度在worker前拒绝，三lane未执行。Native33当前操作加2历史create已获限定独审及root接受；Web当前8项步骤及最终Web限定独审／root范围接受均已完成。长127／短107对照仅属环境诊断。SAN strictFAIL、CPU INCONCLUSIVE、设备限定及U1–U29未全完成保留；hosted tag仍NOT_RUN，不追加为当前dry-run门禁。
+
 2026-10-01 最新接续：[候选失败原件、UI 读档与验证入口修复](2026-10-01-003-candidate-validation-repair-followup.md)。SMA真实保存字节修复已接受，但LSan与整体FAIL保留；f2cf托管CI及EAS完整运行失败，iOS device仅未签名编译范围接受。UI读档已取得真实Chrome限定GREEN与完整Web644通过；uuid、collector修复已本地提交，owner可信通知修复及本地87项验证已限定接受，整合代码锚为 `0c473bf19220aa820391672431d450f78a560f2e`。原Web作者12步与失败均保留，新最终包双模板cold及完整U1–U29继续。
 
 2026-10-01 最新接续：[c41 候选分项验收与验证入口修复](2026-10-01-002-c41-candidate-and-validation-repairs.md)。c41 的12项托管 CI、完整 Release、一小时长跑、原生35步作者/恢复和选定效果矩阵已接受；CPU 保持 INCONCLUSIVE。Web author12通过，cold2因探针语法错误待修复后继续。Linux sanitizer 严格失败及 EAS 三 lane 原失败保留，sanitizer已有具体限制与替代验证记录；SMA改内容保存回归和整合修复后的必要验证继续，完整 U1–U29 尚未完成。
