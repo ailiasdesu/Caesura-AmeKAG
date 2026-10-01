@@ -3057,7 +3057,7 @@ TEST_CASE("U26 coordinator: historical export keeps exact bytes and works offlin
         CHECK(replay.code == CloudCoordinatorCode::Replayed);
         CHECK(replay.path == result.path);
         CHECK(replay.sha256 == result.sha256);
-        CHECK(std::filesystem::last_write_time(path) == modified);
+        CHECK((std::filesystem::last_write_time(path) == modified));
         CHECK(u26ConflictTree(f.coordinatorRoot) == before);
         auto other = choice;
         other.variant = variant == CloudPreservedVariant::Local ? CloudPreservedVariant::Cloud : CloudPreservedVariant::Local;
