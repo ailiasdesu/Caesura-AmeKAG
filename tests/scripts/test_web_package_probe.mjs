@@ -7,6 +7,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, realpathSy
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createCdpWebSocket } from '../../scripts/cdp_websocket.mjs'
 
 // Protocol fixtures exercise the real CLI. No Chrome, engine, game runtime,
 // package HTTP server, or browser-equivalent success is claimed here.
@@ -28,15 +29,17 @@ const argumentsFor = out => ['--url', 'http://127.0.0.1:12345/games/example/', '
 function packet(value) {
   const payload = Buffer.from(JSON.stringify(value))
   if (payload.length < 126) return Buffer.concat([Buffer.from([0x81, payload.length]), payload])
-  const head = Buffer.alloc(4); head[0] = 0x81; head[1] = 126; head.writeUInt16BE(payload.length, 2)
+  const head = Buffer.alloc(payload.length <= 65535 ? 4 : 10); head[0] = 0x81
+  if (payload.length <= 65535) { head[1] = 126; head.writeUInt16BE(payload.length, 2) }
+  else { head[1] = 127; head.writeBigUInt64BE(BigInt(payload.length), 2) }
   return Buffer.concat([head, payload])
 }
 // An OS-assigned port can be Fetch/WebSocket-blocked on hosts whose ephemeral
 // range includes low ports. Ordinary protocol tests need a usable WebSocket;
 // the explicit blocked-port tests below keep their own deliberate selections.
 const ordinaryFixturePorts = Array.from({ length: 64 }, (_, index) => 49152 + index)
-async function protocolFixture(t, responder, versionOverride, ports = ordinaryFixturePorts) {
-  const commands = [], requests = [], sockets = new Set()
+async function protocolFixture(t, responder, versionOverride, ports = ordinaryFixturePorts, upgradeResponse = null) {
+  const commands = [], requests = [], upgrades = [], sockets = new Set()
   const server = createServer((req, res) => {
     requests.push(req.url)
     if (typeof versionOverride === 'function') { versionOverride(req, res); return }
@@ -45,6 +48,8 @@ async function protocolFixture(t, responder, versionOverride, ports = ordinaryFi
   })
   server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)) })
   server.on('upgrade', (req, socket) => {
+    upgrades.push({ path: req.url, headers: { ...req.headers } })
+    if (upgradeResponse) { upgradeResponse(req, socket); return }
     const accept = createHash('sha1').update(req.headers['sec-websocket-key'] + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64')
     socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`)
     let buffer = Buffer.alloc(0)
@@ -90,7 +95,7 @@ async function protocolFixture(t, responder, versionOverride, ports = ordinaryFi
   }
   assert.ok(server.listening, 'No configured fixture port could be owned; existing listeners were untouched: ' + JSON.stringify(bindAttempts))
   t.after(async () => { for (const socket of sockets) socket.destroy(); await new Promise(done => server.close(done)) })
-  return { cdp: `http://127.0.0.1:${server.address().port}`, commands, requests, bindAttempts }
+  return { cdp: `http://127.0.0.1:${server.address().port}`, commands, requests, upgrades, bindAttempts }
 }
 
 function fixtureArgs(out, fixture) { const args = argumentsFor(out); args[3] = fixture.cdp; return args }
@@ -546,4 +551,68 @@ test('CDP control HTTP errors retain the original socket failure cause', async t
   assert.match(JSON.stringify(report.errors), /CDP control request failed/)
   assert.match(JSON.stringify(report.errors), /Caused by:.*socket hang up/)
   assert.deepEqual(f.requests, ['/json/version']); assert.equal(f.commands.length, 0)
+})
+
+
+function transportUrl(fixture) { return fixture.cdp.replace('http:', 'ws:') + '/devtools/browser/fixture' }
+function rejectedUpgrade(socket) {
+  return new Promise((done, reject) => {
+    const timer = setTimeout(() => { socket.close(); reject(new Error('Upgrade rejection deadline')) }, 5000)
+    socket.addEventListener('open', () => { clearTimeout(timer); socket.close(); done(false) }, { once: true })
+    socket.addEventListener('error', () => { clearTimeout(timer); done(true) }, { once: true })
+  })
+}
+function upgradeHeaders(request, { extension, badAccept = false } = {}) {
+  const accept = badAccept ? 'invalid-accept' : createHash('sha1').update(request.headers['sec-websocket-key'] + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64')
+  return `HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n${extension ? 'Sec-WebSocket-Extensions: ' + extension + '\r\n' : ''}\r\n`
+}
+
+test('CDP builtin transport omits deflate and receives a full large body plus a following response', async t => {
+  const body = 'x'.repeat(5 * 1024 * 1024), digest = createHash('sha256').update(body).digest('hex')
+  const f = await protocolFixture(t, call => ({ result: call.id === 1 ? { body } : { healthy: true } }))
+  const socket = createCdpWebSocket(transportUrl(f)), responses = []
+  await new Promise((done, reject) => {
+    const timer = setTimeout(() => { socket.close(); reject(new Error('Large CDP body deadline')) }, 5000)
+    socket.addEventListener('error', event => { clearTimeout(timer); reject(event.error || new Error('Builtin socket error')) })
+    socket.addEventListener('open', () => socket.send(JSON.stringify({ id: 1, method: 'body' })))
+    socket.addEventListener('message', event => {
+      try {
+        const value = JSON.parse(event.data); responses.push(value)
+        if (value.id === 1) {
+          assert.equal(value.result.body.length, body.length)
+          assert.equal(createHash('sha256').update(value.result.body).digest('hex'), digest)
+          socket.send(JSON.stringify({ id: 2, method: 'health' }))
+        } else { assert.equal(value.id, 2); assert.equal(value.result.healthy, true); socket.close() }
+      } catch (error) { clearTimeout(timer); socket.close(); reject(error) }
+    })
+    socket.addEventListener('close', event => { clearTimeout(timer); event.wasClean ? done() : reject(new Error('Unclean fixture close')) })
+  })
+  assert.equal(responses.length, 2); assert.equal(socket.extensions, '')
+  assert.equal(f.upgrades.length, 1); assert.equal(f.upgrades[0].headers['sec-websocket-extensions'], undefined)
+})
+
+test('CDP dispatcher rejects unsolicited compression despite builtin originally advertising it', async t => {
+  const f = await protocolFixture(t, () => null, undefined, ordinaryFixturePorts,
+    (req, socket) => socket.write(upgradeHeaders(req, { extension: 'permessage-deflate' })))
+  assert.equal(await rejectedUpgrade(createCdpWebSocket(transportUrl(f))), true)
+  assert.equal(f.upgrades[0].headers['sec-websocket-extensions'], undefined)
+})
+
+test('CDP builtin still rejects a forged accept and dispatcher refuses non101 without following redirect', async t => {
+  const bad = await protocolFixture(t, () => null, undefined, ordinaryFixturePorts,
+    (req, socket) => socket.write(upgradeHeaders(req, { badAccept: true })))
+  assert.equal(await rejectedUpgrade(createCdpWebSocket(transportUrl(bad))), true)
+  const redirect = await protocolFixture(t, () => null, undefined, ordinaryFixturePorts,
+    (_req, socket) => socket.end('HTTP/1.1 302 Found\r\nLocation: /devtools/browser/other\r\nContent-Length: 0\r\nConnection: close\r\n\r\n'))
+  assert.equal(await rejectedUpgrade(createCdpWebSocket(transportUrl(redirect))), true)
+  assert.equal(redirect.upgrades.length, 1); assert.deepEqual(redirect.requests, [])
+})
+
+test('CDP dispatcher refuses non-exact endpoints before opening a socket', async t => {
+  const f = await protocolFixture(t, () => null), url = transportUrl(f)
+  for (const value of [url.replace('127.0.0.1', 'localhost'), url.replace('/devtools/browser/fixture', '/other'),
+    url + '?query=1', url + '#fragment', url.replace('ws://', 'ws://user:pass@')]) {
+    assert.throws(() => createCdpWebSocket(value), /exact explicit loopback browser endpoint/)
+  }
+  assert.deepEqual(f.upgrades, []); assert.deepEqual(f.requests, [])
 })

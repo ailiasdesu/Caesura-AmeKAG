@@ -847,7 +847,7 @@ def run_web_package(package_root, attempt_dir, *, node_executable, browser_execu
         report['validator_sources'] = {str(path): _digest(path) for path in (
             Path(__file__).resolve(), SCRIPT_ROOT / 'package_runtime.py', SCRIPT_ROOT / 'validation_process.py',
             SCRIPT_ROOT / 'validation_sanitizer.py',
-            SCRIPT_ROOT / 'package_verification.py', PROBE)}
+            SCRIPT_ROOT / 'package_verification.py', PROBE, SCRIPT_ROOT / 'cdp_websocket.mjs')}
         before = inspect_inventory(package)
         report['package_before'] = before
         ci = os.environ.get('CI', '').lower() in {'1', 'true', 'yes'}

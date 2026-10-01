@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto'
 import { get as httpGet } from 'node:http'
 import { appendFileSync, closeSync, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
+import { createCdpWebSocket } from './cdp_websocket.mjs'
 
 const SCHEMA = 'caesura.web-package-probe.v1'
 const sleep = ms => new Promise(done => setTimeout(done, ms))
@@ -180,7 +181,7 @@ class Cdp {
     this.pending.clear()
   }
   static async connect(url, logPath, deadline) {
-    const socket = new WebSocket(url)
+    const socket = createCdpWebSocket(url)
     await new Promise((yes, no) => {
       const timer = setTimeout(() => { socket.close(); no(new Error('CDP connection timeout')) }, Math.max(1, Math.min(8000, deadline - Date.now())))
       socket.addEventListener('open', () => { clearTimeout(timer); yes() }, { once: true })
