@@ -6,7 +6,12 @@
 // and Lua-heap growth under collectgarbage — so engine/script hot-path
 // changes that would regress the browser player surface detectably.
 //
-// Measurement surface (jsdom-headless, wasmoon): wall time around runScene
+// Story throughput uses real Chromium/Wasmoon: jsdom's Node interval-based rAF
+// has a platform-dependent timer cadence and is not a browser rendering clock.
+// It retains jsdom's unavailable-audio workload through a real closed context
+// passed to createPlayer's public injection point. Audio positive behavior has
+// its own real-browser checks; this benchmark must not add audio-wait resumes.
+// All other measurements use jsdom-headless/Wasmoon. Wall time around runScene
 // includes parsing, scheduling, bridge work and final state publication.
 // Throughput uses one representative warmup and the median of three runs
 // in the same VM; it does not measure first-player startup. Every run still
@@ -35,6 +40,9 @@ import { createPlayer } from './bridge.js'
 import { installCanvasHost } from './test-support/canvas-host.js'
 import { createRepositoryFetch, repositoryAssetUrl } from './test-support/repository-fetch.js'
 import { DomRenderer } from './dom-renderer.js'
+import { execFile, spawnSync } from 'node:child_process'
+import { promisify } from 'node:util'
+import { validateStoryBrowserReport } from './test-support/run-story-browser-benchmark.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const rootDir = join(here, '..')
@@ -244,11 +252,29 @@ describe('web player performance baseline (round 109)', () => {
   it('story.ks main path: frame throughput + completes clean', async () => {
     const src = sourceFor('story.ks')
     expect(src, 'demo/example_game/story.ks should exist').toBeTruthy()
-    const r = await steadyRun(player, src, 'story.ks')
+    let python
+    const candidates = process.env.PYTHON ? [process.env.PYTHON]
+      : process.platform === 'win32' ? ['python', 'python3'] : ['python3', 'python']
+    for (const candidate of candidates) {
+      const probe = spawnSync(candidate, ['-c', 'import sys; assert sys.version_info >= (3,10); print(sys.executable)'],
+        {encoding:'utf8', windowsHide:true, timeout:5000})
+      if (probe.status === 0) { python = probe.stdout.trim(); break }
+    }
+    expect(python, 'Existing Python process-tree owner is required').toBeTruthy()
+    const {stdout} = await promisify(execFile)(python,
+      ['-B', '-X', 'utf8', join(rootDir, 'tests/scripts/run_story_browser_benchmark.py'), process.execPath],
+      {cwd:rootDir, windowsHide:true, timeout:105000, maxBuffer:16*1024*1024})
+    const report = JSON.parse(stdout)
+    const samples = validateStoryBrowserReport(report)
+    process.stdout.write(`[perf] real browser=${report.browserVersion}; report=${report.output}/report.json\n`)
+    const r = medianRun(samples, 'story.ks')
     assertThroughput(r, 'story.ks', 0.8, 0.08)
   }, 120000)
 
   it('story.ks Lua heap growth stays bounded (< 1024 KB)', async () => {
+    // The throughput case now owns a browser VM. Keep this shared jsdom VM's
+    // heap measurement warm as before, rather than accidentally measuring boot.
+    await benchmarkRun(player, sourceFor('story.ks'), 'story.ks')
     const r = await benchmarkRun(player, sourceFor('story.ks'), 'story.ks-mem')
     expect(r.memGrowthKB, 'story.ks heap growth < 1024 KB (got ' + r.memGrowthKB.toFixed(1) + ' KB)').toBeLessThan(1024)
   }, 120000)
