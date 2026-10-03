@@ -2,9 +2,9 @@
 
 > 由 python scripts/capability_closure.py 生成；勿手动编辑。
 > **证据边界：CLOSED / Tested 仅为静态源码扫描与历史人工覆写；本生成器不运行引擎、不读取本轮执行终态，不代表本轮 runtime PASS，也不代表测试覆盖率。**
-> 生成时间（输入源最新 mtime）：2026-10-01T17:39:16Z
+> 生成时间（输入源最新 mtime）：2026-10-03T10:53:57Z
 > 生成命令：python scripts/capability_closure.py
-> 源指纹（输入内容 sha256 前 16 hex）：b04a25930023cc9f
+> 源指纹（输入内容 sha256 前 16 hex）：fc92a30efd6107b1
 > 输出确定性：同源指纹同字节（generated_at 为输入源最新 mtime；跨机 checkout 的 mtime 差异属 by-design，确定性以指纹为准）
 
 ## 概述
@@ -100,7 +100,7 @@
 | ai_dialog | Y | Y | Y | CLOSED | 7 | - | - | ? | scripts/kag/commands/system.lua:671 |
 | assert | Y | Y | n | CLOSED | 7 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:463 |
 | auto | Y | Y | n | CLOSED | 6 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:1163 |
-| bg | Y | Y | Y | CLOSED | 39 | - | - | ? | scripts/kag/commands/layer.lua:122 |
+| bg | Y | Y | Y | CLOSED | 40 | - | - | ? | scripts/kag/commands/layer.lua:122 |
 | bgm | Y | Y | Y | CLOSED | 4 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag.lua:498 |
 | blur | Y | Y | n | PARTIAL | 4 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/transition.lua:295 |
 | br | Y | Y | n | CLOSED | 3 | - ⚠ | - ⚠ | VERIFIED（位置级） ⚠ | scripts/kag.lua:212 |
@@ -182,7 +182,7 @@
 | nameplate | Y | Y | n | CLOSED | 9 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:421 |
 | notify | Y | Y | n | CLOSED | 38 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:605 |
 | nvl | Y | Y | Y | CLOSED | 28 | - | - | ? | scripts/kag/commands/text.lua:1027 |
-| p | Y | Y | Y | CLOSED | 330 | - | - | ? | scripts/kag/commands/text.lua:993 |
+| p | Y | Y | Y | CLOSED | 331 | - | - | ? | scripts/kag/commands/text.lua:993 |
 | palette | Y | Y | n | CLOSED ⚠ | 28 | win ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/vfx.lua:467 |
 | particle_weather | Y | Y | Y | CLOSED | 3 | - | - | ? | scripts/kag/commands/vfx.lua:610 |
 | particles | Y | Y | Y | CLOSED | 3 | - | - | ? | scripts/kag/commands/vfx.lua:398 |
