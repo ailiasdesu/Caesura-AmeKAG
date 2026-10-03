@@ -39,3 +39,11 @@
 第三轮Linux在CTest中暴露了身份损坏测试的故障注入竞态：存在性探测认为文件未发布后，实际读取恰好成功，从而未注入非法JSON。生产代码的JSON解码错误不会重试。测试现先保留真实读取的缺失/共享错误，再对成功读取的精确目标注入损坏内容；同时固定原预检查边界，防止再次漏注入。原单次拒绝、监控未执行和完整进程清理断言不变。本地完整native package runtime套件84项通过，证据为 `ci-pr27-linux-third-ctest` 和 `ci-pr27-native-identity-green-01`。
 
 两项修复后的完整Web复验为57文件、725/725通过，源码稳定、实际退出0且进程树清理完成。原件为恢复根的 ci-pr27-web-full-font-green-01；最终合并仍以最新head的托管CI通过为前提。
+
+## 托管复验与浏览器协议就绪
+
+后续托管Linux完整Web 725/725通过，故事中位3753.8ms；Windows Debug也通过了严格原生、编辑器、Web和Unicode打包检查，故事样本3662.6/4244.8/3705.0ms，按原中位数规则约0.0915 tokens/ms。新鲜度检查另发现闭环矩阵的静态测试引用计数未同步，现重新生成；其输入指纹与托管结果一致，不把静态计数提升为运行证明。
+
+再下一轮Windows在故事开始前遇到独立启动故障：DevToolsActivePort已发布，但首次GET /json/version在原1000ms请求限时内没有响应。协调器现于原60秒总deadline内等待同一浏览器的HTTP和初始page就绪；每次请求及正文读取共享不超过剩余预算的1000ms AbortSignal。仅指定临时网络错误、502/503/504和合法空page列表可等待；非法JSON、错误端口/页面身份、永久HTTP错误或子进程退出立即失败。没有浏览器重启、场景重跑或更改性能门槛，退出和进程树清理要求不变。
+
+原一次性读取行为在新增反证中产生11项失败；实现后58项通过，实际浏览器故事中位1810.5ms且仍完成原工作量。随后新增真实loopback HTTP延迟正文测试，直接触发原生fetch/AbortSignal超时并验证同一端点后续就绪，59项全过，服务端连接及拥有进程树完整清理。独立审查通过。原件为 `ci-pr27-windows-fifth-job.log`、`ci-pr27-browser-startup-red-01`、`ci-pr27-browser-startup-green-01`、`ci-pr27-browser-startup-http-green-01`。

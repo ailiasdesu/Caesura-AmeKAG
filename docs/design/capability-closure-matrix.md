@@ -2,9 +2,9 @@
 
 > 由 python scripts/capability_closure.py 生成；勿手动编辑。
 > **证据边界：CLOSED / Tested 仅为静态源码扫描与历史人工覆写；本生成器不运行引擎、不读取本轮执行终态，不代表本轮 runtime PASS，也不代表测试覆盖率。**
-> 生成时间（输入源最新 mtime）：2026-10-03T10:53:57Z
+> 生成时间（输入源最新 mtime）：2026-10-03T12:16:26Z
 > 生成命令：python scripts/capability_closure.py
-> 源指纹（输入内容 sha256 前 16 hex）：fc92a30efd6107b1
+> 源指纹（输入内容 sha256 前 16 hex）：2c07b6816e57b482
 > 输出确定性：同源指纹同字节（generated_at 为输入源最新 mtime；跨机 checkout 的 mtime 差异属 by-design，确定性以指纹为准）
 
 ## 概述
