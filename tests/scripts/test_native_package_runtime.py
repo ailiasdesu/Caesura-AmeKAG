@@ -1396,13 +1396,23 @@ class NativePackageRuntimeTests(unittest.TestCase):
 
     def test_process_identity_invalid_json_is_not_retried(self):
         original, reads, observed = Path.read_text, [], []
+        original_is_file = Path.is_file
         target = self.root / "direct/commands/child/control/process.json"
         def malformed(path, *args, **kwargs):
-            if path == target and path.is_file():
+            # Preserve real missing/sharing failures; inject only after a real
+            # successful read. A prior existence probe can race publication.
+            text = original(path, *args, **kwargs)
+            if path == target:
                 reads.append(path)
                 return "{"
-            return original(path, *args, **kwargs)
-        with patch.object(Path, "read_text", malformed):
+            return text
+        def unpublished_probe(path):
+            # Force the formerly racy ordering: metadata still says absent,
+            # while the subsequent real read may see the atomic publication.
+            # This observation must not bypass malformed-JSON injection.
+            return False if path == target else original_is_file(path)
+        with patch.object(Path, "is_file", unpublished_probe), \
+             patch.object(Path, "read_text", malformed):
             report = self.execute_fixture(timeout=6, controlled=True,
                 monitor=lambda identity, deadline: observed.append(identity))
         self.assertFalse(report["passed"], report)
