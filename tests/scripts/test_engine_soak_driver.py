@@ -58,7 +58,8 @@ class OwnerTests(unittest.TestCase):
         self.assertEqual(result['inspection']['observed_pid'],result['receipt']['process']['pid'])
         self.retired(result)
 
-    def _observe_controlled_publication_boundary(self, *, complete_child, forge_done=False):
+    def _observe_controlled_publication_boundary(self, *, complete_child, forge_done=False,
+                                               cleanup_failure=False):
         """Real child/launcher/cleanup; control only the observer clock and publication.
 
         No heartbeat is added. The fixture still writes exactly one progress line.
@@ -81,6 +82,8 @@ class OwnerTests(unittest.TestCase):
             terminal.set()
             if not publish.wait(6):
                 raise AssertionError('Fixture publication barrier was not released')
+            if cleanup_failure:
+                raise RuntimeError('declared cleanup completion failure')
             return code
 
         class ObserverClock:
@@ -254,18 +257,16 @@ class OwnerTests(unittest.TestCase):
         self.retired(result)
 
     def test_reported_cleanup_failure_after_terminal_cannot_accept_actual_zero(self):
-        original = validation_process.run_owned_command
-        captured = {}
-        def reject_after_real_cleanup(*args, **kwargs):
-            code = original(*args, **kwargs)
-            captured['code'] = code
-            captured['result'] = json.loads(
-                (self.root/'evidence/process/result.json').read_text(encoding='utf-8'))
-            raise RuntimeError('declared cleanup completion failure')
-        with mock.patch.object(validation_process, 'run_owned_command', reject_after_real_cleanup):
-            result = self.run_child(self.ready+self.hold, inspect=self.inspect_release)
-        self.assertEqual(captured['code'], 0)
+        # Reach the trusted terminal callback before crossing the unchanged .4s
+        # observer deadline, then inject failure at cleanup-return publication.
+        # Real child/launcher scheduling must not select a different first error.
+        result, captured, terminal = self._observe_controlled_publication_boundary(
+            complete_child=True, cleanup_failure=True)
+        self.assertTrue(terminal, result)
+        self.assertEqual(captured['launcher_exit'], 0)
         self.assertEqual(captured['result']['actual_exit_code'], 0)
+        self.assertEqual(result['work_terminal']['actual_exit_code'], 0)
+        self.assertEqual(result['work_terminal']['process'], result['observed_process'])
         self.assertEqual(result['status'], 'FAIL')
         self.assertIn('declared cleanup completion failure', result['error'])
         self.assertNotEqual(result['receipt']['owned_tree_cleanup'], 'COMPLETE')
