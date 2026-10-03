@@ -21,3 +21,9 @@
 浏览器使用独有profile/CDP和Vite缓存；HTTP路径受限，允许Vite等待尚未发布的自有cache依赖但拒绝越界及链接逃逸。源码manifest包含实际Wasmoon JavaScript/WASM。Python薄入口复用维护中的Windows Job/POSIX进程组所有权；报告要求真实浏览器/launcher退出、endpoint退休、源码稳定、无fallback及完整owner清理，不只接受摘要PASS。
 
 原件留在恢复根的 `ci-pr27-macos-small-01`、`ci-pr27-windows-first-failure.log`、`ci-pr27-targeted-preflight-02`、`ci-web-throughput-readonly-01`、`ci-pr27-real-browser-story-01..04`、`ci-pr27-web-full-green-01`。初次浏览器bootstrap、WAIT_AUDIO等失败也保留；没有重写成通过。
+
+## Linux Vite 路径复验
+
+第二轮 CI `37114535328` 的 macOS Debug 已通过；Linux 的新浏览器故事测试在 bootstrap 阶段失败。Vite 在 POSIX 上通过 `posix.join('/@fs/', absoluteId)` 生成 `/@fs/tmp/...`，其 `fsPathFromId` 会恢复前导斜杠。协调器此前直接对截取后路径调用 `resolve`，误将 Linux 绝对路径解释为仓库相对路径。现按 Vite 规则解码，保留 Windows 绝对盘符和独占缓存的词法、真实路径边界；未扩大任意文件访问范围。
+
+路径夹具改用 Vite 实际的 URL 生成方式，报告新增源码清单摘要校验，失败 stderr 保留有界原始诊断，成功日志记录三个真实样本。最新本地检查为46项通过；真实浏览器故事三个样本均为 DONE:339:193、5826 ticks、150次呈现，中位2875.8ms，原阈值通过，源码稳定且进程树完整清理。原件为 `ci-pr27-real-browser-story-05`。这些是定向验证，最终托管全量结果仍须以最新提交 CI 为准。
