@@ -95,6 +95,9 @@ export function browserFailureSummary(report) {
     workloadError:String(report.result?.error || '').slice(0,2048),
     diagnostics:diagnostics.slice(0,16).map(item=>({kind:String(item.kind).slice(0,128),detail:String(item.detail).slice(0,1024)})),
     diagnosticCount:diagnostics.length,sourceStable:report.sourceStable,
+    startup:report.startup?{attempts:report.startup.attempts,transientFailures:report.startup.transientFailures,
+      emptyTargetLists:report.startup.emptyTargetLists,elapsedMs:report.startup.elapsedMs,ready:report.startup.ready,
+      lastFailure:String(report.startup.lastFailure||'').slice(0,512)}:null,
     sourceManifestSha256:report.sourceManifestSha256,browserPid:report.browserPid,
     browserExited:report.browserExited,endpointClosed:report.endpointClosed,
     launcherExit:report.launcherExit,cleanupFallback:report.cleanupFallback??false}
@@ -139,6 +142,91 @@ class Cdp {
   close(){for(const call of this.pending.values()){clearTimeout(call.timer);call.reject(Error('CDP closed'))}this.pending.clear();this.socket.close()}
 }
 
+// DevToolsActivePort precedes HTTP/target readiness. Poll only this owned
+// browser's startup protocol; never retry a measured workload or relaunch it.
+export async function waitForBrowserStartup({endpoint,deadline,fetchImpl=fetch,
+  now=Date.now,pause=sleep,getChildState=()=>({exited:false}),startup={},diagnostic=()=>{}}) {
+  const base=new URL(endpoint)
+  ensure(base.protocol==='http:' && base.hostname==='127.0.0.1' && base.port
+    && !base.username && !base.password && base.pathname==='/' && !base.search && !base.hash,
+    'Invalid owned browser endpoint')
+  ensure(Number.isFinite(deadline),'Invalid browser startup deadline')
+  const started=now()
+  Object.assign(startup,{attempts:0,transientFailures:0,emptyTargetLists:0,ready:false})
+  const check=()=>{
+    const state=getChildState()
+    if(state.launchError)throw state.launchError
+    ensure(!state.exited,'Owned browser exited before protocol readiness')
+    ensure(now()<deadline,'Browser startup deadline exceeded')
+  }
+  const validSocket=(value,kind)=>{
+    let socket
+    try{socket=new URL(value)}catch{throw Error('Invalid browser '+kind+' websocket URL')}
+    ensure(socket.protocol==='ws:' && socket.hostname===base.hostname && socket.port===base.port
+      && !socket.username && !socket.password && !socket.search && !socket.hash
+      && socket.pathname.startsWith('/devtools/'+kind+'/')
+      && socket.pathname.length>('/devtools/'+kind+'/').length,'Invalid browser '+kind+' endpoint identity')
+  }
+  const transient=error=>error?.name==='TimeoutError' || error?.name==='AbortError'
+    || ['ECONNREFUSED','ECONNRESET','ETIMEDOUT','UND_ERR_CONNECT_TIMEOUT','UND_ERR_SOCKET'].includes(error?.cause?.code??error?.code)
+    || (error instanceof TypeError && /fetch failed|failed to fetch|networkerror/i.test(error.message))
+  async function request(path) {
+    check();startup.attempts++
+    const remaining=Math.max(1,Math.min(1000,Math.floor(deadline-now())))
+    try {
+      // The same signal covers both headers and body consumption.
+      const response=await fetchImpl(endpoint+path,{signal:AbortSignal.timeout(remaining)})
+      check()
+      if([502,503,504].includes(response.status)){
+        try{await response.body?.cancel()}catch{}
+        startup.transientFailures++;startup.lastFailure='HTTP '+response.status+' '+path
+        diagnostic('browser-startup-retry',{attempt:startup.attempts,path,error:startup.lastFailure})
+        return null
+      }
+      ensure(response.ok===true,'Browser startup HTTP '+response.status+' '+path)
+      const value=await response.json()
+      check()
+      return {value}
+    }catch(error){
+      if(!transient(error))throw error
+      startup.transientFailures++;startup.lastFailure=String(error.name+': '+error.message).slice(0,512)
+      diagnostic('browser-startup-retry',{attempt:startup.attempts,path,error:startup.lastFailure})
+      return null
+    }
+  }
+  async function pending() {check();await pause(Math.min(50,deadline-now()))}
+  let version
+  try {
+    for(;;){
+      check()
+      if(!version){
+        const response=await request('/json/version')
+        if(!response){await pending();continue}
+        version=response.value
+        ensure(version && typeof version==='object' && !Array.isArray(version)
+          && typeof version.Browser==='string' && version.Browser.trim(), 'Invalid browser version response')
+        validSocket(version.webSocketDebuggerUrl,'browser')
+      }
+      const response=await request('/json/list')
+      if(!response){await pending();continue}
+      const targets=response.value
+      ensure(Array.isArray(targets) && targets.every(target=>target && typeof target==='object'
+        && typeof target.type==='string'), 'Invalid browser target list')
+      const page=targets.find(target=>target.type==='page')
+      if(!page){
+        startup.emptyTargetLists++
+        diagnostic('browser-startup-empty-targets',{attempt:startup.attempts,count:targets.length})
+        await pending();continue
+      }
+      ensure(typeof page.id==='string' && page.id && page.url==='about:blank', 'Invalid owned browser page target')
+      validSocket(page.webSocketDebuggerUrl,'page')
+      check();startup.ready=true
+      diagnostic('browser-startup-ready',{attempts:startup.attempts,elapsedMs:now()-started})
+      return {version,targets}
+    }
+  } finally {startup.elapsedMs=now()-started}
+}
+
 async function run() {
   const out=mkdtempSync(join(tmpdir(),'caesura-story-browser-'))
   const profile=join(out,'profile');mkdirSync(profile)
@@ -146,6 +234,7 @@ async function run() {
   let server, child, browserCdp, page, endpoint, browserPid, launchError
   let report={passed:false,output:out}, sourceBefore
   const diagnostics=[]
+  const startup={}
   const diagnostic = (kind, detail) => { if(diagnostics.length<64)diagnostics.push({kind,detail:JSON.stringify(detail).slice(0,2048)}) }
   let bootstrapFailure
   const get = url => fetch(url,{signal:AbortSignal.timeout(1000)})
@@ -188,15 +277,17 @@ async function run() {
     child=spawn(browser,[...browserArgs,'about:blank'],{windowsHide:true,stdio:'ignore'})
     child.on('error',error=>{launchError=error})
     const deadline=Date.now()+60000, portFile=join(profile,'DevToolsActivePort')
-    while(!existsSync(portFile)){if(launchError)throw launchError;ensure(Date.now()<deadline,'Browser startup deadline');await sleep(50)}
+    while(!existsSync(portFile)){if(launchError)throw launchError
+      ensure(child.exitCode===null && child.signalCode===null,'Owned browser exited before port publication')
+      ensure(Date.now()<deadline,'Browser startup deadline');await sleep(50)}
     const port=Number(readFileSync(portFile,'utf8').split(/\r?\n/)[0]);ensure(Number.isInteger(port)&&port>0&&port<65536,'Invalid owned browser port')
     endpoint='http://127.0.0.1:'+port
-    const version=await(await get(endpoint+'/json/version')).json()
+    const {version,targets}=await waitForBrowserStartup({endpoint,deadline,startup,diagnostic,
+      getChildState:()=>({exited:child.exitCode!==null||child.signalCode!==null,launchError})})
     browserCdp=await Cdp.connect(version.webSocketDebuggerUrl)
     const processes=await browserCdp.send('SystemInfo.getProcessInfo')
     browserPid=processes.processInfo.find(item=>item.type==='browser')?.id
     ensure(Number.isSafeInteger(browserPid)&&browserPid>0,'Missing real browser process identity')
-    const targets=await(await get(endpoint+'/json/list')).json()
     page=await Cdp.connect(targets.find(target=>target.type==='page').webSocketDebuggerUrl, (method,params)=>{
       if(method==='Runtime.exceptionThrown'){
         diagnostic(method,params.exceptionDetails);bootstrapFailure=JSON.stringify(params.exceptionDetails).slice(0,2048)
@@ -243,7 +334,7 @@ async function run() {
     }
     await server?.close()
     const sourceAfter=sourceManifest(), sourceStable=JSON.stringify(sourceBefore)===JSON.stringify(sourceAfter)
-    report={...report,diagnostics,sourceBefore,sourceAfter,sourceStable,
+    report={...report,diagnostics,startup,sourceBefore,sourceAfter,sourceStable,
       sourceManifestSha256:sourceBefore?hash(JSON.stringify(sourceBefore)):null,
       browserPid:browserPid??null,endpointClosed,browserExited,launcherExit:child?.exitCode??null}
     report.passed=report.passed&&sourceStable&&endpointClosed&&browserExited&&child?.exitCode===0&&!report.cleanupFallback

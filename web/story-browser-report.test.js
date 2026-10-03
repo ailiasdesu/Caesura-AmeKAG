@@ -1,9 +1,10 @@
 import {describe,it,expect} from 'vitest'
-import {validateStoryBrowserReport,requiredSources,allowFreshViteDependency,viteFsPath,browserFailureSummary} from './test-support/run-story-browser-benchmark.mjs'
+import {validateStoryBrowserReport,requiredSources,allowFreshViteDependency,viteFsPath,browserFailureSummary,waitForBrowserStartup} from './test-support/run-story-browser-benchmark.mjs'
 import {mkdtempSync,mkdirSync,writeFileSync,symlinkSync,rmSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join,posix} from 'node:path'
 import {createHash} from 'node:crypto'
+import {createServer} from 'node:http'
 
 function report() {
   const sample={out:'DONE:339:193',wallMs:3000,frames:4000,framesPerMs:4000/3000,
@@ -118,4 +119,122 @@ describe('bounded browser failure diagnostics',()=>{
     expect(summary.diagnosticCount).toBe(64)
     expect(JSON.stringify(summary).length).toBeLessThan(23000)
   })
+})
+
+describe('owned browser protocol readiness before the measured workload',()=>{
+  const endpoint='http://127.0.0.1:9222'
+  const version={Browser:'Chrome/154.0.0.0',webSocketDebuggerUrl:'ws://127.0.0.1:9222/devtools/browser/owned'}
+  const targets=[{id:'page',type:'page',url:'about:blank',webSocketDebuggerUrl:'ws://127.0.0.1:9222/devtools/page/owned'}]
+  const response=(value,status=200)=>({status,ok:status===200,json:async()=>value,body:{cancel:async()=>{}}})
+  function fixture(queue) {
+    let now=0,exited=false,launchError=null
+    const urls=[], pauses=[], diagnostics=[], startup={}
+    const options={endpoint,deadline:500,now:()=>now,pause:async ms=>{pauses.push(ms);now+=ms},
+      getChildState:()=>({exited,launchError}),startup,diagnostic:(kind,value)=>diagnostics.push({kind,value}),
+      fetchImpl:async url=>{urls.push(url);const item=queue.shift();if(item instanceof Error)throw item
+        if(typeof item==='function')return item();if(!item)throw Error('Unexpected readiness fetch');return item}}
+    return {options,urls,pauses,diagnostics,startup,setExited:()=>{exited=true},setLaunchError:error=>{launchError=error},setNow:value=>{now=value}}
+  }
+  it('waits for HTTP after the owned port file exists, without relaunching a browser',async()=>{
+    const timedOut=new Error('version not ready');timedOut.name='TimeoutError'
+    const refused=new TypeError('fetch failed');refused.cause={code:'ECONNREFUSED'}
+    const test=fixture([timedOut,refused,response(version),response(targets)])
+    expect(await waitForBrowserStartup(test.options)).toEqual({version,targets})
+    expect(test.urls).toEqual([endpoint+'/json/version',endpoint+'/json/version',endpoint+'/json/version',endpoint+'/json/list'])
+    expect(test.pauses).toHaveLength(2)
+    expect(test.startup.attempts).toBe(4)
+    expect(test.startup.transientFailures).toBe(2)
+  })
+  it('waits through declared transient HTTP 503 and a well-formed empty target list',async()=>{
+    const test=fixture([response({},503),response(version),response([]),response(targets)])
+    expect(await waitForBrowserStartup(test.options)).toEqual({version,targets})
+    expect(test.urls.filter(url=>url.endsWith('/json/version'))).toHaveLength(2)
+    expect(test.urls.filter(url=>url.endsWith('/json/list'))).toHaveLength(2)
+    expect(test.startup.emptyTargetLists).toBe(1)
+  })
+  it('fails when the retained browser exits during startup, before another request',async()=>{
+    const test=fixture([])
+    test.options.fetchImpl=async()=>{test.urls.push('attempt');test.setExited();const error=new Error('slow startup');error.name='TimeoutError';throw error}
+    await expect(waitForBrowserStartup(test.options)).rejects.toThrow(/exited/)
+    expect(test.urls).toHaveLength(1)
+  })
+  it('preserves a real launch error before issuing a readiness request',async()=>{
+    const test=fixture([response(version),response(targets)])
+    test.setLaunchError(new Error('declared launch failure'))
+    await expect(waitForBrowserStartup(test.options)).rejects.toThrow('declared launch failure')
+    expect(test.urls).toEqual([])
+  })
+  it('does not restart its overall deadline after a transient failure',async()=>{
+    const test=fixture([])
+    test.options.fetchImpl=async()=>{test.urls.push('attempt');const error=new Error('not ready');error.name='TimeoutError';throw error}
+    await expect(waitForBrowserStartup(test.options)).rejects.toThrow(/startup deadline/)
+    expect(test.urls.length).toBeGreaterThan(0)
+    expect(test.urls.length).toBeLessThanOrEqual(10)
+    expect(test.pauses.reduce((sum,ms)=>sum+ms,0)).toBe(500)
+  })
+  it('rejects an already expired deadline without starting HTTP',async()=>{
+    const test=fixture([response(version),response(targets)]);test.setNow(501)
+    await expect(waitForBrowserStartup(test.options)).rejects.toThrow(/startup deadline/)
+    expect(test.urls).toEqual([])
+  })
+  it('fails immediately on malformed JSON instead of retrying it',async()=>{
+    const bad=response(null);bad.json=async()=>{throw new SyntaxError('bad DevTools JSON')}
+    const test=fixture([bad,response(version),response(targets)])
+    await expect(waitForBrowserStartup(test.options)).rejects.toThrow('bad DevTools JSON')
+    expect(test.urls).toHaveLength(1);expect(test.pauses).toEqual([])
+  })
+  it.each([
+    ['wrong version shape',{},targets],
+    ['wrong endpoint identity',{...version,webSocketDebuggerUrl:'ws://127.0.0.1:9333/devtools/browser/other'},targets],
+    ['wrong target shape',version,{page:targets[0]}],
+    ['invalid target entry',version,[null]],
+  ])('rejects %s without retry',async(_name,versionValue,targetValue)=>{
+    const test=fixture([response(versionValue),response(targetValue)])
+    await expect(waitForBrowserStartup(test.options)).rejects.toThrow(/Invalid/)
+    expect(test.pauses).toEqual([])
+  })
+  it('does not retry a permanent HTTP response',async()=>{
+    const test=fixture([response({},404),response(version),response(targets)])
+    await expect(waitForBrowserStartup(test.options)).rejects.toThrow(/HTTP 404/)
+    expect(test.urls).toHaveLength(1);expect(test.pauses).toEqual([])
+  })
+  it('retries a real loopback response-body timeout with native fetch and the same absolute deadline',async()=>{
+    const sockets=new Set(),timers=new Set(),requests=[]
+    let origin,firstHeadersSent=false,versionRequests=0
+    const server=createServer((request,response)=>{
+      requests.push(request.url)
+      const value=request.url==='/json/version'
+        ? {Browser:'Chrome/154.0.0.0',webSocketDebuggerUrl:origin.replace('http:','ws:')+'/devtools/browser/owned'}
+        : [{id:'owned',type:'page',url:'about:blank',webSocketDebuggerUrl:origin.replace('http:','ws:')+'/devtools/page/owned'}]
+      response.writeHead(200,{'content-type':'application/json'})
+      if(request.url==='/json/version' && ++versionRequests===1){
+        response.flushHeaders();firstHeadersSent=true
+        const timer=setTimeout(()=>{timers.delete(timer);if(!response.destroyed)response.end(JSON.stringify(value))},1300)
+        timers.add(timer)
+      }else response.end(JSON.stringify(value))
+    })
+    server.on('connection',socket=>{sockets.add(socket);socket.on('close',()=>sockets.delete(socket))})
+    try {
+      await new Promise((yes,no)=>{server.once('error',no);server.listen(0,'127.0.0.1',yes)})
+      origin='http://127.0.0.1:'+server.address().port
+      const startup={},deadline=Date.now()+4000
+      const result=await waitForBrowserStartup({endpoint:origin,deadline,startup})
+      expect(firstHeadersSent).toBe(true)
+      expect(requests).toEqual(['/json/version','/json/version','/json/list'])
+      expect(startup.attempts).toBe(3)
+      expect(startup.transientFailures).toBe(1)
+      expect(startup.lastFailure).toMatch(/abort|timeout/i)
+      expect(startup.ready).toBe(true)
+      expect(Date.now()).toBeLessThan(deadline)
+      expect(result.targets[0].webSocketDebuggerUrl).toBe(origin.replace('http:','ws:')+'/devtools/page/owned')
+    }finally{
+      for(const timer of timers)clearTimeout(timer)
+      timers.clear()
+      const closed=new Promise((yes,no)=>server.close(error=>error?no(error):yes()))
+      for(const socket of sockets)socket.destroy()
+      await closed
+      expect(server.listening).toBe(false)
+      expect(await new Promise((yes,no)=>server.getConnections((error,count)=>error?no(error):yes(count)))).toBe(0)
+    }
+  },10000)
 })
