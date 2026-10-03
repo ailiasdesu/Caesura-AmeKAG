@@ -24,6 +24,7 @@ namespace {
 constexpr uint8_t kRedTga[] = {0,0,2,0,0,0,0,0,0,0,0,0,1,0,1,0,24,0x20,0,0,255};
 class MemProvider : public IAssetProvider {
 public:
+    Caesura::AssetDirectoryResult listDirectory(const std::string&, size_t, size_t) override { return {}; }
     MemProvider(int priority, std::string source) : m_priority(priority), m_source(std::move(source)) {}
     void put(std::string path, std::vector<uint8_t> bytes) { m_files[std::move(path)] = std::move(bytes); }
     bool exists(const std::string& path) override { return m_files.count(path) != 0; }
@@ -124,6 +125,7 @@ public:
 // the backing file cannot alter that old worker's bytes.
 class SnapshotReadProvider : public IAssetProvider {
 public:
+    Caesura::AssetDirectoryResult listDirectory(const std::string&, size_t, size_t) override { return {}; }
     explicit SnapshotReadProvider(std::filesystem::path file)
         : m_file(std::move(file)) {}
     bool exists(const std::string& path) override { return path == "generation.tga"; }

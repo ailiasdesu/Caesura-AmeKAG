@@ -9,7 +9,27 @@ end
 local chunk=loadfile(root.."/scripts/capability_runtime.lua")
 check("runtime adapter module exists",type(chunk)=="function")
 if not chunk then
-    print(string.format("Capability Runtime Tests: %d passed, %d failed",passed,failed));os.exit(1)
+    -- Native corpus proved standalone blur bypassed the guard while vfx blur did not.
+-- Exercise the actual adapter; the effect sink records whether a denial leaked.
+do
+    local facts=profile("native")
+    local runtime=instance("native",function()return facts end)
+    local calls=0
+    local sink=function()calls=calls+1;return true end
+    check("standalone blur optional policy commits",runtime.configure_project_json('{"capabilities":{"optional":["render.blur"]}}')==true)
+    local owner={current_scene="blur.ks",token_index=1}
+    local applied,result=runtime.invoke_command(sink,owner,{amount=4,time=32},"blur")
+    check("standalone blur optional refusal has exact diagnostic and no effect",applied==false and calls==0
+        and result.status=="unsupported" and result.feature=="render.blur" and result.reason=="command_not_wired"
+        and #owner.capability_diagnostics==1 and owner.capability_diagnostics[1].location.command=="blur")
+    check("standalone blur ordinary policy commits",runtime.configure_project_json('{}')==true)
+    owner={current_scene="blur.ks",token_index=2}
+    local ok=pcall(runtime.wrap_command(sink,"blur"),owner,{amount=4})
+    check("standalone blur required-use rejection cannot reach effect",not ok and calls==0
+        and owner.capability_diagnostics[1].status=="unsupported")
+end
+
+print(string.format("Capability Runtime Tests: %d passed, %d failed",passed,failed));os.exit(1)
 end
 local json=require("capability_json")
 local policy=require("target_capabilities")

@@ -14,7 +14,7 @@ local COMPILED={ffmpeg=true,live2d=true,steam=true}
 local PLATFORMS={windows=true,linux=true,macos=true,ios=true,android=true}
 local PROFILE_KEYS={schema=true,target=true,scope=true,platform=true,catalog_sha256=true,
     compiled=true,available=true,binary_sha256=true,binary=true,bundle_files=true,source_files=true}
-local GUARDED_COMMANDS={postprocess=true,vfx=true,particles=true,particle_weather=true,palette=true,
+local GUARDED_COMMANDS={postprocess=true,vfx=true,blur=true,particles=true,particle_weather=true,palette=true,
     video=true,xfadebgm=true,fadebgm=true,fadevol=true,stopbgm=true,playstop=true,playbgmstop=true,
     play=true,bgm=true,playbgm=true,playse=true,playvoice=true,se=true,voice=true,
     live2d_load=true,live2d_show=true,live2d_hide=true,live2d_unload=true,
@@ -294,6 +294,7 @@ function M.command_features(command,params,staticMode)
     end
     if command=="eval" or command=="iscript" or command=="emb" then note("dynamic_lua")
     elseif command=="postprocess_off" or command=="stopvideo" then -- teardown is always permitted
+    elseif command=="blur" then add("render.blur")
     elseif command=="postprocess" then postfx(raw_get(params,"effect") or "bloom")
     elseif command=="vfx" then
         local fx=raw_get(params,"postfx")

@@ -104,7 +104,7 @@ it('rejects a competing drive while an asynchronous scheduler operation owns the
   const gate = new Promise(resolve => { release = resolve })
   const began = new Promise(resolve => { entered = resolve })
   player.lua.global.set('__WAIT_FOR_OWNER', () => { entered(); return gate })
-  await player.lua.doString("require('kag').u11_wait_owner=function(ctx) __WAIT_FOR_OWNER():await(); ctx.f.done=1 end")
+  await player.lua.doString("require('kag.schema').define('u11_wait_owner', {}); require('kag').u11_wait_owner=function(ctx) __WAIT_FOR_OWNER():await(); ctx.f.done=1 end")
   const running = player.runScene('[u11_wait_owner]\n[end]', 'pending.ks')
   try {
     await began

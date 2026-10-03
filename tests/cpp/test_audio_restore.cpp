@@ -98,6 +98,7 @@ public:
 
 class AudioAssetFixture final : public IAssetReader {
 public:
+    Caesura::AssetDirectoryResult listDirectory(const std::string&, size_t, size_t) override { return {}; }
     AudioAssetFixture() : previous(BackendRegistry::instance().getAssetReader()) {
         BackendRegistry::instance().setAssetReader(this);
     }

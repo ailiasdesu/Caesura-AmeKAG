@@ -83,7 +83,8 @@ local function capture_state(ctx)
     -- wait that has not yet been reconstructed while the debugger is paused.
     state.resume_page_wait = ctx._resumePageWait == true
         or (ctx.waiting_input == true and ctx._executing_command == "p")
-    if ctx._executing_command == "save" or ctx._executing_command == "saveload" then
+    if ctx._executing_command == "save" or ctx._executing_command == "saveload"
+        or ctx._executing_command == "quickmenu_qsave" then
         state.token_index = state.token_index + 1
     end
 

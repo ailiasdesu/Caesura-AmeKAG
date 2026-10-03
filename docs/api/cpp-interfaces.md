@@ -54,12 +54,13 @@ auto* lua      = BackendRegistry::instance().getLuaManager()->state();
 
 | 接口 / 头文件 | 方法与契约 |
 |---|---|
-| `resource/api/IAssetReader.h` | `readAsset(path, maxBytes) -> vector<uint8_t>`：按资源优先级读取，最高优先级来源失败不能回退到其它内容；空结果表示不可用、失败或超限。上限约束返回字节，各 provider 的读取峰值另有约束。 |
+| `resource/api/IAssetReader.h` | `readAsset(path, maxBytes)`遵循最高优先级来源与字节上限；`listDirectory(directory, maxEntries, maxNameBytes)`返回完整有界目录结果，不把失败伪装为空列表。 |
+| `resource/api/IAssetProvider.h` | `AssetDirectoryStatus`、`AssetDirectoryResult`定义目录枚举状态和叶名；Complete、Unsupported、InvalidPath、LimitExceeded、IoError分别可辨。只读非递归，运行时最大4096条／1MiB名称，不开放shell。 |
 | `resource/api/IImageDecoder.h` | `decode(bytes, size, maxDecodedBytes) -> DecodedImage`：只做 CPU 解码；结果包含 `rgba`、`width`、`height`、`ok`，不暴露第三方图像类型。 |
 | `audio/api/IAudioRestore.h` | `captureAudioState()`、`prepareAudioState(state, bytes, size)`、`applyAudioState(unique_ptr<IPreparedAudioState>)`、`stopSessionAudio()`。准备对象仅通过 `description()` 暴露描述。 |
 | `render/api/IRenderDevice.h` | `captureFontState()`、`defaultFontState()`、`prepareFontState(state, bytes, size)`、`applyFontState(unique_ptr<IPreparedFontState>)`、`clearFontState()`。准备对象仅通过 `description()` 暴露描述。 |
 | `render/api/ITextureManager.h` | `describeTexture(id, TextureSourceInfo&)` 描述资源路径或 RGBA 纯色来源；未知、临时纹理返回 false 且不改变输出。恢复通过 `loadTextureFromRGBA` 创建独占纹理。 |
-| `render/api/IVideoPlayer.h` | `closeAll()` 逻辑停止全部视频，沿用播放器更新中的延迟释放；保留后端初始化状态。 |
+| `render/api/IVideoPlayer.h` | `openMemory(vector<uint8_t>)`只解码已拥有的有界资产字节，不回退文件名／URL；`close`／`closeAll`逻辑停止，物理释放沿`updateAll`边界进行。`activeCount() const`是实际对象观察，不能用Lua会话数量替代。 |
 | `render/api/IParticleSystem.h` | `activeEmitterCount() const` 查询活动发射器；`shutdown()` 清空发射器和粒子池，恢复层按原初始化状态决定重新初始化。 |
 | `live2d/api/IAnimationBackend.h` | `loadedModelCount() const -> size_t`、`clearModels()`；清空模型但保留后端与设备关联，不复用旧模型句柄。 |
 

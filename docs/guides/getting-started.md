@@ -1,5 +1,11 @@
 # Getting Started with Caesura (AmeKAG)
 
+## 脚本工具与引擎入口
+
+Lua工具脚本由真正的Lua解释器运行：源码构建使用`build/lua/Debug/lua.exe`，发布包使用`external/lua/lua.exe`；工具中的Lua查找不应选择Caesura引擎可执行文件。目录扫描需要运行时`KAG.list_assets`，或独立CLI可用的LuaFileSystem，不能在沙箱中打开popen作为补救。
+
+引擎运行场景与这些CLI脚本是不同入口。HTTP编辑器需显式`--editor`，stdin JSON-RPC需显式`--editor-stdio`；`--headless`并不把引擎变成Lua解释器。实际参数以当前引擎`--help`及[Lua API](../api/lua-modules.md)为准。
+
 > 本指南带你**从克隆仓库到跑通示例游戏**：逐平台环境准备 → 构建 → 运行 →
 > 测试 → 常见问题。全程约 30–60 分钟（构建占大头）。
 >

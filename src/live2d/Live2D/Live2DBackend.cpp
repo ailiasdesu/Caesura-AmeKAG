@@ -275,21 +275,31 @@ Live2DBackend::~Live2DBackend() = default;
 
 void Live2DBackend::shutdown() {
     clearModels();
-    if (m_renderPath) {
-        m_renderPath->shutdown();
-        delete m_renderPath;
-        m_renderPath = nullptr;
-    }
+    const auto releaseRenderPath = [this] {
+        if (m_renderPath) {
+            m_renderPath->shutdown();
+            delete m_renderPath;
+            m_renderPath = nullptr;
+        }
+    };
+#ifndef _WIN32
+    releaseRenderPath();
+#endif
     if (m_initialized) {
 #ifdef _WIN32
         // CubismFramework::Dispose() does not release the D3D11 render-state
         // / shader objects held in the static device-info map; release them
-        // while the device is still alive.
+        // while the render path still retains the context and D3D11 DLL.
         CubismDeviceInfo_D3D11::ReleaseAllDeviceInfo();
 #endif
         CubismFramework::Dispose();
         m_initialized = false;
     }
+#ifdef _WIN32
+    // Last: release target/context COM owners, then the counted runtime DLL
+    // reference. bgfx may already have destroyed its renderer after loss.
+    releaseRenderPath();
+#endif
     m_deviceReady = false;
 }
 
@@ -451,6 +461,14 @@ bool Live2DBackend::loadModelInternal(Live2DModel& model) {
 
 bool Live2DBackend::createRenderer(Live2DModel& model) {
     if (!model.userModel) return false;
+#ifdef _WIN32
+    if (!m_renderPath ||
+        !static_cast<D3D11NativeRenderPath*>(m_renderPath)->ensureShadersReady()) {
+        DEBUG_ERR(SubSys::Live2D, ErrCode::Ok,
+            "[Live2D] Cannot create renderer: D3D11 shaders are not ready");
+        return false;
+    }
+#endif
 
     model.userModel->CreateRenderer(model.renderWidth, model.renderHeight);
 #ifdef _WIN32
@@ -524,7 +542,7 @@ void Live2DBackend::render(float dt) {
 
         // Blit bgfx texture to screen
         if (m_renderDevice && model->bgfxTexValid) {
-            m_renderDevice->blitTexture(0, model->bgfxTex.idx,
+            m_renderDevice->blitTexture(VIEW_MAIN, model->bgfxTex.idx,
                 model->x, model->y,
                 static_cast<float>(model->renderWidth)  * model->scale,
                 static_cast<float>(model->renderHeight) * model->scale,

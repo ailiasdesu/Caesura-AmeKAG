@@ -10,6 +10,8 @@
 // Cubism
 #include <Rendering/CubismRenderer.hpp>
 #include <Rendering/D3D11/CubismRenderer_D3D11.hpp>
+#include <Rendering/D3D11/CubismDeviceInfo_D3D11.hpp>
+#include <Rendering/D3D11/CubismShader_D3D11.hpp>
 
 // Direct3D 11
 #include <d3d11.h>
@@ -30,25 +32,34 @@ static ID3D11Device* getBgfxD3D11Device() {
     return static_cast<ID3D11Device*>(internal->context);
 }
 
-static ID3D11DeviceContext* getBgfxD3D11Context() {
-    ID3D11Device* device = getBgfxD3D11Device();
-    if (!device) return nullptr;
-    ID3D11DeviceContext* ctx = nullptr;
-    device->GetImmediateContext(&ctx);
-    return ctx;
-}
-
 // ============================================================
 // init / shutdown
 // ============================================================
+bool D3D11NativeRenderPath::retainLoadedRuntime() {
+    if (m_runtimeModule) return true;
+    HMODULE module = nullptr;
+    // bgfx already selected and loaded this runtime. Take a normal counted
+    // reference; do not load a replacement DLL or permanently pin it.
+    if (!GetModuleHandleExW(0, L"d3d11.dll", &module)) return false;
+    m_runtimeModule = module;
+    return true;
+}
+
 bool D3D11NativeRenderPath::init(int width, int height) {
+    if (m_context) return true;
+    if (!retainLoadedRuntime()) return false;
     m_device = getBgfxD3D11Device();
     if (!m_device) {
         DEBUG_WARN(SubSys::Live2D, ErrCode::Ok,
             "[Live2D/D3D11] bgfx D3D11 device not available, falling back");
+        shutdown();
         return false;
     }
-    m_device->GetImmediateContext(&m_context);  // shared with bgfx, no Release
+    m_device->GetImmediateContext(&m_context);  // AddRef balanced in shutdown.
+    if (!m_context) {
+        shutdown();
+        return false;
+    }
     m_width = width;
     m_height = height;
 
@@ -59,7 +70,53 @@ bool D3D11NativeRenderPath::init(int width, int height) {
     return true;
 }
 
+bool D3D11NativeRenderPath::ensureShadersReady() {
+    if (!m_device || !m_context || FAILED(m_device->GetDeviceRemovedReason())) {
+        m_shaderReadiness = ShaderReadiness::Failed;
+        return false;
+    }
+    if (m_shaderReadiness != ShaderReadiness::Unknown) {
+        return m_shaderReadiness == ShaderReadiness::Ready;
+    }
+    // Cache failure too: the SDK exposes a void setup operation and may retain
+    // a partial shader set. Never repeatedly compile or erase shared device
+    // state that another renderer could reference.
+    m_shaderReadiness = ShaderReadiness::Failed;
+    auto* deviceInfo = CubismDeviceInfo_D3D11::GetDeviceInfo(m_device);
+    auto* shaders = deviceInfo ? deviceInfo->GetShader() : nullptr;
+    if (!shaders) return false;
+    for (csmUint32 index = 0; index < static_cast<csmUint32>(ShaderNames_Max); ++index) {
+        if (!shaders->GetVertexShader(index) || !shaders->GetPixelShader(index)) {
+            DEBUG_ERR(SubSys::Live2D, ErrCode::Ok,
+                "[Live2D/D3D11] Shader initialization incomplete at slot %u; model load refused", index);
+            return false;
+        }
+    }
+
+    // BindShader silently does nothing when its private input layout is null.
+    // Probe from an empty IA binding, preserving bgfx's prior state and both
+    // counted references acquired by IAGetInputLayout. No GPU work is submitted.
+    ID3D11InputLayout* saved = nullptr;
+    ID3D11InputLayout* actual = nullptr;
+    m_context->IAGetInputLayout(&saved);
+    m_context->IASetInputLayout(nullptr);
+    shaders->BindShader(m_context);
+    m_context->IAGetInputLayout(&actual);
+    m_context->IASetInputLayout(saved);
+    const bool hasLayout = actual != nullptr;
+    if (actual) actual->Release();
+    if (saved) saved->Release();
+    if (!hasLayout) {
+        DEBUG_ERR(SubSys::Live2D, ErrCode::Ok,
+            "[Live2D/D3D11] Shader input layout unavailable; model load refused");
+        return false;
+    }
+    m_shaderReadiness = ShaderReadiness::Ready;
+    return true;
+}
+
 void D3D11NativeRenderPath::shutdown() {
+    m_shaderReadiness = ShaderReadiness::Unknown;
     for (auto& [renderer, target] : m_targets) {
         (void)renderer;
         if (target.rtv) target.rtv->Release();
@@ -70,6 +127,12 @@ void D3D11NativeRenderPath::shutdown() {
     // The underlying device/context remain owned by bgfx.
     if (m_context) { m_context->Release(); m_context = nullptr; }
     m_device = nullptr;
+    // Live2DBackend releases model and Cubism static COM owners before this
+    // call. The loader reference must be the last D3D11 owner retired here.
+    if (m_runtimeModule) {
+        FreeLibrary(static_cast<HMODULE>(m_runtimeModule));
+        m_runtimeModule = nullptr;
+    }
 }
 
 // ============================================================

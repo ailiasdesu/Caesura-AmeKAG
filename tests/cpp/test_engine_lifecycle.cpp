@@ -233,14 +233,19 @@ struct FailingAudioBackend : IAudioBackend {
     void suspend() override {}
     void resume() override {}
     unsigned int playBGM(const std::string&, float) override { return 0; }
+    unsigned int playBGM(const std::string&, const AudioPlaybackOptions&) override { return 0; }
     void stopBGM(float) override {}
     unsigned int playVoice(const std::string&) override { return 0; }
+    unsigned int playVoice(const std::string&, const AudioPlaybackOptions&) override { return 0; }
     void stopVoice() override {}
     unsigned int playSE(const std::string&) override { return 0; }
+    unsigned int playSE(const std::string&, const AudioPlaybackOptions&) override { return 0; }
     unsigned int playRawPCM(const float*, unsigned int, unsigned int,
                             unsigned int) override { return 0; }
     unsigned int playSE3D(const std::string&, float, float, float) override { return 0; }
+    unsigned int playSE3D(const std::string&, float, float, float, const AudioPlaybackOptions&) override { return 0; }
     void stopSE() override {}
+    void stopSE(float) override {}
     void setSEVolume(unsigned int, float) override {}
     float getSEVolume(unsigned int) override { return 0.0f; }
     void stopSEHandle(unsigned int) override {}

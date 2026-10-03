@@ -1351,6 +1351,7 @@ def render_markdown(records, private, declared_total, oos, generated_at, fp, sus
     L.append("# Capability Closure Matrix (auto-generated)")
     L.append("")
     L.append("> 由 python scripts/capability_closure.py 生成；勿手动编辑。")
+    L.append('> **证据边界：CLOSED / Tested 仅为静态源码扫描与历史人工覆写；本生成器不运行引擎、不读取本轮执行终态，不代表本轮 runtime PASS，也不代表测试覆盖率。**')
     L.append("> 生成时间（输入源最新 mtime）：" + generated_at)
     L.append("> 生成命令：python scripts/capability_closure.py")
     L.append("> 源指纹（输入内容 sha256 前 16 hex）：" + fp)

@@ -327,6 +327,8 @@ caesura_add_module(Script
     src/script/vm/LuaManager.cpp
     src/script/state/GameState.cpp
     src/script/bindings/KAGBinding.cpp
+    src/script/bindings/AssetVideoBinding.cpp
+    src/script/bindings/AssetDirectoryBinding.cpp
     src/script/bindings/RenderBinding.cpp
     src/script/bindings/VFXBinding.cpp
     src/script/bindings/DevCoreBinding.cpp

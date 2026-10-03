@@ -51,7 +51,8 @@ public:
 constexpr uint16_t VIEW_RTT   = 0;  // Offscreen render-to-texture canvas
 constexpr uint16_t VIEW_MAIN  = 1;  // Primary compositing pipeline (KAG UI)
 constexpr uint16_t VIEW_DEBUG = 2;  // Debug overlay / IMGUI
-constexpr uint16_t VIEW_TRANSITION = 99;  // Transition compositing view
+constexpr uint16_t VIEW_TRANSITION = 3;  // After scene/postfx presentation
+constexpr uint32_t VIEWPORT_HANDLE_TAG = 0x80000000u;
 
 // -- Handle types ----------------------------------------------------------
 
@@ -60,6 +61,14 @@ struct ViewportHandle {
     explicit operator bool() const { return id != 0; }
     bool operator==(const ViewportHandle& o) const { return id == o.id; }
     bool operator!=(const ViewportHandle& o) const { return id != o.id; }
+};
+
+// Owned copy of the last submitted, post-processed scene. The numeric viewport
+// is released with destroyRenderTarget; frameId identifies its actual source
+// frame, not allocation time. Empty means no real scene/capture is available.
+struct SceneSnapshot {
+    ViewportHandle viewport;
+    uint64_t frameId = 0;
 };
 
 struct RenderRuntimeInfo {
@@ -177,6 +186,8 @@ public:
 
     // Offscreen render target
     virtual ViewportHandle createRenderTarget(int width, int height) = 0;
+    virtual SceneSnapshot captureSceneSnapshot() = 0;
+    virtual void cancelTransition() = 0;
     virtual void destroyRenderTarget(ViewportHandle handle) = 0;
 
     // Draw a viewport`s texture as a full-view quad in another view

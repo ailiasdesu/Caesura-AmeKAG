@@ -1,5 +1,16 @@
 # 当前迭代计划
 
+2026-10-03 命令审计结果：[182 个命令名的原生合同审计结果与验收边界](2026-10-03-001-command-native-audit-results.md)。176 个选定应用/状态/宿主观察、5 个明确拒绝、1 个离线回退已逐名列证据；当前完整 Windows profile 通过，C++ 1630/1630、Lua 153+60、CTest 74 通过与 1 预声明可选跳过。完整 Web 671/672，原吞吐性能门槛仍失败，不能宣布全部门禁通过或合并发布。
+
+2026-10-03 最新命令审计接续：[SMA 透明度、Live2D 着色器与呈现故障](2026-10-02-001-command-contract-validation-followup.md#2026-10-03-继续sma-透明度与-live2d-实际故障)。SMA 真实 CPU/GPU 透明度回归通过；Live2D 次生 DLL 卸载访问违例已修复，补齐 SDK shader 后不再 HUNG，MAIN 视图修复后 Haru 显示、手动嘴型、隐藏与卸载像素通过。缺失/损坏 shader 拒绝控制及当前候选完整门禁仍待闭合，全命令和 U1–U29 未全完成。
+
+2026-10-02 最新接续：[重启后的硬件计算基线检查](2026-10-02-002-gpu-reboot-diagnostic.md)。普通用户目录下的独立硬件计算已通过，回切 E 盘隔离目录再次超时；当前定位为环境敏感故障。用户已批准本轮原生验收使用普通目录环境；真实 SMA 维护 GPU 七项已通过，完整门禁继续。未修改驱动或系统设置。
+
+2026-10-02 先前检查点：[命令合同修复与验证边界](2026-10-02-001-command-contract-validation-followup.md)。公开182名称与145声明分开统计；CLI、Doc、camera、菜单与视频各自按真实原件接受。SDKON构建0但Haru执行DeviceHung／frame5截图失败，停止物理GPU新测等待用户重启；SMA硬件compute与当前完整门禁未闭合，U1–U29未完成。
+
+2026-10-01 当前追加：[全命令原生绑定审计与回归](2026-10-01-005-command-native-contract-audit.md)。用户报告的转场中断已在真实 Lua/C++ 绑定复现；当前发现还包括混合、伸缩／仿射绘制、SMA 和音频参数链问题。此前分项验收不证明所有命令真实可用，本轮保留完整 182 个公开声明／控制／兼容名称的审计范围（原181遗漏sel，历史记录保留），修复与完整门禁进行中。
+
+
 2026-10-01 最新接续：[b533最终包、托管终态与作者恢复](2026-10-01-004-b533-final-package-validation.md)。b533的12项GitHub CI成功，10producer／11role dry-run闭合，release_ready仍false；EAS因实际CI/CD额度在worker前拒绝，三lane未执行。Native33当前操作加2历史create已获限定独审及root接受；Web当前8项步骤及最终Web限定独审／root范围接受均已完成。长127／短107对照仅属环境诊断。SAN strictFAIL、CPU INCONCLUSIVE、设备限定及U1–U29未全完成保留；hosted tag仍NOT_RUN，不追加为当前dry-run门禁。
 
 2026-10-01 最新接续：[候选失败原件、UI 读档与验证入口修复](2026-10-01-003-candidate-validation-repair-followup.md)。SMA真实保存字节修复已接受，但LSan与整体FAIL保留；f2cf托管CI及EAS完整运行失败，iOS device仅未签名编译范围接受。UI读档已取得真实Chrome限定GREEN与完整Web644通过；uuid、collector修复已本地提交，owner可信通知修复及本地87项验证已限定接受，整合代码锚为 `0c473bf19220aa820391672431d450f78a560f2e`。原Web作者12步与失败均保留，新最终包双模板cold及完整U1–U29继续。

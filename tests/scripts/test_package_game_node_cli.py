@@ -162,7 +162,7 @@ fs.copyFileSync = function(source,target,...args) {
     const text=fs.readFileSync(target,'utf8');
     const changed=process.env.U14_COPY_MUTATION==='missing-scene'
       ? 'local b=(function() '+text+' end)(); b.scenes["callee.ks"]=nil; return b'
-      : text.replace('caesura-kag-2','injected-incompatible-runtime');
+      : text.replace(/caesura-kag-[0-9]+/,'injected-incompatible-runtime');
     if (changed===text) throw new Error('U14 fixture did not mutate copied semantics');
     fs.writeFileSync(target,changed,'utf8');
   }

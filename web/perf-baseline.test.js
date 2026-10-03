@@ -32,31 +32,17 @@ import { readFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { createPlayer } from './bridge.js'
+import { installCanvasHost } from './test-support/canvas-host.js'
+import { createRepositoryFetch, repositoryAssetUrl } from './test-support/repository-fetch.js'
+import { DomRenderer } from './dom-renderer.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const rootDir = join(here, '..')
-const scriptsDir = join(rootDir, 'scripts')
-const assetsDir = join(rootDir, 'assets')
 const index = JSON.parse(readFileSync(join(here, 'scripts-index.json'), 'utf8'))
 const syntheticMinFrames = 2.0
 const syntheticMinTokens = 1.5
 
-const fileFetch = async (url) => {
-  const u = new URL(url)
-  if (u.pathname.startsWith('/assets/lang/')) {
-    const rel = u.pathname.replace('/assets/lang/', '')
-    const p = join(assetsDir, 'lang', ...rel.split('/'))
-    return {
-      ok: existsSync(p), status: existsSync(p) ? 200 : 404,
-      text: async () => (existsSync(p) ? readFileSync(p, 'utf8') : ''),
-      json: async () => index,
-    }
-  }
-  const rel = u.pathname.replace('/scripts/', '')
-  const p = join(scriptsDir, ...rel.split('/'))
-  const ok = existsSync(p)
-  return { ok, status: ok ? 200 : 404, text: async () => (ok ? readFileSync(p, 'utf8') : ''), json: async () => index }
-}
+const fileFetch = createRepositoryFetch(rootDir, index)
 
 function sourceFor(key) {
   for (const dir of ['../demo/', '../demo/tutorial/', '../demo/example_game/']) {
@@ -235,17 +221,25 @@ describe('performance measurement statistics', () => {
 })
 
 describe('web player performance baseline (round 109)', () => {
-  let player = null
+  let player = null, renderer = null, stage = null, restoreCanvas = null
   beforeAll(async () => {
+    restoreCanvas = installCanvasHost()
     player = await createPlayer({
       scriptsBase: 'http://local/scripts/',
       fetchImpl: fileFetch,
+      assetUrl: repositoryAssetUrl, audioAssetUrl: repositoryAssetUrl,
       langBase: 'http://local/assets/lang/',
       capabilities: JSON.parse(readFileSync(join(here, '../demo/caesura.project.json'), 'utf8')).capabilities,
       wasmFile: join(here, 'node_modules', 'wasmoon', 'dist', 'glue.wasm'),
     })
+    stage = document.createElement('div')
+    document.body.appendChild(stage)
+    renderer = new DomRenderer(player.core, stage)
   }, 60000)
-  afterAll(async () => { await player?.dispose() })
+  afterAll(async () => {
+    try { await player?.dispose() }
+    finally { renderer?.destroy(); stage?.remove(); restoreCanvas?.() }
+  })
 
   it('story.ks main path: frame throughput + completes clean', async () => {
     const src = sourceFor('story.ks')

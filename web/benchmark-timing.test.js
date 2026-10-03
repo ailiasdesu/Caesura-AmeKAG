@@ -104,6 +104,10 @@ function loadBenchmarkFixture({ failAt = null } = {}) {
   const entry = new URL('./perf-bundle.test.js', import.meta.url)
   const specs = [], before = [], after = [], calls = []
   const disposeGate = deferred()
+  const lifecycle=[]
+  const stage={remove:()=>lifecycle.push('stage.remove')}
+  const document={createElement:tag=>{expect(tag).toBe('div');lifecycle.push('stage.create');return stage},
+    body:{appendChild:value=>{expect(value).toBe(stage);lifecycle.push('stage.append')}}}
   let time = 0n, active = 0, maxActive = 0, disposeCalls = 0, disposed = false
   const failure = new Error('controlled benchmark player rejection')
   function run(kind, key) {
@@ -144,6 +148,17 @@ function loadBenchmarkFixture({ failAt = null } = {}) {
     },
     'node:fs': fs, 'node:path': path, 'node:url': url,
     './bridge.js': { createPlayer: async () => player },
+    './test-support/canvas-host.js': {installCanvasHost:()=>{
+      lifecycle.push('canvas.install');return ()=>lifecycle.push('canvas.restore')
+    }},
+    './test-support/repository-fetch.js': {
+      createRepositoryFetch:()=>async()=>{throw new Error('orchestration fixture must not fetch assets')},
+      repositoryAssetUrl:value=>String(value),
+    },
+    './dom-renderer.js': {DomRenderer:class {
+      constructor(core,element){expect(core).toBe(player.core);expect(element).toBe(stage);lifecycle.push('renderer.create')}
+      destroy(){lifecycle.push('renderer.destroy')}
+    }},
     './benchmark-timing.mjs': { dualMedianMs: (a, b, reps) => dualMedianMs(a, b, reps, () => time) },
   }
   let source = fs.readFileSync(entry, 'utf8').replace(/\r\n/g, '\n')
@@ -152,9 +167,9 @@ function loadBenchmarkFixture({ failAt = null } = {}) {
     return `const ${bindings} = imports[${JSON.stringify(specifier)}]`
   }).replaceAll('import.meta.url', JSON.stringify(entry.href))
   // The controlled host does not log synthetic timings as performance evidence.
-  new Function('imports', 'console', source)(imports, { log() {} })
+  new Function('imports', 'console', 'document', source)(imports, { log() {} }, document)
   return {
-    specs, before, after, calls, disposeGate, failure,
+    specs, before, after, calls, disposeGate, failure, lifecycle,
     get active() { return active }, get maxActive() { return maxActive },
     get disposeCalls() { return disposeCalls }, get disposed() { return disposed },
   }
@@ -183,6 +198,7 @@ describe('maintained bundle benchmark callback and disposal contracts', () => {
         await cleanup
         expect.soft(beforeRelease).toEqual({ calls: 1, disposed: false, cleanupSettled: false })
         expect.soft(fixture.disposed).toBe(true)
+        expect.soft(fixture.lifecycle).toEqual(['canvas.install','stage.create','stage.append','renderer.create','renderer.destroy','stage.remove','canvas.restore'])
       }
     })
   }
@@ -198,6 +214,7 @@ describe('maintained bundle benchmark callback and disposal contracts', () => {
       fixture.disposeGate.resolve()
       for (const hook of fixture.after) await hook()
       expect.soft({ calls: fixture.disposeCalls, disposed: fixture.disposed }).toEqual({ calls: 1, disposed: true })
+      expect.soft(fixture.lifecycle).toEqual(['canvas.install','stage.create','stage.append','renderer.create','renderer.destroy','stage.remove','canvas.restore'])
     }
   })
 })

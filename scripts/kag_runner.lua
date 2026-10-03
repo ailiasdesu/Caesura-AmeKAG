@@ -88,6 +88,11 @@ local function pending_transaction(c)
     if c and c._pendingRollback then return "rollback-pending" end
 end
 
+local function render_pending(owner)
+    local wait = owner and owner._transition_render_wait
+    return wait and not owner.stop_flag and (owner._render_epoch or 0) < wait.epoch
+end
+
 local function spawn_scheduler(index)
     local owner = ctx
     retained_save_owner = nil
@@ -404,6 +409,8 @@ local function resume_scheduler(origin, value, expected_owner, expected_co)
         return true, coroutine.status(kag_co)
     end
 
+    if render_pending(ctx) then return true, "render-pending" end
+
     local called, resumed, result = pcall(
         resume_adapter.resume, origin, kag_co, value)
     if expected_owner and (ctx ~= expected_owner or kag_co ~= expected_co) then
@@ -528,6 +535,7 @@ local function make_context()
     -- Prepare a candidate before changing the published session reference.
     local candidate = {
         _native_runner_owner = true,
+        _render_epoch = 0,
         f = {}, sf = {}, tf = {},
         tokens = {}, token_index = 1,
         call_stack = {}, layers = {}, backlog = {},
@@ -898,7 +906,7 @@ function kag_runner.update(dt)
                and ctx.typewriter_sound ~= "" then
                 local interval = tonumber(ctx.typewriter_sound_interval) or 1
                 if (shown - prev) >= interval then
-                    backend.audio_play("se", ctx.typewriter_sound)
+                    require("backend").audio_play("se", ctx.typewriter_sound)
                     ctx.reveal.last_shown = shown
                 end
             end
@@ -1072,6 +1080,8 @@ end
 local cc_bar_tex = nil  -- cached solid texture for the CC backing bar
 function kag_runner.render()
     if not ctx then return false, "no-context" end
+    local owner = ctx
+    require("kag.commands.video").render(ctx)
     local config = require("config")
     local ok, n = true, require("kag.text_scene").render(ctx)
     -- Closed captions (accessibility): a voiced line is drawn at a fixed
@@ -1106,6 +1116,7 @@ function kag_runner.render()
         pcall(backend.render_text, text, x, y, 255, 255, 255, 255)
     end
 
+    if ok and ctx == owner then owner._render_epoch = (owner._render_epoch or 0) + 1 end
     return ok, n
 end
 
@@ -1164,6 +1175,7 @@ end
 
 function kag_runner.on_click()
     if changing_session then return false, "session-changing" end
+    if render_pending(ctx) then return false, "render-pending" end
     local pending = pending_transaction(ctx)
     if pending then return false, pending end
     if ctx and ctx._choiceMode then return false, "choice-open" end

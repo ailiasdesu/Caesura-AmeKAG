@@ -58,16 +58,22 @@ public:
     void resume() override;
 
     unsigned int playBGM(const std::string& file, float fadeTime = 1.0f) override;
+    unsigned int playBGM(const std::string& file, const AudioPlaybackOptions& options) override;
     void stopBGM(float fadeTime = 1.0f) override;
 
     unsigned int playVoice(const std::string& file) override;
+    unsigned int playVoice(const std::string& file, const AudioPlaybackOptions& options) override;
     void stopVoice() override;
 
     unsigned int playSE(const std::string& file) override;
+    unsigned int playSE(const std::string& file, const AudioPlaybackOptions& options) override;
     unsigned int playRawPCM(const float* samples, unsigned int numFrames,
                             unsigned int sampleRate, unsigned int channels) override;
     unsigned int playSE3D(const std::string& file, float x, float y, float z) override;
+    unsigned int playSE3D(const std::string& file, float x, float y, float z,
+                         const AudioPlaybackOptions& options) override;
     void stopSE() override;
+    void stopSE(float fadeTime) override;
     void setSEVolume(unsigned int handle, float volume) override;
     float getSEVolume(unsigned int handle) override;
     void stopSEHandle(unsigned int handle) override;

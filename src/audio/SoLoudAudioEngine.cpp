@@ -18,6 +18,28 @@
 #include <sstream>
 namespace Caesura {
 
+static bool validPlaybackOptions(const AudioPlaybackOptions& options) {
+    return std::isfinite(options.volume) && options.volume >= 0 && options.volume <= 1.5f
+        && std::isfinite(options.fadeIn) && options.fadeIn >= 0;
+}
+
+static bool hasPlaybackCapacity(SoLoud::Soloud& mixer) {
+    AudioMutexLock lock(mixer);
+    for (unsigned i = 0; i < VOICE_COUNT; ++i) {
+        const auto* voice = mixer.mVoice[i];
+        if (!voice || !(voice->mFlags & SoLoud::AudioSourceInstance::PROTECTED)) return true;
+    }
+    return false;
+}
+
+static bool ownsBusVoice(SoLoud::Soloud& mixer, SoLoud::handle handle,
+                        SoLoud::handle bus, const SoLoud::AudioSource& source) {
+    AudioMutexLock lock(mixer);
+    const int index = mixer.getVoiceFromHandle_internal(handle);
+    return index >= 0 && mixer.mVoice[index]->mBusHandle == bus
+        && mixer.mVoice[index]->mAudioSourceID == source.mAudioSourceID;
+}
+
 
 // Detect extension and use WavStream for .ogg/.mp3, Wav for .wav
 static bool isStreamFormat(const std::string& file) {
@@ -629,7 +651,12 @@ void SoLoudAudioEngine::flushWaveCache() {
 // The fade-out uses fadeVolume() + scheduleStop() for a smooth transition.
 
 unsigned int SoLoudAudioEngine::playBGM(const std::string& file, float fadeTime) {
-    if (!m_initialized) return 0;
+    return playBGM(file, AudioPlaybackOptions{1.0f, false, fadeTime});
+}
+
+unsigned int SoLoudAudioEngine::playBGM(const std::string& file, const AudioPlaybackOptions& options) {
+    if (!m_initialized || !validPlaybackOptions(options)) return 0;
+    const float fadeTime = options.fadeIn;
 
     std::string playingPath = file;
     // Retirement bookkeeping must be allocated before creating a new voice.
@@ -661,7 +688,10 @@ unsigned int SoLoudAudioEngine::playBGM(const std::string& file, float fadeTime)
         m_currentBGM = 0;
     }
 
-    m_soloud.fadeVolume(h, 1.0f, fadeTime);
+    // Configure this paused instance only. Cached sources and persistent bus
+    // gains must not inherit a previous clip's options.
+    m_soloud.setLooping(h, options.loop);
+    m_soloud.fadeVolume(h, options.volume, fadeTime);
     if (m_soloud.startBusVoice(h, m_bgmBus) != SoLoud::SO_NO_ERROR) {
         m_soloud.stop(h);
         registry.release("audio_handles");
@@ -687,8 +717,12 @@ void SoLoudAudioEngine::stopBGM(float fadeTime) {
 // -- VOICE -----------------------------------------------------------------
 
 unsigned int SoLoudAudioEngine::playVoice(const std::string& file){
+    return playVoice(file, AudioPlaybackOptions{});
+}
+
+unsigned int SoLoudAudioEngine::playVoice(const std::string& file, const AudioPlaybackOptions& options) {
     CAESURA_ASSERT_MAIN_THREAD();
-    if (!m_initialized) return 0;
+    if (!m_initialized || !validPlaybackOptions(options)) return 0;
 
     {
         AudioMutexLock lock(m_soloud);
@@ -725,7 +759,7 @@ unsigned int SoLoudAudioEngine::playVoice(const std::string& file){
     try {
         // Admission is paused so a callback cannot publish a new session's
         // PCM before its epoch and owner slot have been committed together.
-        h = m_voiceBus.play(*wav, 1.0f, 0.0f, true);
+        h = m_voiceBus.play(*wav, options.fadeIn > 0 ? 0.0f : options.volume, 0.0f, true);
     } catch (...) {
         registry.release("audio_handles");
         return 0;
@@ -743,6 +777,9 @@ unsigned int SoLoudAudioEngine::playVoice(const std::string& file){
         registry.release("audio_handles");
         return 0;
     }
+
+    m_soloud.setLooping(h, options.loop);
+    if (options.fadeIn > 0) m_soloud.fadeVolume(h, options.volume, options.fadeIn);
 
     // Round-robin 4-slot voice pool: rapid character voice overlap (a VN
     // staple) no longer cuts the previous line; the displaced slot fades
@@ -819,22 +856,49 @@ void SoLoudAudioEngine::stopSE(){
     releaseAudioHandles(handleCount);
 }
 
-unsigned int SoLoudAudioEngine::playSE(const std::string& file){
+void SoLoudAudioEngine::stopSE(float fadeTime) {
     CAESURA_ASSERT_MAIN_THREAD();
-    if (!m_initialized) return 0;
+    if (!m_initialized || !std::isfinite(fadeTime) || fadeTime < 0) return;
+    if (fadeTime == 0) { stopSE(); return; }
+    // Retain owners, raw PCM sources and quotas until the scheduled physical
+    // stop. cullFinishedHandles releases each one once the voice is invalid.
+    for (auto h : m_activeSE) {
+        if (m_soloud.isValidVoiceHandle(h)) {
+            m_soloud.fadeVolume(h, 0.0f, fadeTime);
+            m_soloud.scheduleStop(h, fadeTime);
+        }
+    }
+}
+
+unsigned int SoLoudAudioEngine::playSE(const std::string& file){
+    return playSE(file, AudioPlaybackOptions{});
+}
+
+unsigned int SoLoudAudioEngine::playSE(const std::string& file, const AudioPlaybackOptions& options) {
+    CAESURA_ASSERT_MAIN_THREAD();
+    if (!m_initialized || !validPlaybackOptions(options)) return 0;
+    // Same trusted owner-thread admission boundary as VOICE. With all voices
+    // protected the vendor has no victim; do not enter its allocation path.
+    if (!hasPlaybackCapacity(m_soloud)) return 0;
     auto wav = loadWave(file);
     if (!wav) return 0;
 
     cullFinishedHandles();
+    m_activeSE.reserve(m_activeSE.size() + 1);
     auto& registry = BackendRegistry::instance();
     if (!registry.tryAlloc("audio_handles")) return 0;
 
-    SoLoud::handle h = m_seBus.play(*wav);
-    if (h == 0 || !m_soloud.isValidVoiceHandle(h)) {
+    SoLoud::handle h = 0;
+    try { h = m_seBus.play(*wav, options.fadeIn > 0 ? 0.0f : options.volume, 0.0f, true); }
+    catch (...) { registry.release("audio_handles"); return 0; }
+    if (!ownsBusVoice(m_soloud, h, m_seBusHandle, *wav)) {
         registry.release("audio_handles");
         return 0;
     }
     m_activeSE.push_back(h);
+    m_soloud.setLooping(h, options.loop);
+    if (options.fadeIn > 0) m_soloud.fadeVolume(h, options.volume, options.fadeIn);
+    m_soloud.setPause(h, m_softwareSuspended);
     printf("[Audio] SE: %s (handle %u)\n", file.c_str(), h);
     return static_cast<unsigned int>(h);
 }
@@ -880,21 +944,36 @@ unsigned int SoLoudAudioEngine::playRawPCM(const float* samples,
 
 unsigned int SoLoudAudioEngine::playSE3D(const std::string& file,
                                           float x, float y, float z) {
+    return playSE3D(file, x, y, z, AudioPlaybackOptions{});
+}
+
+unsigned int SoLoudAudioEngine::playSE3D(const std::string& file, float x, float y, float z,
+                                       const AudioPlaybackOptions& options) {
     CAESURA_ASSERT_MAIN_THREAD();
-    if (!m_initialized) return 0;
+    if (!m_initialized || !validPlaybackOptions(options)
+        || !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) return 0;
+    if (!hasPlaybackCapacity(m_soloud)) return 0;
     auto wav = loadWave(file);
     if (!wav) return 0;
 
     cullFinishedHandles();
+    m_activeSE.reserve(m_activeSE.size() + 1);
     auto& registry = BackendRegistry::instance();
     if (!registry.tryAlloc("audio_handles")) return 0;
 
-    SoLoud::handle h = m_seBus.play3d(*wav, x, y, z);
-    if (h == 0 || !m_soloud.isValidVoiceHandle(h)) {
+    SoLoud::handle h = 0;
+    try { h = m_seBus.play3d(*wav, x, y, z, 0, 0, 0,
+                           options.fadeIn > 0 ? 0.0f : options.volume, true); }
+    catch (...) { registry.release("audio_handles"); return 0; }
+    // UNKNOWN_ERROR(1) must never be treated as an admitted unrelated bus.
+    if (!ownsBusVoice(m_soloud, h, m_seBusHandle, *wav)) {
         registry.release("audio_handles");
         return 0;
     }
     m_activeSE.push_back(h);
+    m_soloud.setLooping(h, options.loop);
+    if (options.fadeIn > 0) m_soloud.fadeVolume(h, options.volume, options.fadeIn);
+    m_soloud.setPause(h, m_softwareSuspended);
     printf("[Audio] SE 3D: %s at (%.1f,%.1f,%.1f) h=%u\n",
            file.c_str(), x, y, z, h);
     return static_cast<unsigned int>(h);

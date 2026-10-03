@@ -163,6 +163,8 @@ public:
     void setViewClear(uint16_t, uint16_t, uint32_t, float, uint8_t) override {}
     void touch(uint16_t) override {}
     ViewportHandle createRenderTarget(int, int) override { return {}; }
+    SceneSnapshot captureSceneSnapshot() override { return {}; }
+    void cancelTransition() override {}
     void destroyRenderTarget(ViewportHandle) override {}
     void blitViewport(ViewportHandle, uint16_t, float, float, float, float) override {}
     RenderTextureHandle getViewportTexture(ViewportHandle) override { return {}; }
@@ -268,13 +270,18 @@ public:
     void suspend() override { ++m_probe.audioSuspendCalls; }
     void resume() override { ++m_probe.audioResumeCalls; }
     unsigned int playBGM(const std::string&, float) override { return 0; }
+    unsigned int playBGM(const std::string&, const AudioPlaybackOptions&) override { return 0; }
     void stopBGM(float) override {}
     unsigned int playVoice(const std::string&) override { return 0; }
+    unsigned int playVoice(const std::string&, const AudioPlaybackOptions&) override { return 0; }
     void stopVoice() override {}
     unsigned int playSE(const std::string&) override { return 0; }
+    unsigned int playSE(const std::string&, const AudioPlaybackOptions&) override { return 0; }
     unsigned int playRawPCM(const float*, unsigned int, unsigned int, unsigned int) override { return 0; }
     unsigned int playSE3D(const std::string&, float, float, float) override { return 0; }
+    unsigned int playSE3D(const std::string&, float, float, float, const AudioPlaybackOptions&) override { return 0; }
     void stopSE() override {}
+    void stopSE(float) override {}
     void setSEVolume(unsigned int, float) override {}
     float getSEVolume(unsigned int) override { return 0.0f; }
     void stopSEHandle(unsigned int) override {}

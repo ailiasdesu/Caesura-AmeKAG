@@ -33,6 +33,9 @@ namespace {
 // -----------------------------------------------------------------------------
 class CountingRenderDevice final : public IRenderDevice {
 public:
+    SceneSnapshot captureSceneSnapshot() override { return {}; }
+    void cancelTransition() override {}
+
     // -- lifecycle --
     bool init(void*, int width, int height) override { return true; }
     void setPresentSize(uint32_t, uint32_t) override {}

@@ -4,10 +4,25 @@ if(CAESURA_REQUIRE_TEST_PREREQUISITES)
 else()
     find_package(Python3 COMPONENTS Interpreter QUIET)
 endif()
+if(Python3_Interpreter_FOUND)
+    add_test(NAME CaesuraLive2DNativeEvidence
+        COMMAND ${Python3_EXECUTABLE} -B
+                ${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_verify_live2d_native_contract.py)
+    set_tests_properties(CaesuraLive2DNativeEvidence PROPERTIES
+        LABELS "qa;validation;live2d"
+        TIMEOUT 60
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+endif()
 add_library(doctest INTERFACE)
 target_include_directories(doctest INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/cpp)
 
 set(TEST_SOURCES
+    cpp/test_live2d_d3d11_library_lifetime.cpp
+    cpp/test_input_native_contract.cpp
+    cpp/test_video_native_contract.cpp
+    cpp/test_video_strict_contract.cpp
+    cpp/test_asset_directory_contract.cpp
+    cpp/test_blt_native_contract.cpp
     cpp/test_main.cpp
     cpp/test_core.cpp
     cpp/test_debug_manager_edge.cpp
@@ -43,6 +58,7 @@ set(TEST_SOURCES
     cpp/test_lua_manager.cpp
     cpp/test_lua_lifetime.cpp
     cpp/test_script_bindings.cpp
+    cpp/test_backend_native_contract.cpp
     cpp/test_script_boundary.cpp
     cpp/test_game_state.cpp
     cpp/test_texture_budget_edge.cpp
@@ -85,6 +101,8 @@ set(TEST_SOURCES
     cpp/test_backend_registry.cpp
     cpp/test_mesh_renderer.cpp
     cpp/test_sma_skinner.cpp
+    cpp/test_sma_native_contract.cpp
+    cpp/test_audio_native_contract.cpp
     cpp/test_perf_bench.cpp
     cpp/test_layer_manager.cpp
     cpp/test_texture_manager.cpp
@@ -239,6 +257,20 @@ endif()
 if(Python3_EXECUTABLE)
     # Native host process contract; cross/device/Web work is explicitly separate.
     if(NOT CMAKE_CROSSCOMPILING AND NOT EMSCRIPTEN)
+        add_test(
+            NAME CaesuraCliAssetDirectory
+            COMMAND "${Python3_EXECUTABLE}" -B
+                    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_cli_asset_directory.py"
+                    --test "${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_cli_asset_directory.lua"
+                    --lua "$<TARGET_FILE:lua_cli>"
+                    --scripts "${CMAKE_SOURCE_DIR}/scripts"
+        )
+        set_tests_properties(CaesuraCliAssetDirectory PROPERTIES
+            LABELS "script;lua;filesystem;security"
+            TIMEOUT 60
+            RUN_SERIAL TRUE
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+        )
         add_executable(CaesuraCloudConflictRestartProbe probes/cloud_conflict_restart_probe.cpp)
         target_link_libraries(CaesuraCloudConflictRestartProbe PRIVATE
             Caesura::Storage Caesura::Archive Caesura::BuildOptions)
@@ -289,6 +321,12 @@ if(Python3_EXECUTABLE)
         add_dependencies(CaesuraScreenshotGpuProbe CaesuraTests)
 
         # Opt-in real D3D11/Device workload; a headless CTest must not claim it ran.
+        # Opt-in hidden-window real command corpus; never auto-run by CTest.
+        add_executable(CaesuraCommandContractHost probes/command_contract_host.cpp)
+        target_link_libraries(CaesuraCommandContractHost PRIVATE Caesura::Engine)
+        # Opt-in SMA compute isolation on the same bgfx D3D11 device; no CTest.
+        add_executable(CaesuraSmaComputeProbe probes/sma_compute_contract_probe.cpp)
+        target_link_libraries(CaesuraSmaComputeProbe PRIVATE Caesura::Engine d3d11 dxgi)
         add_executable(CaesuraEngineSoakProbe probes/engine_soak_probe.cpp)
         target_link_libraries(CaesuraEngineSoakProbe PRIVATE Caesura::Engine psapi)
         add_dependencies(CaesuraEngineSoakProbe CaesuraTests)

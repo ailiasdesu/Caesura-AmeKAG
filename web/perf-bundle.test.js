@@ -1,4 +1,4 @@
-// @vitest-environment node
+// @vitest-environment jsdom
 // Story-bundle path performance comparison (runFromBundle vs runScene).
 //
 // Question: does the ks_bake bundle path (compiled-token deserialize +
@@ -10,38 +10,36 @@
 // Assertion: the bundle path is no more than 20% slower (>= 0.8x token
 // dispatch throughput). Interleaved runs cancel warmup/drift bias.
 import { describe, it, expect, beforeAll, afterAll } from "vitest"
-import { readFileSync, existsSync } from "node:fs"
+import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { dirname, join } from "node:path"
 import { createPlayer } from "./bridge.js"
+import { installCanvasHost } from './test-support/canvas-host.js'
+import { createRepositoryFetch, repositoryAssetUrl } from './test-support/repository-fetch.js'
+import { DomRenderer } from './dom-renderer.js'
 import { dualMedianMs } from "./benchmark-timing.mjs"
 const here = dirname(fileURLToPath(import.meta.url))
 const rootDir = join(here, "..")
-const scriptsDir = join(rootDir, "scripts")
-const assetsDir = join(rootDir, "assets")
 const index = JSON.parse(readFileSync(join(here, "scripts-index.json"), "utf8"))
-const fileFetch = async (url) => {
-  const u = new URL(url)
-  if (u.pathname.startsWith("/assets/lang/")) {
-    const rel = u.pathname.replace("/assets/lang/", "")
-    const p = join(assetsDir, "lang", ...rel.split("/"))
-    return { ok: existsSync(p), status: existsSync(p) ? 200 : 404,
-      text: async () => (existsSync(p) ? readFileSync(p, "utf8") : ""), json: async () => index }
-  }
-  const rel = u.pathname.replace("/scripts/", "")
-  const p = join(scriptsDir, ...rel.split("/"))
-  const ok = existsSync(p)
-  return { ok, status: ok ? 200 : 404, text: async () => (ok ? readFileSync(p, "utf8") : ""), json: async () => index }
-}
-let player = null
+const fileFetch = createRepositoryFetch(rootDir, index)
+
+let player = null, renderer = null, stage = null, restoreCanvas = null
 beforeAll(async () => {
+  restoreCanvas = installCanvasHost()
   player = await createPlayer({
     scriptsBase: "http://local/scripts/", fetchImpl: fileFetch, langBase: "http://local/assets/lang/",
+    assetUrl: repositoryAssetUrl, audioAssetUrl: repositoryAssetUrl,
     wasmFile: join(here, "node_modules", "wasmoon", "dist", "glue.wasm"),
     capabilities: JSON.parse(readFileSync(join(here, '../demo/caesura.project.json'), 'utf8')).capabilities,
   })
+  stage = document.createElement('div')
+  document.body.appendChild(stage)
+  renderer = new DomRenderer(player.core, stage)
 })
-afterAll(async () => { await player?.dispose() })
+afterAll(async () => {
+  try { await player?.dispose() }
+  finally { renderer?.destroy(); stage?.remove(); restoreCanvas?.() }
+})
 const NLx = String.fromCharCode(10)
 const Q = String.fromCharCode(34) // double-quote
 async function bakeBundle(scenes) {

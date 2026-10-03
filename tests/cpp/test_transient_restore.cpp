@@ -24,6 +24,7 @@ namespace {
 class TransientVideo final : public IVideoPlayer {
 public:
     VideoHandle open(const char*) override { ++active; return {1}; }
+    VideoHandle openMemory(std::vector<uint8_t>) override { ++active; return {1}; }
     void close(VideoHandle) override { active = 0; }
     void closeAll() override {
         ++closes;
@@ -84,6 +85,9 @@ public:
 
 class TransientRender final : public IRenderDevice {
 public:
+    SceneSnapshot captureSceneSnapshot() override { return {}; }
+    void cancelTransition() override {}
+
     bool init(void*, int, int) override { return true; }
     void setPresentSize(uint32_t, uint32_t) override {}
     bool isInitialized() const override { return true; }

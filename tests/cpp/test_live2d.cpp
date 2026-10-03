@@ -93,6 +93,9 @@ public:
 
 class RecordingRenderDevice final : public IRenderDevice {
 public:
+    SceneSnapshot captureSceneSnapshot() override { return {}; }
+    void cancelTransition() override {}
+
     struct Blit {
         uint16_t view = 0;
         uint32_t texture = 0;

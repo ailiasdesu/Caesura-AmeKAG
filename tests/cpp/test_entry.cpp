@@ -1195,11 +1195,35 @@ private:
     std::string m_value;
 };
 
+class U17PreparedFont final : public IPreparedFontState {
+public:
+    explicit U17PreparedFont(FontRestoreState value) : state(std::move(value)) {}
+    const FontRestoreState& description() const override { return state; }
+private:
+    FontRestoreState state;
+};
 class U17LogicalRender final : public Caesura::Test::RenderDevice {
 public:
     using Caesura::Test::RenderDevice::RenderDevice;
     int getBackbufferWidth() const override { return 200; }
     int getBackbufferHeight() const override { return 100; }
+    // Explicit Small bitmap (16px) state for the no-GPU SDL/IME fixture. Production
+    // FontRestore C functions still prepare/apply/consume their real tickets.
+    FontRestoreState captureFontState() const override { return font; }
+    FontRestoreState defaultFontState() const override { return {true,FontId::Small,"",16}; }
+    std::unique_ptr<IPreparedFontState> prepareFontState(const FontRestoreState& value,
+                                                       const uint8_t*, size_t) override {
+        if (!value.active || value.font!=FontId::Small || !value.assetPath.empty()
+            || !std::isfinite(value.pixelSize) || value.pixelSize!=16) return {};
+        return std::make_unique<U17PreparedFont>(value);
+    }
+    bool applyFontState(std::unique_ptr<IPreparedFontState> value) override {
+        if (!value) return false;
+        font=value->description(); return true;
+    }
+    void clearFontState() override { font={}; }
+private:
+    FontRestoreState font{true,FontId::Small,"",16};
 };
 }
 
@@ -1577,6 +1601,40 @@ TEST_CASE("U17 IME command: SDL composition keys do not prematurely finish the r
     SUBCASE("composition commit then independent form commit") { cancel=false; }
     SUBCASE("composition cancel then independent form cancel") { cancel=true; }
     U17InputHarness h;
+    // This fixture owns a real SDL window/event route, not a bgfx renderer.
+    // Record only logical UI allocations; platform calls forward unchanged to
+    // the real DevCore C functions. Do not make production tolerate no font.
+    REQUIRE(luaL_dostring(h.L, R"lua(
+        u17_visual={textures={},viewports={},next=1000,allocations=0,releases=0}
+        local prior=rawget(_G,'_CAESURA_BACKEND')
+        u17_visual.restore=function() _CAESURA_BACKEND=prior end
+        assert(debug.getinfo(DevCore.set_text_input_rect,'S').what=='C')
+        assert(debug.getinfo(DevCore.start_text_input,'S').what=='C')
+        assert(debug.getinfo(DevCore.stop_text_input,'S').what=='C')
+        _CAESURA_BACKEND={
+            platform=function(method,...) return assert(DevCore[method],method)(...) end,
+            render=function(method,...)
+                local values={...}
+                if method=='create_solid_texture' or method=='create_viewport' then
+                    if method=='create_solid_texture' then
+                        assert(#values==4)
+                        for _,v in ipairs(values) do assert(type(v)=='number' and v>=0 and v<=255 and v%1==0) end
+                    else assert(#values==2 and values[1]>=1 and values[2]>=1) end
+                    u17_visual.next=u17_visual.next+1
+                    local owned=method=='create_solid_texture' and u17_visual.textures or u17_visual.viewports
+                    owned[u17_visual.next]=values;u17_visual.allocations=u17_visual.allocations+1
+                    return u17_visual.next
+                elseif method=='destroy_texture' or method=='destroy_viewport' then
+                    local owned=method=='destroy_texture' and u17_visual.textures or u17_visual.viewports
+                    assert(owned[values[1]],'unknown or double UI release')
+                    owned[values[1]]=nil;u17_visual.releases=u17_visual.releases+1;return true
+                end
+                error('Unexpected U17 graphics operation: '..tostring(method))
+            end,
+        }
+        local font=assert(Restore.capture_font())
+        assert(font.version==1 and font.active and font.font==0 and font.path=='' and font.size==16, 'fixture must provide a complete valid Small bitmap description')
+    )lua") == LUA_OK);
     const int startResult = luaL_dostring(h.L,
         "package.path='scripts/?.lua;scripts/?/init.lua;'..package.path; "
         "ime_ctx={f={name='unchanged'},sf={},tf={},mp={},_session_active=true}; "
@@ -1619,6 +1677,11 @@ TEST_CASE("U17 IME command: SDL composition keys do not prematurely finish the r
             if (lua_gettop(h.L) > 0) lua_settop(h.L,0);
             CHECK_FALSE(h.platform->isTextInputActive());
             REQUIRE(luaL_dostring(h.L,"assert(coroutine.resume(ime_co)); assert(coroutine.status(ime_co)=='dead')") == LUA_OK);
+            CHECK(luaL_dostring(h.L,
+                "assert(next(u17_visual.textures)==nil and next(u17_visual.viewports)==nil); "
+                "assert(u17_visual.allocations==2 and u17_visual.releases==2); "
+                "local font=assert(Restore.capture_font()); assert(font.version==1 and font.active and font.font==0 and font.path=='' and font.size==16); "
+                "u17_visual.restore()") == LUA_OK);
             h.engine->quit(); break;
         }
     });

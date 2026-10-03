@@ -3,6 +3,21 @@
 
 namespace Caesura {
 
+unsigned int NullAudioBackend::playBGM(const std::string& file, const AudioPlaybackOptions& options) {
+    return playBGM(file, options.fadeIn);
+}
+unsigned int NullAudioBackend::playVoice(const std::string& file, const AudioPlaybackOptions&) {
+    return playVoice(file);
+}
+unsigned int NullAudioBackend::playSE(const std::string& file, const AudioPlaybackOptions&) {
+    return playSE(file);
+}
+unsigned int NullAudioBackend::playSE3D(const std::string& file, float x, float y, float z,
+                                     const AudioPlaybackOptions&) {
+    return playSE3D(file, x, y, z);
+}
+void NullAudioBackend::stopSE(float) { stopSE(); }
+
 NullAudioBackend::NullAudioBackend() {
     printf("[BackendRegistry] Using NullAudioBackend.\n");
 }

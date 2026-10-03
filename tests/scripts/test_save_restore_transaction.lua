@@ -1,6 +1,12 @@
 -- U11: run actual runner/handlers; storage alone is an isolated value-copy fake.
 package.path = "scripts/?.lua;scripts/?/init.lua;" .. package.path
 
+-- Test handlers are explicit DSL extensions; a recording KAG table alone
+-- does not register commands. Keep the production public selector intact.
+local fixture_schema = require("kag.schema")
+fixture_schema.define("u11_reentrant_replace", {})
+fixture_schema.define("u11_pending_restore", {})
+
 local function callable(fields)
     return setmetatable(fields or {}, { __index = function(self, key)
         if type(key) ~= "string" then return nil end

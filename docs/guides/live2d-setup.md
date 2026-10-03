@@ -187,6 +187,11 @@ assets/live2d/
 
 ## 常见问题
 
+**Q: Windows 日志出现 `Failed to load effect shader` 或 `Fail Compile shader`**
+A: D3D11 运行目录必须同时包含匹配当前 SDK 的 `FrameworkShaders/CubismEffect.fx` 和 `FrameworkShaders/CubismBlendMode.fx`。CMake 会将它们复制到引擎输出目录及源码根；独立游戏目录或验证目录也必须保留这项运行资源，只有模型文件不够。当前引擎在实际 shader/layout 初始化失败时拒绝加载模型，不再继续提交失效绘制。修复资源后重新启动进程；失败结果在当前渲染路径生命周期内缓存。
+
+2026-10-03 的限定实测已确认 D3D11 Haru 可见、手动嘴型变化及隐藏/卸载恢复背景，并验证缺失和损坏 shader 均正常拒绝和退出。具体产物、像素与未测边界见[命令审计结果](../plans/2026-10-03-001-command-native-audit-results.md)，不将此前 round 108 的历史计数作为当前证据。
+
 **Q: 构建提示找不到 `Live2DCubismCore.h`**
 A: 确认 `CUBISM_SDK_ROOT/Core/include/Live2DCubismCore.h` 存在。
 

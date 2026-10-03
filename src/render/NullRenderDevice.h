@@ -25,6 +25,8 @@ class NullRenderDevice final : public IRenderDevice {public:
                       float depth, uint8_t stencil) override;
     void touch(uint16_t viewId) override;
     ViewportHandle createRenderTarget(int width, int height) override;
+    SceneSnapshot captureSceneSnapshot() override { return {}; }
+    void cancelTransition() override {}
     void destroyRenderTarget(ViewportHandle handle) override;
     RenderTextureHandle getViewportTexture(ViewportHandle handle) override;
     void blitViewport(ViewportHandle handle, uint16_t targetView,

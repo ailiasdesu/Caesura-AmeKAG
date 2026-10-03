@@ -35,6 +35,14 @@ struct VoiceLevelSnapshot {
     uint64_t generation = 0; // Nonreused invalidation identity; zero means unavailable.
 };
 
+// Per-play source options, independent of persistent master/bus gain. Legacy
+// overloads retain their previous defaults; callers opt into these explicitly.
+struct AudioPlaybackOptions {
+    float volume = 1.0f;
+    bool loop = false;
+    float fadeIn = 0.0f; // seconds, finite and nonnegative
+};
+
 // ---------------------------------------------------------------------------
 // IAudioBackend   Abstract audio backend interface
 // ---------------------------------------------------------------------------
@@ -80,14 +88,17 @@ public:
 
     // -- BGM bus: background music with cross-fade support -----------------
     virtual unsigned int playBGM(const std::string& file, float fadeTime = 1.0f) = 0;
+    virtual unsigned int playBGM(const std::string& file, const AudioPlaybackOptions& options) = 0;
     virtual void stopBGM(float fadeTime = 1.0f) = 0;
 
     // -- VOICE bus: voice playback and explicit session interruption ------
     virtual unsigned int playVoice(const std::string& file) = 0;
+    virtual unsigned int playVoice(const std::string& file, const AudioPlaybackOptions& options) = 0;
     virtual void stopVoice() = 0;
 
     // -- SE bus: sound effects (2D and 3D spatial) ------------------------
     virtual unsigned int playSE(const std::string& file) = 0;
+    virtual unsigned int playSE(const std::string& file, const AudioPlaybackOptions& options) = 0;
 
     // -- Raw PCM playback (video audio etc.) ------------------------------
     // Plays interleaved float PCM [-1,1] on the SE bus; the engine copies the
@@ -97,7 +108,11 @@ public:
                                     unsigned int sampleRate, unsigned int channels) = 0;
     virtual unsigned int playSE3D(const std::string& file,
                                    float x, float y, float z) = 0;
+    virtual unsigned int playSE3D(const std::string& file, float x, float y, float z,
+                                 const AudioPlaybackOptions& options) = 0;
     virtual void stopSE() = 0;
+    // Fade existing sources, then stop them. Owners/quotas remain until stopped.
+    virtual void stopSE(float fadeTime) = 0;
     // [10.2.27] Per-SE-handle volume control
     virtual void setSEVolume(unsigned int handle, float volume) = 0;
     virtual float getSEVolume(unsigned int handle) = 0;

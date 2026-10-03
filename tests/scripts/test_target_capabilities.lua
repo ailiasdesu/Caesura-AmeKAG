@@ -229,6 +229,8 @@ end
 mapping("vfx",{}, {"render.particles"})
 mapping("vfx",{postfx=""}, {"render.particles"})
 mapping("vfx",{type="blur"}, {"render.blur"})
+mapping("blur",{amount=4,time=32}, {"render.blur"})
+check("standalone blur direct Lua wrapper is guarded",caps.command_has_capabilities("blur"))
 mapping("vfx",{type="stop",postfx="bloom"}, {"render.postfx.bloom"})
 mapping("vfx",{type="stop"}, {})
 mapping("vfx",{postfx="none"}, {})
