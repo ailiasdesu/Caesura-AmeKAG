@@ -267,6 +267,11 @@ describe('web player performance baseline (round 109)', () => {
     const report = JSON.parse(stdout)
     const samples = validateStoryBrowserReport(report)
     process.stdout.write(`[perf] real browser=${report.browserVersion}; report=${report.output}/report.json\n`)
+    process.stdout.write('[perf] browser workload '+JSON.stringify({sourceManifestSha256:report.sourceManifestSha256,
+      audioProfile:report.result.audioProfile,owner:report.owner,
+      samples:samples.map(sample=>({out:sample.out,wallMs:sample.wallMs,frames:sample.frames,
+        renderedFrames:sample.renderedFrames,tokensPerMs:sample.tokensPerMs,
+        audioBefore:sample.audioBefore,audioAfter:sample.audioAfter,audioAvailable:sample.audioAvailable}))})+'\n')
     const r = medianRun(samples, 'story.ks')
     assertThroughput(r, 'story.ks', 0.8, 0.08)
   }, 120000)

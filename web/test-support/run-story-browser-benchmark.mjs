@@ -1,7 +1,7 @@
 // Own one real browser and Vite instance; never reuse the user's CDP/profile.
 import {spawn, spawnSync} from 'node:child_process'
 import {readFileSync, writeFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, lstatSync} from 'node:fs'
-import {dirname, join, resolve, relative, isAbsolute} from 'node:path'
+import {dirname, join, resolve, relative, isAbsolute, posix} from 'node:path'
 import {fileURLToPath, pathToFileURL} from 'node:url'
 import {tmpdir} from 'node:os'
 import {createHash} from 'node:crypto'
@@ -18,9 +18,20 @@ export const requiredSources = ['web/bridge.js', 'web/dom-renderer.js', 'web/ada
   'web/node_modules/wasmoon/package.json', 'demo/example_game/story.ks', 'demo/caesura.project.json',
   'tests/scripts/run_story_browser_benchmark.py', 'scripts/validation_process.py']
 
+export function viteFsPath(path) {
+  if(!path.startsWith('/@fs/') || path.includes('\\'))return null
+  // Vite emits posix.join('/@fs/', absoluteId): on POSIX this is /@fs/tmp/...
+  // rather than /@fs//tmp/.... Match fsPathFromId's restored leading slash.
+  const file=posix.normalize(path.slice(5))
+  if(/^[A-Za-z]:/.test(file))return /^[A-Za-z]:\//.test(file)?file:null
+  return file.startsWith('/')?file:'/'+file
+}
+
 export function allowFreshViteDependency(path, cacheRoot) {
   if(!path.startsWith('/@fs/') || !/\.(js|map)$/.test(path))return false
-  const file=resolve(path.slice(5)), cache=resolve(cacheRoot)
+  const decoded=viteFsPath(path)
+  if(!decoded)return false
+  const file=resolve(decoded), cache=resolve(cacheRoot)
   if(!inside(cache,file))return false
   try {
     const canonicalCache=realpathSync(cache)
@@ -57,6 +68,7 @@ export function validateStoryBrowserReport(report) {
         && !path.includes('\\') && /^[0-9a-f]{64}$/.test(digest)), 'Required source identity missing')
   }
   ensure(JSON.stringify(report.sourceBefore) === JSON.stringify(report.sourceAfter), 'Source manifests changed')
+  ensure(report.sourceManifestSha256 === hash(JSON.stringify(report.sourceBefore)), 'Source manifest digest differs')
   ensure(report.result?.visibility === 'visible' && report.result.disposed === true, 'Browser page was hidden or not disposed')
   ensure(report.result.audioAvailable === false && report.result.audioProfile === 'unavailable-real-closed-context',
     'Story baseline audio profile differs from the original workload')
@@ -75,6 +87,17 @@ export function validateStoryBrowserReport(report) {
       && sample.audioContextRetained === true && sample.audioAvailable === false, 'Audio capability changed during measurement')
   }
   return report.result.samples
+}
+
+export function browserFailureSummary(report) {
+  const diagnostics=Array.isArray(report.diagnostics)?report.diagnostics:[]
+  return {passed:report.passed,error:String(report.error || '').slice(0,4096),
+    workloadError:String(report.result?.error || '').slice(0,2048),
+    diagnostics:diagnostics.slice(0,16).map(item=>({kind:String(item.kind).slice(0,128),detail:String(item.detail).slice(0,1024)})),
+    diagnosticCount:diagnostics.length,sourceStable:report.sourceStable,
+    sourceManifestSha256:report.sourceManifestSha256,browserPid:report.browserPid,
+    browserExited:report.browserExited,endpointClosed:report.endpointClosed,
+    launcherExit:report.launcherExit,cleanupFallback:report.cleanupFallback??false}
 }
 
 function sourceManifest() {
@@ -220,11 +243,16 @@ async function run() {
     }
     await server?.close()
     const sourceAfter=sourceManifest(), sourceStable=JSON.stringify(sourceBefore)===JSON.stringify(sourceAfter)
-    report={...report,diagnostics,sourceBefore,sourceAfter,sourceStable,endpointClosed,browserExited,launcherExit:child?.exitCode??null}
+    report={...report,diagnostics,sourceBefore,sourceAfter,sourceStable,
+      sourceManifestSha256:sourceBefore?hash(JSON.stringify(sourceBefore)):null,
+      browserPid:browserPid??null,endpointClosed,browserExited,launcherExit:child?.exitCode??null}
     report.passed=report.passed&&sourceStable&&endpointClosed&&browserExited&&child?.exitCode===0&&!report.cleanupFallback
     writeFileSync(join(out,'report.json'),JSON.stringify(report,null,2)+'\n',{flag:'wx'})
   }
-  if(!report.passed)console.error('Browser benchmark report: '+join(out,'report.json'))
+  if(!report.passed){
+    console.error('BROWSER_BENCHMARK_FAILURE '+JSON.stringify(browserFailureSummary(report)))
+    console.error('Browser benchmark report: '+join(out,'report.json'))
+  }
   ensure(report.passed, 'Browser benchmark failed; see '+join(out,'report.json'))
   process.stdout.write(JSON.stringify(report)+'\n')
 }
