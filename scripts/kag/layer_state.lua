@@ -9,6 +9,19 @@ local active_owner
 local scalar_fields = {"x","y","w","h","z","opacity","scale","scaleX","scaleY",
     "rotation","originX","originY","alpha","pos_x","pos_y","clipX","clipY","clipW","clipH",
     "imgX","imgY","imgW","imgH","layer_type"}
+-- Numeric rules depend only on the declared field, never on a live node.
+-- Prepare them once; captures and saved descriptions still validate each value.
+local scalar_rules = {}
+for _,key in ipairs(scalar_fields) do
+    local low,high,integral=-1000000,1000000,false
+    if key=="w" or key=="h" or key=="clipW" or key=="clipH" or key=="imgW" or key=="imgH" then
+        low,high,integral=0,16384,true
+    elseif key=="opacity" then low,high,integral=0,255,true
+    elseif key=="alpha" then low,high=0,1
+    elseif key=="layer_type" then low,high,integral=0,7,true
+    elseif key=="scale" or key=="scaleX" or key=="scaleY" then low,high=-16,16 end
+    scalar_rules[#scalar_rules+1]={key,low,high,integral}
+end
 local named_fields = {"name","tag","blend_mode"}
 local transient_effects = {"quake","shake","fade"}
 
@@ -43,17 +56,11 @@ local function node_value(node)
         error("Invalid saved layer identity",0)
     end
     local result = {id=node.id,parent=node.parent,source=source_value(node.source)}
-    for _,key in ipairs(scalar_fields) do
+    for _,rule in ipairs(scalar_rules) do
+        local key=rule[1]
         local value=node[key]
         if value~=nil then
-            local low,high,integral=-1000000,1000000,false
-            if key=="w" or key=="h" or key=="clipW" or key=="clipH" or key=="imgW" or key=="imgH" then
-                low,high,integral=0,16384,true
-            elseif key=="opacity" then low,high,integral=0,255,true
-            elseif key=="alpha" then low,high=0,1
-            elseif key=="layer_type" then low,high,integral=0,7,true
-            elseif key=="scale" or key=="scaleX" or key=="scaleY" then low,high=-16,16 end
-            if not number(value,low,high,integral) then error("Invalid saved layer "..key,0) end
+            if not number(value,rule[2],rule[3],rule[4]) then error("Invalid saved layer "..key,0) end
             result[key]=value
         end
     end
