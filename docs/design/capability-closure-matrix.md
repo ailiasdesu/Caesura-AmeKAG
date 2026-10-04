@@ -2,9 +2,9 @@
 
 > 由 python scripts/capability_closure.py 生成；勿手动编辑。
 > **证据边界：CLOSED / Tested 仅为静态源码扫描与历史人工覆写；本生成器不运行引擎、不读取本轮执行终态，不代表本轮 runtime PASS，也不代表测试覆盖率。**
-> 生成时间（输入源最新 mtime）：2026-10-03T12:16:26Z
+> 生成时间（输入源最新 mtime）：2026-10-04T10:19:07Z
 > 生成命令：python scripts/capability_closure.py
-> 源指纹（输入内容 sha256 前 16 hex）：2c07b6816e57b482
+> 源指纹（输入内容 sha256 前 16 hex）：eb91cd3abff8059d
 > 输出确定性：同源指纹同字节（generated_at 为输入源最新 mtime；跨机 checkout 的 mtime 差异属 by-design，确定性以指纹为准）
 
 ## 概述
@@ -109,7 +109,7 @@
 | camera | Y | Y | Y | CLOSED | 7 | - | - | ? | scripts/kag/commands/transition.lua:505 |
 | cancel | Y | Y | Y | CLOSED | 7 | - | - | ? | scripts/kag.lua:222 |
 | capture_state | n | Y | n | EXTRA | - | - | - | ? | scripts/kag/commands/save.lua:258 |
-| ch | Y | Y | Y | CLOSED | 696 | - | - | ? | scripts/kag/commands/text.lua:612 |
+| ch | Y | Y | Y | CLOSED | 704 | - | - | ? | scripts/kag/commands/text.lua:612 |
 | chapter | Y | Y | n | PARTIAL | 3 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:323 |
 | cl | Y | Y | Y | CLOSED | 14 | - | - | ? | scripts/kag/commands/layer.lua:185 |
 | clear | n | Y | Y | EXTRA | 3 | - | - | ? | scripts/kag.lua:352 |
@@ -125,7 +125,7 @@
 | div | Y | Y | n | CLOSED ⚠ | 15 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/math.lua:124 |
 | edit | Y | Y | Y | CLOSED | 1 | - | - | ? | scripts/kag/commands/text.lua:2053 |
 | emb | Y | Y | n | CLOSED | 16 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:103 |
-| end | n | Y | n | EXTRA | 355 | - | - | ? | scripts/kag.lua:86 |
+| end | n | Y | n | EXTRA | 359 | - | - | ? | scripts/kag.lua:86 |
 | endbutton | Y | Y | n | CLOSED | 32 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:1428 |
 | endform | n | Y | n | EXTRA | 1 | - | - | ? | scripts/kag.lua:363 |
 | ending | Y | Y | n | CLOSED ⚠ | 25 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:339 |
@@ -182,7 +182,7 @@
 | nameplate | Y | Y | n | CLOSED | 9 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:421 |
 | notify | Y | Y | n | CLOSED | 38 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:605 |
 | nvl | Y | Y | Y | CLOSED | 28 | - | - | ? | scripts/kag/commands/text.lua:1027 |
-| p | Y | Y | Y | CLOSED | 331 | - | - | ? | scripts/kag/commands/text.lua:993 |
+| p | Y | Y | Y | CLOSED | 339 | - | - | ? | scripts/kag/commands/text.lua:993 |
 | palette | Y | Y | n | CLOSED ⚠ | 28 | win ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/vfx.lua:467 |
 | particle_weather | Y | Y | Y | CLOSED | 3 | - | - | ? | scripts/kag/commands/vfx.lua:610 |
 | particles | Y | Y | Y | CLOSED | 3 | - | - | ? | scripts/kag/commands/vfx.lua:398 |
@@ -227,7 +227,7 @@
 | se | n | Y | Y | EXTRA | 6 | - | - | ? | scripts/kag.lua:446 |
 | sel | n | Y | n | EXTRA | 73 | - | - | ? | scripts/kag/commands/text.lua:1569 |
 | select | Y | Y | n | CLOSED ⚠ | 39 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/text.lua:1565 |
-| set | Y | Y | n | CLOSED | 240 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:427 |
+| set | Y | Y | n | CLOSED | 241 | - ⚠ | - ⚠ | VERIFIED ⚠ | scripts/kag/commands/system.lua:427 |
 | setbgmvolume | Y | Y | Y | CLOSED | 6 | - | - | ? | scripts/kag/commands/audio.lua:377 |
 | setsevolume | Y | Y | Y | CLOSED | 6 | - | - | ? | scripts/kag/commands/audio.lua:382 |
 | setvoicevolume | Y | Y | Y | CLOSED | 5 | - | - | ? | scripts/kag/commands/audio.lua:387 |
