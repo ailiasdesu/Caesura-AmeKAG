@@ -29,6 +29,75 @@ async function loadLayerState() {
 }
 
 describe('live Lua Layers facade (real Wasmoon)', () => {
+  it('keeps repeated bulk captures detached and observes direct JS edits, removals, topology and fields', async () => {
+    const parent = core.ensureLayer('parent', {x:17})
+    const child = core.addLayer(parent, {id:'child',name:'child',x:23})
+    expect(await lua.doString(`
+      first=layers.capture_restore_tree({'x','y','w','h'})
+      local second=layers.capture_restore_tree({'x','y','w','h'})
+      assert(first~=second and first.children~=second.children)
+      assert(first.children[1]~=second.children[1] and first.children[1].children[1]~=second.children[1].children[1])
+      first.children[1].x=999; first.children[1].children[1].x=888
+      return layers.capture_restore_tree({'x','y','w','h'}).children[1].children[1].x
+    `)).toBe(23)
+    parent.x = 41
+    delete child.x
+    expect(await lua.doString(`
+      local tree=layers.capture_restore_tree({'x','y','w','h'})
+      return tree.children[1].x==41 and tree.children[1].children[1].x==nil
+    `)).toBe(true)
+    core.moveLayer(child,73,81)
+    core.getRoot().children.push(child)
+    parent.children.splice(parent.children.indexOf(child),1)
+    expect(await lua.doString(`
+      local tree=layers.capture_restore_tree({'x','y','w','h'})
+      assert(#tree.children==2 and #tree.children[1].children==0 and tree.children[2].x==73)
+      local without=layers.capture_restore_tree({'y'})
+      assert(without.children[2].x==nil and without.children[2].y==81)
+      return layers.capture_restore_tree({'x'}).children[2].x
+    `)).toBe(73)
+    core.getRoot().children.reverse()
+    expect(await lua.doString("return layers.capture_restore_tree({'x'}).children[1].id")).toBe('child')
+  })
+
+  it('refuses invalid live values and topology after a successful equal-tree capture', async () => {
+    await loadLayerState()
+    const node=core.ensureLayer('actor',{x:17})
+    const capture=()=>lua.doString("return require('kag.layer_state').capture()")
+    await capture(); await capture()
+    for (const value of [NaN,Infinity,-Infinity,Number.MAX_SAFE_INTEGER+1,{},()=>1]) {
+      node.x=value
+      await expect(capture()).rejects.toThrow()
+      node.x=17
+      expect((await capture()).nodes[1].x).toBe(17)
+    }
+    // JSON signature collisions must not turn NaN/null or toJSON into a hit.
+    node.x={toJSON:()=>17}
+    await expect(capture()).rejects.toThrow()
+    node.x=17
+    for (const value of [false,{},0]) {
+      node.userdata=value
+      await expect(capture()).rejects.toThrow()
+    }
+    delete node.userdata
+    for (const field of ['quake','shake','fade']) {
+      const previous=node[field]
+      node[field]={active:0}
+      await expect(capture()).rejects.toThrow()
+      node[field]=previous
+      await capture()
+    }
+    node.children.push(core.getRoot())
+    await expect(capture()).rejects.toThrow()
+    node.children.pop()
+    expect((await capture()).nodes[1].x).toBe(17)
+    node.w=-1
+    await expect(capture()).rejects.toThrow()
+    node.w=0
+    await capture()
+  })
+
+
   it('bulk capture preserves the complete restore tree and matches the shared scalar validator', async () => {
     await loadLayerState()
     const result = await lua.doString(`

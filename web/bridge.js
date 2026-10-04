@@ -7,6 +7,7 @@ import { AdapterCore, LAYER_TYPE } from './adapter-core.js'
 import { AudioEngine } from './audio-engine.js'
 import { installLayerBridge } from './layer-bridge.js'
 import { installRunnerBridge } from './runner-bridge.js'
+import { createBacklogReader } from './backlog-transfer.js'
 import { createAssetRestore } from './restore-assets.js'
 import { installSaveValueBridge } from './save-value-bridge.js'
 import { createFontRestore } from './restore-font.js'
@@ -705,6 +706,8 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
     }
   }
 
+  const readBacklog = await createBacklogReader(lua)
+
   let driving = false
   let disposed = false
   let audioWaiting = false
@@ -725,9 +728,9 @@ export async function createPlayer({ scriptsBase, fetchImpl = fetch, wasmFile, a
       if (lua.global.get('__WEB_NEW_SESSION') === true) core._lastBacklog = ''
       lua.global.set('__WEB_NEW_SESSION', null)
       syncRestoredHistory(lua, core)
-      const pages = lua.global.get('__SCENE_BACKLOG')
+      const {pages,encoded} = readBacklog()
       if (Array.isArray(pages)) {
-        for (const page of pages) if (Array.isArray(page) && page.length) core.pushBacklog(JSON.parse(JSON.stringify(page)))
+        for (const page of pages) if (Array.isArray(page) && page.length) core.pushBacklog(encoded ? page : JSON.parse(JSON.stringify(page)))
       }
       const endings = lua.global.get('__SCENE_ENDINGS')
       if (Array.isArray(endings)) core.recordEndings(JSON.parse(JSON.stringify(endings)))

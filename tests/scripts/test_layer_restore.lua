@@ -181,5 +181,44 @@ hostOwner={}
 check("host install failure clears its partial tree and ownership",not pcall(state.apply,state.prepare(saved),hostOwner)
     and Layers.count()==1 and next(hostOwner._restoredTextures or {})==nil)
 Layers.install_prepared=nil
+-- All declared numeric fields retain the same capture-domain boundaries.
+-- Capture does not allocate images/RTTs, so 16384 geometry is distinct from
+-- prepare's later backend texture-size/resource refusal.
+Layers.init()
+local numericNode=Layers.add_layer(nil,{id="numeric-boundaries"})
+local numericGroups={
+    {keys={"x","y","z","rotation","originX","originY","pos_x","pos_y","clipX","clipY","imgX","imgY"},low=-1000000,high=1000000},
+    {keys={"w","h","clipW","clipH","imgW","imgH"},low=0,high=16384,integer=true},
+    {keys={"opacity"},low=0,high=255,integer=true},
+    {keys={"alpha"},low=0,high=1},
+    {keys={"scale","scaleX","scaleY"},low=-16,high=16},
+    {keys={"layer_type"},low=0,high=7,integer=true},
+}
+for _,group in ipairs(numericGroups) do
+    for _,key in ipairs(group.keys) do
+        local old=numericNode[key]
+        local function accepts(value)
+            numericNode[key]=value
+            local ok,captured=pcall(state.capture)
+            return ok and captured.nodes[2][key]==value
+        end
+        local function rejects(value)
+            numericNode[key]=value
+            return not pcall(state.capture)
+        end
+        check("numeric minimum preserved: "..key,accepts(group.low))
+        check("numeric maximum preserved: "..key,accepts(group.high))
+        check("numeric below-minimum refuses: "..key,rejects(group.low-0.25))
+        check("numeric above-maximum refuses: "..key,rejects(group.high+0.25))
+        check("numeric fractional contract: "..key,group.integer and rejects(group.low+0.5) or (not group.integer and accepts(group.low+0.5)))
+        for _,invalid in ipairs({0/0,math.huge,-math.huge,"0",false,{}}) do
+            check("numeric invalid value refuses: "..key,rejects(invalid))
+        end
+        numericNode[key]=nil
+        local ok,captured=pcall(state.capture)
+        check("missing optional numeric field remains omitted: "..key,ok and captured.nodes[2][key]==nil)
+        numericNode[key]=old
+    end
+end
 print(string.format("U11 LAYER RESTORE: %d passed, %d failed",passed,failed))
 os.exit(failed==0 and 0 or 1)

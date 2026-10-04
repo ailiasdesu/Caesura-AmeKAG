@@ -11,7 +11,7 @@ const sleep = ms => new Promise(yes => setTimeout(yes, ms))
 const hash = data => createHash('sha256').update(data).digest('hex')
 const ensure = (condition, message) => { if (!condition) throw new Error(message) }
 const inside = (parent, file) => { const rel = relative(parent, file); return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel) }
-export const requiredSources = ['web/bridge.js', 'web/dom-renderer.js', 'web/adapter-core.js', 'web/runner-bridge.js',
+export const requiredSources = ['web/bridge.js', 'web/dom-renderer.js', 'web/adapter-core.js', 'web/runner-bridge.js', 'web/backlog-transfer.js',
   'web/package-lock.json', 'web/scripts-index.json', 'web/perf-baseline.test.js',
   'web/test-support/story-browser-benchmark.js', 'web/test-support/run-story-browser-benchmark.mjs',
   'web/node_modules/wasmoon/dist/index.js', 'web/node_modules/wasmoon/dist/glue.wasm',

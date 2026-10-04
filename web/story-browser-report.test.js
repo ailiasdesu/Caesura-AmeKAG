@@ -38,6 +38,7 @@ describe('required real-browser story report',()=>{
     ['empty source manifest',value=>{value.sourceBefore={};value.sourceAfter={}}],
     ['changed raw source',value=>{value.sourceAfter['web/bridge.js']='c'.repeat(64)}],
     ['wrong source digest',value=>{value.sourceManifestSha256='d'.repeat(64)}],
+    ['missing backlog reader',value=>{delete value.sourceBefore['web/backlog-transfer.js'];delete value.sourceAfter['web/backlog-transfer.js']}],
     ['missing VM JavaScript',value=>{delete value.sourceBefore['web/node_modules/wasmoon/dist/index.js'];delete value.sourceAfter['web/node_modules/wasmoon/dist/index.js']}],
     ['malformed source digest',value=>{value.sourceBefore['web/bridge.js']='bad';value.sourceAfter['web/bridge.js']='bad'}],
     ['missing tree owner',value=>{delete value.owner}],

@@ -3,7 +3,31 @@
 import {luaLiteralValue} from './lua-value.js'
 const SNAPSHOT_FIELDS=['id','x','y','w','h','visible','opacity','alpha','blend_mode',
   'z','scaleX','scaleY','rotation','clipX','clipY','clipW','clipH','layer_type','tag']
+// Compare only detached records constructed by the validated live walk below.
+// No live reference, revision, getter or JSON/toJSON signature establishes equality.
+function sameRestoreTree(left, right) {
+  if (left === right) return true
+  if (left === null || right === null || typeof left !== 'object' || typeof right !== 'object') return false
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false
+    for (let index = 0; index < left.length; index++) {
+      if (!sameRestoreTree(left[index], right[index])) return false
+    }
+    return true
+  }
+  let count = 0
+  for (const key in left) {
+    if (!Object.hasOwn(left, key)) continue
+    count++
+    if (!Object.hasOwn(right, key) || !sameRestoreTree(left[key], right[key])) return false
+  }
+  for (const key in right) if (Object.hasOwn(right, key)) count--
+  return count === 0
+}
+
 export async function installLayerBridge(lua, core) {
+  let restoreFieldsArgument, restoreFields
+  let restoreTreeArgument, restoreTree, restoreSource
   const keys = new WeakMap()
   let sequence = 0
   const host = {
@@ -53,7 +77,11 @@ export async function installLayerBridge(lua, core) {
       return luaLiteralValue({layers})
     },
     captureRestoreTree: scalarFields => {
-      const fields = ['id','name','tag','visible','blend_mode','tex','rt', ...scalarFields.split(',')]
+      if (scalarFields !== restoreFieldsArgument) {
+        restoreFields = ['id','name','tag','visible','blend_mode','tex','rt', ...scalarFields.split(',')]
+        restoreFieldsArgument = scalarFields
+      }
+      const fields = restoreFields
       const seen = new Set()
       const walk = (node, depth) => {
         if (depth > 64 || seen.size >= 256 || seen.has(node)) throw new Error('Layer tree exceeds restore limits')
@@ -62,7 +90,8 @@ export async function installLayerBridge(lua, core) {
         for (const key of fields) {
           const value = host.read(node, key)
           if (value == null) continue
-          if (!['string','number','boolean'].includes(typeof value)) throw new Error('Non-scalar layer field: ' + key)
+          const kind = typeof value
+          if (kind !== 'string' && kind !== 'number' && kind !== 'boolean') throw new Error('Non-scalar layer field: ' + key)
           values[key] = value
         }
         // These fields are refusal conditions, never restorable payloads.
@@ -77,7 +106,15 @@ export async function installLayerBridge(lua, core) {
         values.children = (node.children ?? []).map(child => walk(child, depth + 1))
         return values
       }
-      return luaLiteralValue(walk(core.getRoot(), 0))
+      // Always walk the current graph, including all limits and refusal fields.
+      // Reuse only the immutable encoding of an exactly equal detached tree.
+      const tree = walk(core.getRoot(), 0)
+      if (scalarFields === restoreTreeArgument && restoreTree && sameRestoreTree(tree, restoreTree)) return restoreSource
+      const source = luaLiteralValue(tree) // validates finite/safe numeric values
+      restoreTreeArgument = scalarFields
+      restoreTree = tree
+      restoreSource = source
+      return source
     },
   }
   lua.global.set('__CAESURA_LAYER_HOST', host)
